@@ -41,14 +41,36 @@ if (app.Environment.IsDevelopment())
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.EnsureCreated();
+        logger.LogInformation("Database ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Database initialization failed; starting app anyway. /health will report degraded.");
+    }
 }
 
 app.UseCors("AllowFrontend");
 app.MapControllers();
 app.MapGet("/", () => "CutPigPoint API is running.");
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", (AppDbContext db) =>
+{
+    try
+    {
+        var canConnect = db.Database.CanConnect();
+        return canConnect
+            ? Results.Ok(new { status = "ok", db = "connected" })
+            : Results.Json(new { status = "degraded", db = "unreachable" }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "degraded", db = "error", message = ex.Message }, statusCode: 503);
+    }
+});
 
 app.Run();
 
