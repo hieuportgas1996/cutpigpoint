@@ -1,0 +1,51 @@
+using CutPig.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace CutPig.Data;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<Player> Players => Set<Player>();
+    public DbSet<Game> Games => Set<Game>();
+    public DbSet<GamePlayer> GamePlayers => Set<GamePlayer>();
+    public DbSet<GameRound> GameRounds => Set<GameRound>();
+    public DbSet<RoundResult> RoundResults => Set<RoundResult>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Player>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.Name);
+        });
+
+        modelBuilder.Entity<Game>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasMany(x => x.Players).WithOne(x => x.Game!).HasForeignKey(x => x.GameId).OnDelete(DeleteBehavior.Cascade);
+            b.HasMany(x => x.Rounds).WithOne(x => x.Game!).HasForeignKey(x => x.GameId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GamePlayer>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.GameId, x.Seat }).IsUnique();
+            b.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GameRound>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.GameId, x.RoundNumber }).IsUnique();
+            b.HasMany(x => x.Results).WithOne(x => x.GameRound!).HasForeignKey(x => x.GameRoundId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RoundResult>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+}
