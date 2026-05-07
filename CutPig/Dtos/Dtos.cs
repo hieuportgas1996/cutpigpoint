@@ -27,9 +27,18 @@ public record PlayerRoundInputDto(
     int BlackPigsLost,
     int RedPigsLost,
     bool ThreePairsStraight,
+    Guid? ThreePairsVictimId,
     bool FourOfAKind,
+    Guid? FourOfAKindVictimId,
     bool FourPairsStraight,
+    Guid? FourPairsVictimId,
     bool WhiteWin,
+    bool Judge,
+    int BlackPigsHeld,
+    int RedPigsHeld,
+    bool HasThreePairsHeld,
+    bool HasFourOfAKindHeld,
+    bool HasFourPairsHeld,
     int? ManualScore);
 
 public record CreateRoundRequest(bool ManualScoring, List<PlayerRoundInputDto> Players);
@@ -42,9 +51,18 @@ public record RoundResultDto(
     int BlackPigsLost,
     int RedPigsLost,
     bool ThreePairsStraight,
+    Guid? ThreePairsVictimId,
     bool FourOfAKind,
+    Guid? FourOfAKindVictimId,
     bool FourPairsStraight,
+    Guid? FourPairsVictimId,
     bool WhiteWin,
+    bool Judge,
+    int BlackPigsHeld,
+    int RedPigsHeld,
+    bool HasThreePairsHeld,
+    bool HasFourOfAKindHeld,
+    bool HasFourPairsHeld,
     int Score);
 
 public record RoundDto(

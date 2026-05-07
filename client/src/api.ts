@@ -21,9 +21,18 @@ export interface RoundResult {
   blackPigsLost: number;
   redPigsLost: number;
   threePairsStraight: boolean;
+  threePairsVictimId: string | null;
   fourOfAKind: boolean;
+  fourOfAKindVictimId: string | null;
   fourPairsStraight: boolean;
+  fourPairsVictimId: string | null;
   whiteWin: boolean;
+  judge: boolean;
+  blackPigsHeld: number;
+  redPigsHeld: number;
+  hasThreePairsHeld: boolean;
+  hasFourOfAKindHeld: boolean;
+  hasFourPairsHeld: boolean;
   score: number;
 }
 
@@ -51,9 +60,18 @@ export interface PlayerRoundInput {
   blackPigsLost: number;
   redPigsLost: number;
   threePairsStraight: boolean;
+  threePairsVictimId: string | null;
   fourOfAKind: boolean;
+  fourOfAKindVictimId: string | null;
   fourPairsStraight: boolean;
+  fourPairsVictimId: string | null;
   whiteWin: boolean;
+  judge: boolean;
+  blackPigsHeld: number;
+  redPigsHeld: number;
+  hasThreePairsHeld: boolean;
+  hasFourOfAKindHeld: boolean;
+  hasFourPairsHeld: boolean;
   manualScore: number | null;
 }
 

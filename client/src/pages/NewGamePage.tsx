@@ -116,42 +116,39 @@ export default function NewGamePage() {
       <div className="card">
         <div className="section-title">Chọn từ danh sách</div>
         <div className="muted small mb-1">Chạm vào người chơi để gán vào vị trí trống tiếp theo</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
-          {players.map((p) => {
-            const seatIndex = seats.indexOf(p.id);
-            const selected = seatIndex >= 0;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={selected ? '' : 'secondary'}
-                onClick={() => {
-                  if (selected) {
-                    setSeat(seatIndex, '');
-                    return;
-                  }
-                  const empty = seats.indexOf('');
-                  if (empty < 0) {
-                    toast.push('info', 'Đã đủ 4 người, bỏ chọn để thay');
-                    return;
-                  }
-                  pickPlayer(empty, p);
-                }}
-                style={{ padding: '0.4rem 0.75rem 0.4rem 0.4rem', gap: '0.5rem' }}
-              >
-                {p.hasAvatar ? (
-                  <Avatar playerId={p.id} name={p.name} hasAvatar size="sm" />
-                ) : (
-                  <span className="avatar sm" style={{ background: selected ? 'rgba(255,255,255,0.25)' : undefined }}>
-                    {initials(p.name)}
-                  </span>
-                )}
-                {p.name}
-                {selected && <span className="tiny" style={{ opacity: 0.85 }}>#{seatIndex + 1}</span>}
-              </button>
-            );
-          })}
-        </div>
+        {(() => {
+          const remaining = players.filter((p) => !seats.includes(p.id));
+          if (remaining.length === 0) {
+            return <div className="muted small mt-1">Đã chọn đủ 4 người. Bỏ chọn ở vị trí trên để đổi.</div>;
+          }
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+              {remaining.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    const empty = seats.indexOf('');
+                    if (empty < 0) {
+                      toast.push('info', 'Đã đủ 4 người, bỏ chọn để thay');
+                      return;
+                    }
+                    pickPlayer(empty, p);
+                  }}
+                  style={{ padding: '0.4rem 0.75rem 0.4rem 0.4rem', gap: '0.5rem' }}
+                >
+                  {p.hasAvatar ? (
+                    <Avatar playerId={p.id} name={p.name} hasAvatar size="sm" />
+                  ) : (
+                    <span className="avatar sm">{initials(p.name)}</span>
+                  )}
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       <button onClick={start} disabled={!allSelected || !unique || submitting} className="block-mobile">

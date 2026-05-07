@@ -118,11 +118,7 @@ public class GamesController : ControllerBase
             round.RoundNumber,
             round.ManualScoring,
             round.CreatedAt,
-            round.Results.Select(r => new RoundResultDto(
-                r.PlayerId, r.Rank,
-                r.BlackPigsCut, r.RedPigsCut, r.BlackPigsLost, r.RedPigsLost,
-                r.ThreePairsStraight, r.FourOfAKind, r.FourPairsStraight, r.WhiteWin,
-                r.Score)).ToList());
+            round.Results.Select(MapRoundResult).ToList());
     }
 
     [HttpDelete("{id:guid}/rounds/{roundId:guid}")]
@@ -167,11 +163,20 @@ public class GamesController : ControllerBase
                 .OrderBy(r => r.RoundNumber)
                 .Select(r => new RoundDto(
                     r.Id, r.RoundNumber, r.ManualScoring, r.CreatedAt,
-                    r.Results.Select(rr => new RoundResultDto(
-                        rr.PlayerId, rr.Rank,
-                        rr.BlackPigsCut, rr.RedPigsCut, rr.BlackPigsLost, rr.RedPigsLost,
-                        rr.ThreePairsStraight, rr.FourOfAKind, rr.FourPairsStraight, rr.WhiteWin,
-                        rr.Score)).ToList()))
+                    r.Results.Select(MapRoundResult).ToList()))
                 .ToList());
     }
+
+    private static RoundResultDto MapRoundResult(RoundResult r) => new(
+        r.PlayerId,
+        r.Rank,
+        r.BlackPigsCut, r.RedPigsCut, r.BlackPigsLost, r.RedPigsLost,
+        r.ThreePairsStraight, r.ThreePairsVictimId,
+        r.FourOfAKind, r.FourOfAKindVictimId,
+        r.FourPairsStraight, r.FourPairsVictimId,
+        r.WhiteWin,
+        r.Judge,
+        r.BlackPigsHeld, r.RedPigsHeld,
+        r.HasThreePairsHeld, r.HasFourOfAKindHeld, r.HasFourPairsHeld,
+        r.Score);
 }
