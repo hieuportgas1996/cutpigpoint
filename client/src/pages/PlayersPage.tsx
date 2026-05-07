@@ -124,7 +124,7 @@ export default function PlayersPage() {
       <div className="page-header">
         <div>
           <h1>Người chơi</h1>
-          <div className="muted small">Quản lý danh sách người chơi để thêm vào ván</div>
+          <div className="muted small">Quản lý danh sách mấy thằng loz vào cutpig</div>
         </div>
         <span className="status done"><Icon name="users" size={14} />{players.length} người</span>
       </div>
@@ -139,7 +139,7 @@ export default function PlayersPage() {
               <label htmlFor="p-name">Tên</label>
               <input
                 id="p-name"
-                placeholder="Ví dụ: Nguyễn Văn A"
+                placeholder="Ví dụ: Bảo kuto"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -150,7 +150,7 @@ export default function PlayersPage() {
               <label htmlFor="p-nick">Biệt danh <span className="dim">(tuỳ chọn)</span></label>
               <input
                 id="p-nick"
-                placeholder="Ví dụ: A Cá"
+                placeholder="Ví dụ: Thiện 4ass"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 autoComplete="off"

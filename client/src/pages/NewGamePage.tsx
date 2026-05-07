@@ -83,7 +83,7 @@ export default function NewGamePage() {
       <div className="page-header">
         <div>
           <h1>Ván mới</h1>
-          <div className="muted small">Chọn 4 người chơi cho ván Tiến Lên</div>
+          <div className="muted small">Chọn 4 người chơi cho ván Cut Pig</div>
         </div>
       </div>
 
