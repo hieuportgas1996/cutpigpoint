@@ -28,16 +28,21 @@ public class TienLenScoringService
 
     public List<RoundResult> Compute(List<PlayerRoundInputDto> inputs, bool manualScoring)
     {
+        var results = ComputeCore(inputs, manualScoring);
+        ValidateZeroSum(results);
+        return results;
+    }
+
+    private static List<RoundResult> ComputeCore(List<PlayerRoundInputDto> inputs, bool manualScoring)
+    {
         if (manualScoring)
         {
-            var results = inputs.Select(i => new RoundResult
+            return inputs.Select(i => new RoundResult
             {
                 PlayerId = i.PlayerId,
                 Rank = i.Rank,
                 Score = i.ManualScore ?? 0
             }).ToList();
-            ValidateZeroSum(results);
-            return results;
         }
 
         if (inputs.Count != 4)
