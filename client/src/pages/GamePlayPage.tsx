@@ -79,11 +79,7 @@ export default function GamePlayPage() {
 
   function setRank(playerId: string, rank: number | null) {
     setInputs((prev) =>
-      prev.map((it) => {
-        if (it.playerId === playerId) return { ...it, rank };
-        if (it.rank === rank && rank !== null) return { ...it, rank: null };
-        return it;
-      })
+      prev.map((it) => (it.playerId === playerId ? { ...it, rank } : it))
     );
   }
 
@@ -290,6 +286,7 @@ export default function GamePlayPage() {
                   player={p}
                   others={game.players.filter((x) => x.playerId !== p.playerId)}
                   input={inputs.find((i) => i.playerId === p.playerId)!}
+                  allInputs={inputs}
                   onUpdate={(patch) => updateInput(p.playerId, patch)}
                   onSetRank={(rank) => setRank(p.playerId, rank)}
                 />
@@ -585,16 +582,23 @@ function NormalPlayerCard({
   player,
   others,
   input,
+  allInputs,
   onUpdate,
   onSetRank
 }: {
   player: GamePlayer;
   others: GamePlayer[];
   input: PlayerInputState;
+  allInputs: PlayerInputState[];
   onUpdate: (patch: Partial<PlayerInputState>) => void;
   onSetRank: (rank: number | null) => void;
 }) {
   const cardClass = `player-card ${input.rank === 1 ? 'has-rank-1' : ''} ${input.rank === 4 ? 'has-rank-4' : ''}`;
+  const takenRanks = new Set(
+    allInputs
+      .filter((i) => i.playerId !== player.playerId && i.rank !== null)
+      .map((i) => i.rank as number)
+  );
   return (
     <div className={cardClass}>
       <div className="player-card-head">
@@ -608,16 +612,21 @@ function NormalPlayerCard({
       <div>
         <div className="section-title">Hạng</div>
         <div className="pill-group">
-          {[1, 2, 3, 4].map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={input.rank === r ? 'active' : ''}
-              onClick={() => onSetRank(input.rank === r ? null : r)}
-            >
-              #{r}
-            </button>
-          ))}
+          {[1, 2, 3, 4].map((r) => {
+            const isMine = input.rank === r;
+            const isTaken = takenRanks.has(r);
+            return (
+              <button
+                key={r}
+                type="button"
+                className={isMine ? 'active' : ''}
+                disabled={isTaken && !isMine}
+                onClick={() => onSetRank(isMine ? null : r)}
+              >
+                #{r}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -933,6 +942,12 @@ function JudgePanel({
           <div className="player-grid">
             {pardoned.map((p) => {
               const input = inputFor(p.playerId);
+              const takenRanks = new Set(
+                pardoned
+                  .filter((x) => x.playerId !== p.playerId)
+                  .map((x) => inputFor(x.playerId).rank)
+                  .filter((r): r is number => r !== null)
+              );
               return (
                 <div
                   key={p.playerId}
@@ -948,16 +963,21 @@ function JudgePanel({
                   <div>
                     <div className="section-title">Hạng</div>
                     <div className="pill-group">
-                      {[2, 3].map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          className={input.rank === r ? 'active' : ''}
-                          onClick={() => onSetRank(p.playerId, input.rank === r ? null : r)}
-                        >
-                          #{r}
-                        </button>
-                      ))}
+                      {[2, 3].map((r) => {
+                        const isMine = input.rank === r;
+                        const isTaken = takenRanks.has(r);
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            className={isMine ? 'active' : ''}
+                            disabled={isTaken && !isMine}
+                            onClick={() => onSetRank(p.playerId, isMine ? null : r)}
+                          >
+                            #{r}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                   <div>
