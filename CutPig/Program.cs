@@ -9,9 +9,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var connectionString = ResolveConnectionString(builder.Configuration);
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    Console.Error.WriteLine("WARN: No DATABASE_URL or ConnectionStrings:DefaultConnection configured. App will start but DB calls will fail.");
+    connectionString = "Host=localhost;Port=5432;Database=placeholder;Username=placeholder;Password=placeholder";
+}
 
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<TienLenScoringService>();
 
@@ -25,11 +29,9 @@ builder.Services.AddCors(opt =>
         .AllowAnyMethod());
 });
 
-var port = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrEmpty(port))
-{
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-}
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+Console.WriteLine($"Binding to http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
@@ -72,17 +74,25 @@ app.MapGet("/health", (AppDbContext db) =>
     }
 });
 
+Console.WriteLine("CutPigPoint API starting...");
 app.Run();
 
-static string ResolveConnectionString(IConfiguration config)
+static string? ResolveConnectionString(IConfiguration config)
 {
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
     if (!string.IsNullOrWhiteSpace(databaseUrl))
     {
-        return BuildNpgsqlConnectionString(databaseUrl);
+        try
+        {
+            return BuildNpgsqlConnectionString(databaseUrl);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"WARN: Failed to parse DATABASE_URL: {ex.Message}");
+            return null;
+        }
     }
-    return config.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("DATABASE_URL or ConnectionStrings:DefaultConnection must be set.");
+    return config.GetConnectionString("DefaultConnection");
 }
 
 static string BuildNpgsqlConnectionString(string databaseUrl)
