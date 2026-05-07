@@ -196,10 +196,9 @@ export default function GamePlayPage() {
   const nextRoundNum = game.rounds.length + 1;
   const champion = finished && ranking.length > 0 ? ranking[0] : null;
 
-  const manualSum = manualScoring
-    ? inputs.reduce((s, i) => s + (i.manualScore ?? 0), 0)
-    : 0;
-  const manualValid = !manualScoring || manualSum === 0;
+  const manualHasPositive = manualScoring && inputs.some((i) => (i.manualScore ?? 0) > 0);
+  const manualHasNegative = manualScoring && inputs.some((i) => (i.manualScore ?? 0) < 0);
+  const manualValid = !manualScoring || (manualHasPositive && manualHasNegative);
 
   return (
     <div>
@@ -356,7 +355,9 @@ export default function GamePlayPage() {
               }}
             >
               <Icon name={manualValid ? 'info' : 'alert'} size={14} />{' '}
-              Tổng điểm 4 người: <strong>{formatScore(manualSum)}</strong> {manualValid ? '(hợp lệ)' : '— phải bằng 0'}
+              {manualValid
+                ? 'Hợp lệ — có cả điểm dương và điểm âm'
+                : 'Round phải có cả người điểm dương và người điểm âm'}
             </div>
           )}
 

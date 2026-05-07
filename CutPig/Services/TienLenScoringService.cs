@@ -29,7 +29,7 @@ public class TienLenScoringService
     public List<RoundResult> Compute(List<PlayerRoundInputDto> inputs, bool manualScoring)
     {
         var results = ComputeCore(inputs, manualScoring);
-        ValidateZeroSum(results);
+        ValidateHasWinnerAndLoser(results);
         return results;
     }
 
@@ -242,11 +242,10 @@ public class TienLenScoringService
         _ => 0
     };
 
-    private static void ValidateZeroSum(List<RoundResult> results)
+    private static void ValidateHasWinnerAndLoser(List<RoundResult> results)
     {
-        var sum = results.Sum(r => r.Score);
-        if (sum != 0)
-            throw new InvalidOperationException($"Tổng điểm phải bằng 0 (hiện tại {sum}).");
+        if (!results.Any(r => r.Score > 0) || !results.Any(r => r.Score < 0))
+            throw new InvalidOperationException("Round phải có cả người được điểm dương và người bị điểm âm.");
     }
 
     private static RoundResult Snapshot(PlayerRoundInputDto i, int score) => new()
