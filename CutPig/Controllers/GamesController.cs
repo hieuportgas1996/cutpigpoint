@@ -176,6 +176,7 @@ public class GamesController : ControllerBase
         r.FourPairsStraight, r.FourPairsVictimId,
         r.WhiteWin,
         r.Judge,
+        r.JudgedVictim,
         r.BlackPigsHeld, r.RedPigsHeld,
         r.HasThreePairsHeld, r.HasFourOfAKindHeld, r.HasFourPairsHeld,
         r.Score);

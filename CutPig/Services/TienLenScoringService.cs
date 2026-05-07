@@ -20,8 +20,10 @@ public class TienLenScoringService
     private const int WhiteWinSelfPoint = 6;
     private const int WhiteWinLossPoint = 2;
 
-    private const int JudgeSelfPoint = 12;
+    private const int JudgeFullSelfPoint = 12;     // case 1 & 2
+    private const int JudgePartialSelfPoint = 4;   // case 3 (1 victim only)
     private const int JudgeLossPoint = 4;
+    private const int JudgePardonPenalty = 1;      // case 2 only
 
     public List<RoundResult> Compute(List<PlayerRoundInputDto> inputs, bool manualScoring)
     {
@@ -71,25 +73,105 @@ public class TienLenScoringService
 
     private static List<RoundResult> ComputeJudge(List<PlayerRoundInputDto> inputs, PlayerRoundInputDto judge)
     {
+        var victims = inputs.Where(i => i.JudgedVictim).ToList();
+        if (victims.Any(v => v.PlayerId == judge.PlayerId))
+            throw new InvalidOperationException("Người phán xét không thể tự là nạn nhân.");
+        if (victims.Count is < 1 or > 3)
+            throw new InvalidOperationException("Phán xét phải có 1, 2 hoặc 3 nạn nhân.");
+
         var totals = inputs.ToDictionary(i => i.PlayerId, _ => 0);
+        var pardoned = inputs.Where(i => i.PlayerId != judge.PlayerId && !i.JudgedVictim).ToList();
 
-        totals[judge.PlayerId] = JudgeSelfPoint;
-        foreach (var p in inputs.Where(i => i.PlayerId != judge.PlayerId))
-            totals[p.PlayerId] = -JudgeLossPoint;
+        // Judger base
+        totals[judge.PlayerId] = victims.Count == 1 ? JudgePartialSelfPoint : JudgeFullSelfPoint;
 
-        foreach (var victim in inputs.Where(i => i.PlayerId != judge.PlayerId))
+        // Each victim: -4 minus held; judger gets the held amount
+        foreach (var v in victims)
         {
-            int extra = victim.BlackPigsHeld * BlackPigPoint
-                      + victim.RedPigsHeld * RedPigPoint
-                      + (victim.HasThreePairsHeld ? ThreePairsPoint : 0)
-                      + (victim.HasFourOfAKindHeld ? FourOfAKindPoint : 0)
-                      + (victim.HasFourPairsHeld ? FourPairsPoint : 0);
+            int held = v.BlackPigsHeld * BlackPigPoint
+                     + v.RedPigsHeld * RedPigPoint
+                     + (v.HasThreePairsHeld ? ThreePairsPoint : 0)
+                     + (v.HasFourOfAKindHeld ? FourOfAKindPoint : 0)
+                     + (v.HasFourPairsHeld ? FourPairsPoint : 0);
+            totals[v.PlayerId] -= JudgeLossPoint + held;
+            totals[judge.PlayerId] += held;
+        }
 
-            totals[judge.PlayerId] += extra;
-            totals[victim.PlayerId] -= extra;
+        if (victims.Count == 3)
+        {
+            // case 1: nothing more to do
+        }
+        else if (victims.Count == 2)
+        {
+            // case 2: the pardoned player gets a flat -1
+            foreach (var p in pardoned)
+                totals[p.PlayerId] -= JudgePardonPenalty;
+        }
+        else
+        {
+            // case 3: 2 pardoned players play a normal sub-round between themselves
+            ApplyCase3SubRound(pardoned, totals, inputs);
         }
 
         return inputs.Select(i => Snapshot(i, totals[i.PlayerId])).ToList();
+    }
+
+    private static void ApplyCase3SubRound(
+        List<PlayerRoundInputDto> pardoned,
+        Dictionary<Guid, int> totals,
+        List<PlayerRoundInputDto> allInputs)
+    {
+        if (pardoned.Count != 2)
+            throw new InvalidOperationException("Case 3 phán xét cần đúng 2 người không bị xử.");
+
+        // Rank: must be exactly {2, 3}
+        var ranks = pardoned.Where(i => i.Rank.HasValue).Select(i => i.Rank!.Value).ToList();
+        if (ranks.Count != 2 || ranks.Distinct().Count() != 2 || !ranks.Contains(2) || !ranks.Contains(3))
+            throw new InvalidOperationException("Hai người không bị xử phải có hạng #2 và #3.");
+
+        foreach (var p in pardoned)
+            totals[p.PlayerId] += RankPoints(p.Rank!.Value);
+
+        // Pigs (between the two pardoned players)
+        foreach (var p in pardoned)
+        {
+            int cut = p.BlackPigsCut * BlackPigPoint + p.RedPigsCut * RedPigPoint;
+            int lost = p.BlackPigsLost * BlackPigPoint + p.RedPigsLost * RedPigPoint;
+            totals[p.PlayerId] += cut;
+            totals[p.PlayerId] -= lost;
+        }
+
+        // Bonus 1-vs-1 (victim must be the other pardoned player)
+        var pardonedIds = pardoned.Select(p => p.PlayerId).ToHashSet();
+        foreach (var p in pardoned)
+        {
+            ApplyBonusInScope(totals, p.PlayerId, p.ThreePairsStraight, p.ThreePairsVictimId, ThreePairsPoint, "3 đôi thông", pardonedIds, allInputs);
+            ApplyBonusInScope(totals, p.PlayerId, p.FourOfAKind, p.FourOfAKindVictimId, FourOfAKindPoint, "tứ quý", pardonedIds, allInputs);
+            ApplyBonusInScope(totals, p.PlayerId, p.FourPairsStraight, p.FourPairsVictimId, FourPairsPoint, "4 đôi thông", pardonedIds, allInputs);
+        }
+    }
+
+    private static void ApplyBonusInScope(
+        Dictionary<Guid, int> totals,
+        Guid winnerId,
+        bool flag,
+        Guid? victimId,
+        int points,
+        string bonusName,
+        HashSet<Guid> allowedVictims,
+        List<PlayerRoundInputDto> allInputs)
+    {
+        if (!flag) return;
+        if (victimId == null)
+            throw new InvalidOperationException($"Cần chọn người thua khi ăn {bonusName}.");
+        if (!allowedVictims.Contains(victimId.Value))
+            throw new InvalidOperationException($"Người thua {bonusName} phải là người không bị phán xét.");
+        if (victimId == winnerId)
+            throw new InvalidOperationException($"Người ăn {bonusName} không thể tự thua chính mình.");
+        if (!allInputs.Any(i => i.PlayerId == victimId.Value))
+            throw new InvalidOperationException($"Người thua {bonusName} không thuộc bàn chơi.");
+        totals[winnerId] += points;
+        totals[victimId.Value] -= points;
     }
 
     private static List<RoundResult> ComputeNormal(List<PlayerRoundInputDto> inputs)
@@ -172,6 +254,7 @@ public class TienLenScoringService
         FourPairsVictimId = i.FourPairsVictimId,
         WhiteWin = i.WhiteWin,
         Judge = i.Judge,
+        JudgedVictim = i.JudgedVictim,
         BlackPigsHeld = i.BlackPigsHeld,
         RedPigsHeld = i.RedPigsHeld,
         HasThreePairsHeld = i.HasThreePairsHeld,

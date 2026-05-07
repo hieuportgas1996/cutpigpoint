@@ -28,6 +28,7 @@ export interface RoundResult {
   fourPairsVictimId: string | null;
   whiteWin: boolean;
   judge: boolean;
+  judgedVictim: boolean;
   blackPigsHeld: number;
   redPigsHeld: number;
   hasThreePairsHeld: boolean;
@@ -67,6 +68,7 @@ export interface PlayerRoundInput {
   fourPairsVictimId: string | null;
   whiteWin: boolean;
   judge: boolean;
+  judgedVictim: boolean;
   blackPigsHeld: number;
   redPigsHeld: number;
   hasThreePairsHeld: boolean;

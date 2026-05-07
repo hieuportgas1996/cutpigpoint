@@ -45,10 +45,12 @@ public class RoundResult
     // Về trắng (round-ending): +6 cho người này, -2 cho 3 người còn lại
     public bool WhiteWin { get; set; }
 
-    // Phán xét (round-ending): +12/-4/-4/-4, plus quét heo+bonus trên tay 3 player kia
+    // Phán xét: 1 player Judge=true. Nạn nhân JudgedVictim=true.
+    // Có thể có 1, 2, hoặc 3 nạn nhân.
     public bool Judge { get; set; }
+    public bool JudgedVictim { get; set; }
 
-    // Bài trên tay khi BỊ phán xét bóc (chỉ dùng khi 1 player khác judge)
+    // Bài trên tay khi BỊ phán xét bóc (chỉ dùng cho người có JudgedVictim=true)
     public int BlackPigsHeld { get; set; }
     public int RedPigsHeld { get; set; }
     public bool HasThreePairsHeld { get; set; }

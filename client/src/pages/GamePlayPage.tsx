@@ -24,6 +24,7 @@ function emptyInput(playerId: string): PlayerInputState {
     fourPairsVictimId: null,
     whiteWin: false,
     judge: false,
+    judgedVictim: false,
     blackPigsHeld: 0,
     redPigsHeld: 0,
     hasThreePairsHeld: false,
@@ -95,6 +96,8 @@ export default function GamePlayPage() {
           const base = emptyInput(p.playerId);
           if (newMode === 'whiteWin' && p.playerId === playerId) base.whiteWin = true;
           if (newMode === 'judge' && p.playerId === playerId) base.judge = true;
+          // default: judge xử cả 3 người (case 1)
+          if (newMode === 'judge' && playerId && p.playerId !== playerId) base.judgedVictim = true;
           return base;
         })
       );
@@ -103,17 +106,23 @@ export default function GamePlayPage() {
 
   function buildSubmitInputs(): PlayerInputState[] {
     if (mode === 'normal') return inputs;
+
+    if (mode === 'whiteWin') {
+      return inputs.map((it) => ({
+        ...emptyInput(it.playerId),
+        whiteWin: it.playerId === specialPlayerId
+      }));
+    }
+
+    // mode === 'judge'
     return inputs.map((it) => {
       if (it.playerId === specialPlayerId) {
-        return {
-          ...emptyInput(it.playerId),
-          whiteWin: mode === 'whiteWin',
-          judge: mode === 'judge'
-        };
+        return { ...emptyInput(it.playerId), judge: true };
       }
-      if (mode === 'judge') {
+      if (it.judgedVictim) {
         return {
           ...emptyInput(it.playerId),
+          judgedVictim: true,
           blackPigsHeld: it.blackPigsHeld,
           redPigsHeld: it.redPigsHeld,
           hasThreePairsHeld: it.hasThreePairsHeld,
@@ -121,7 +130,21 @@ export default function GamePlayPage() {
           hasFourPairsHeld: it.hasFourPairsHeld
         };
       }
-      return emptyInput(it.playerId);
+      // pardoned: keep rank + pigs + bonuses for case 3, ignored by backend in case 1/2
+      return {
+        ...emptyInput(it.playerId),
+        rank: it.rank,
+        blackPigsCut: it.blackPigsCut,
+        redPigsCut: it.redPigsCut,
+        blackPigsLost: it.blackPigsLost,
+        redPigsLost: it.redPigsLost,
+        threePairsStraight: it.threePairsStraight,
+        threePairsVictimId: it.threePairsVictimId,
+        fourOfAKind: it.fourOfAKind,
+        fourOfAKindVictimId: it.fourOfAKindVictimId,
+        fourPairsStraight: it.fourPairsStraight,
+        fourPairsVictimId: it.fourPairsVictimId
+      };
     });
   }
 
@@ -287,6 +310,7 @@ export default function GamePlayPage() {
               others={game.players.filter((p) => p.playerId !== specialPlayerId)}
               inputs={inputs}
               onUpdate={updateInput}
+              onSetRank={setRank}
             />
           )}
 
@@ -744,12 +768,14 @@ function JudgePanel({
   judge,
   others,
   inputs,
-  onUpdate
+  onUpdate,
+  onSetRank
 }: {
   judge: GamePlayer;
   others: GamePlayer[];
   inputs: PlayerInputState[];
   onUpdate: (playerId: string, patch: Partial<PlayerInputState>) => void;
+  onSetRank: (playerId: string, rank: number | null) => void;
 }) {
   function inputFor(pid: string) {
     return inputs.find((i) => i.playerId === pid)!;
@@ -764,8 +790,13 @@ function JudgePanel({
       (i.hasFourPairsHeld ? 5 : 0)
     );
   }
-  const totalExtra = others.reduce((s, p) => s + heldExtra(p.playerId), 0);
-  const judgeFinal = 12 + totalExtra;
+
+  const victims = others.filter((p) => inputFor(p.playerId).judgedVictim);
+  const pardoned = others.filter((p) => !inputFor(p.playerId).judgedVictim);
+  const victimCount = victims.length;
+  const totalExtra = victims.reduce((s, p) => s + heldExtra(p.playerId), 0);
+  const judgeBase = victimCount === 1 ? 4 : 12;
+  const judgeFinal = judgeBase + totalExtra;
 
   return (
     <div>
@@ -784,46 +815,197 @@ function JudgePanel({
           <div style={{ flex: 1 }}>
             <div className="dim small">Người phán xét</div>
             <div className="bold" style={{ fontSize: '1.1rem' }}>{judge.name}</div>
-            <div className="muted small">+12 điểm cơ bản • +{totalExtra} từ bài đối thủ • <strong>Tổng dự kiến: {formatScore(judgeFinal)}</strong></div>
+            <div className="muted small">
+              +{judgeBase} cơ bản
+              {totalExtra > 0 && <> • +{totalExtra} từ bài bị xử</>}
+              {' • '}
+              <strong>Tổng dự kiến: {formatScore(judgeFinal)}</strong>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="section-title">Bài còn trên tay 3 đối thủ</div>
+      <div className="section-title">Chọn người bị xử (1-3 người)</div>
       <div className="muted tiny mb-1">
-        <Icon name="info" size={11} /> Tick những lá bài đối thủ đang giữ. Mỗi heo đen +1, đỏ +2; 3 đôi thông +3; tứ quý +4; 4 đôi thông +5 sẽ được cộng vào điểm phán xét và trừ vào điểm đối thủ.
+        <Icon name="info" size={11} /> Tick những người bị phán xét. Người được tha sẽ chịu phạt nhẹ hoặc chơi bình thường.
       </div>
-
-      <div className="player-grid">
+      <div className="row mt-1" style={{ marginBottom: '0.85rem' }}>
         {others.map((p) => {
           const i = inputFor(p.playerId);
-          const extra = heldExtra(p.playerId);
+          const isVictim = i.judgedVictim;
           return (
-            <div key={p.playerId} className="player-card">
-              <div className="player-card-head">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
-                  <h4>{p.name}</h4>
-                </div>
-                <span className="score-pill neg">-{4 + extra}</span>
-              </div>
-
-              <div>
-                <div className="section-title">Heo trên tay</div>
-                <Stepper label="Heo đen" value={i.blackPigsHeld} onChange={(v) => onUpdate(p.playerId, { blackPigsHeld: v })} />
-                <Stepper label="Heo đỏ" value={i.redPigsHeld} onChange={(v) => onUpdate(p.playerId, { redPigsHeld: v })} />
-              </div>
-
-              <div>
-                <div className="section-title">Bonus trên tay</div>
-                <SimpleToggle label="3 đôi thông (+3)" checked={i.hasThreePairsHeld} onChange={(v) => onUpdate(p.playerId, { hasThreePairsHeld: v })} />
-                <SimpleToggle label="Tứ quý (+4)" checked={i.hasFourOfAKindHeld} onChange={(v) => onUpdate(p.playerId, { hasFourOfAKindHeld: v })} />
-                <SimpleToggle label="4 đôi thông (+5)" checked={i.hasFourPairsHeld} onChange={(v) => onUpdate(p.playerId, { hasFourPairsHeld: v })} />
-              </div>
-            </div>
+            <button
+              key={p.playerId}
+              type="button"
+              className={isVictim ? '' : 'secondary'}
+              onClick={() => {
+                onUpdate(p.playerId, {
+                  judgedVictim: !isVictim,
+                  // Khi chuyển trạng thái, reset rank của người này
+                  rank: null,
+                  blackPigsCut: 0,
+                  redPigsCut: 0,
+                  blackPigsLost: 0,
+                  redPigsLost: 0,
+                  threePairsStraight: false,
+                  threePairsVictimId: null,
+                  fourOfAKind: false,
+                  fourOfAKindVictimId: null,
+                  fourPairsStraight: false,
+                  fourPairsVictimId: null,
+                  blackPigsHeld: 0,
+                  redPigsHeld: 0,
+                  hasThreePairsHeld: false,
+                  hasFourOfAKindHeld: false,
+                  hasFourPairsHeld: false
+                });
+              }}
+              style={{ padding: '0.4rem 0.7rem 0.4rem 0.4rem', gap: '0.5rem' }}
+            >
+              <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+              <span>{p.name}</span>
+              {isVictim && <Icon name="check" size={14} />}
+            </button>
           );
         })}
       </div>
+
+      {victimCount === 0 && (
+        <div className="card empty" style={{ padding: '1rem' }}>
+          <div className="muted small">Chưa chọn ai bị phán xét. Tick ít nhất 1 người ở trên.</div>
+        </div>
+      )}
+
+      {victimCount >= 1 && (
+        <>
+          <div className="section-title">Bài còn trên tay người bị xử</div>
+          <div className="muted tiny mb-1">
+            <Icon name="info" size={11} /> Heo đen +1, đỏ +2 • 3 đôi thông +3 • tứ quý +4 • 4 đôi thông +5
+          </div>
+          <div className="player-grid">
+            {victims.map((p) => {
+              const i = inputFor(p.playerId);
+              const extra = heldExtra(p.playerId);
+              return (
+                <div key={p.playerId} className="player-card has-rank-4">
+                  <div className="player-card-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+                      <h4>{p.name}</h4>
+                    </div>
+                    <span className="score-pill neg">-{4 + extra}</span>
+                  </div>
+                  <div>
+                    <div className="section-title">Heo trên tay</div>
+                    <Stepper label="Heo đen" value={i.blackPigsHeld} onChange={(v) => onUpdate(p.playerId, { blackPigsHeld: v })} />
+                    <Stepper label="Heo đỏ" value={i.redPigsHeld} onChange={(v) => onUpdate(p.playerId, { redPigsHeld: v })} />
+                  </div>
+                  <div>
+                    <div className="section-title">Bonus trên tay</div>
+                    <SimpleToggle label="3 đôi thông (+3)" checked={i.hasThreePairsHeld} onChange={(v) => onUpdate(p.playerId, { hasThreePairsHeld: v })} />
+                    <SimpleToggle label="Tứ quý (+4)" checked={i.hasFourOfAKindHeld} onChange={(v) => onUpdate(p.playerId, { hasFourOfAKindHeld: v })} />
+                    <SimpleToggle label="4 đôi thông (+5)" checked={i.hasFourPairsHeld} onChange={(v) => onUpdate(p.playerId, { hasFourPairsHeld: v })} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {victimCount === 2 && pardoned.length === 1 && (
+        <div className="mt-2">
+          <div className="section-title">Người được tha</div>
+          <div className="leader-row" style={{ background: 'var(--bg-2)' }}>
+            <Avatar playerId={pardoned[0].playerId} name={pardoned[0].name} hasAvatar={pardoned[0].hasAvatar} size="sm" />
+            <div className="name">{pardoned[0].name}</div>
+            <span className="score-pill neg">-1</span>
+          </div>
+        </div>
+      )}
+
+      {victimCount === 1 && pardoned.length === 2 && (
+        <div className="mt-3">
+          <div className="section-title">2 người không bị xử — chia hạng #2 và #3</div>
+          <div className="muted tiny mb-1">
+            <Icon name="info" size={11} /> Chọn hạng cho 2 người này. Có thể cộng heo chặt nhau và bonus 1-vs-1.
+          </div>
+          <div className="player-grid">
+            {pardoned.map((p) => {
+              const input = inputFor(p.playerId);
+              return (
+                <div
+                  key={p.playerId}
+                  className={`player-card ${input.rank === 2 ? 'has-rank-1' : ''}`}
+                >
+                  <div className="player-card-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+                      <h4>{p.name}</h4>
+                    </div>
+                    {input.rank && <div className={`rank-badge r${input.rank}`}>#{input.rank}</div>}
+                  </div>
+                  <div>
+                    <div className="section-title">Hạng</div>
+                    <div className="pill-group">
+                      {[2, 3].map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          className={input.rank === r ? 'active' : ''}
+                          onClick={() => onSetRank(p.playerId, input.rank === r ? null : r)}
+                        >
+                          #{r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="section-title">Heo bị chặt (mất điểm)</div>
+                    <Stepper label="Heo đen" value={input.blackPigsLost} onChange={(v) => onUpdate(p.playerId, { blackPigsLost: v })} />
+                    <Stepper label="Heo đỏ" value={input.redPigsLost} onChange={(v) => onUpdate(p.playerId, { redPigsLost: v })} />
+                  </div>
+                  <div>
+                    <div className="section-title">Heo chặt được (ăn điểm)</div>
+                    <Stepper label="Heo đen" value={input.blackPigsCut} onChange={(v) => onUpdate(p.playerId, { blackPigsCut: v })} />
+                    <Stepper label="Heo đỏ" value={input.redPigsCut} onChange={(v) => onUpdate(p.playerId, { redPigsCut: v })} />
+                  </div>
+                  <div>
+                    <div className="section-title">Bonus đặc biệt</div>
+                    <BonusVictimRow
+                      label="3 đôi thông"
+                      value="+3 / -3"
+                      checked={input.threePairsStraight}
+                      victimId={input.threePairsVictimId}
+                      others={pardoned.filter((x) => x.playerId !== p.playerId)}
+                      onCheck={(v) => onUpdate(p.playerId, { threePairsStraight: v, threePairsVictimId: v ? input.threePairsVictimId : null })}
+                      onVictim={(vid) => onUpdate(p.playerId, { threePairsVictimId: vid })}
+                    />
+                    <BonusVictimRow
+                      label="Tứ quý"
+                      value="+4 / -4"
+                      checked={input.fourOfAKind}
+                      victimId={input.fourOfAKindVictimId}
+                      others={pardoned.filter((x) => x.playerId !== p.playerId)}
+                      onCheck={(v) => onUpdate(p.playerId, { fourOfAKind: v, fourOfAKindVictimId: v ? input.fourOfAKindVictimId : null })}
+                      onVictim={(vid) => onUpdate(p.playerId, { fourOfAKindVictimId: vid })}
+                    />
+                    <BonusVictimRow
+                      label="4 đôi thông"
+                      value="+5 / -5"
+                      checked={input.fourPairsStraight}
+                      victimId={input.fourPairsVictimId}
+                      others={pardoned.filter((x) => x.playerId !== p.playerId)}
+                      onCheck={(v) => onUpdate(p.playerId, { fourPairsStraight: v, fourPairsVictimId: v ? input.fourPairsVictimId : null })}
+                      onVictim={(vid) => onUpdate(p.playerId, { fourPairsVictimId: vid })}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

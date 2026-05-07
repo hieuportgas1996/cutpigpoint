@@ -53,6 +53,7 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"FourOfAKindVictimId\" uuid");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"FourPairsVictimId\" uuid");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"Judge\" boolean NOT NULL DEFAULT false");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"JudgedVictim\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"BlackPigsHeld\" integer NOT NULL DEFAULT 0");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"RedPigsHeld\" integer NOT NULL DEFAULT 0");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasThreePairsHeld\" boolean NOT NULL DEFAULT false");
