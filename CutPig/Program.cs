@@ -48,6 +48,7 @@ using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.EnsureCreated();
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Players\" ADD COLUMN IF NOT EXISTS \"AvatarData\" text");
         logger.LogInformation("Database ready.");
     }
     catch (Exception ex)

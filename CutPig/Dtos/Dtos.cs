@@ -4,11 +4,13 @@ public record CreatePlayerRequest(string Name, string? Nickname);
 
 public record UpdatePlayerRequest(string Name, string? Nickname);
 
-public record PlayerDto(Guid Id, string Name, string? Nickname);
+public record PlayerDto(Guid Id, string Name, string? Nickname, bool HasAvatar);
+
+public record UpdateAvatarRequest(string DataUrl);
 
 public record CreateGameRequest(List<Guid> PlayerIds);
 
-public record GamePlayerDto(Guid PlayerId, string Name, int Seat, int TotalScore);
+public record GamePlayerDto(Guid PlayerId, string Name, int Seat, int TotalScore, bool HasAvatar);
 
 public record GameDto(
     Guid Id,

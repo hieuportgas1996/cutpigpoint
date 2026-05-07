@@ -12,5 +12,7 @@ public class Player
     [MaxLength(50)]
     public string? Nickname { get; set; }
 
+    public string? AvatarData { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

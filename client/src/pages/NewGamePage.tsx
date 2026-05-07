@@ -4,6 +4,7 @@ import { api, Player } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
 import { initials } from '../ui/helpers';
+import { Avatar } from '../ui/Avatar';
 
 export default function NewGamePage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -96,7 +97,7 @@ export default function NewGamePage() {
                 <div className={`rank-badge r${i + 1}`}>{i + 1}</div>
                 {player ? (
                   <>
-                    <div className="avatar sm">{initials(player.name)}</div>
+                    <Avatar playerId={player.id} name={player.name} hasAvatar={player.hasAvatar} size="sm" />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.name}</div>
                       {player.nickname && <div className="tiny muted">{player.nickname}</div>}
@@ -138,9 +139,13 @@ export default function NewGamePage() {
                 }}
                 style={{ padding: '0.4rem 0.75rem 0.4rem 0.4rem', gap: '0.5rem' }}
               >
-                <span className="avatar sm" style={{ background: selected ? 'rgba(255,255,255,0.25)' : undefined }}>
-                  {initials(p.name)}
-                </span>
+                {p.hasAvatar ? (
+                  <Avatar playerId={p.id} name={p.name} hasAvatar size="sm" />
+                ) : (
+                  <span className="avatar sm" style={{ background: selected ? 'rgba(255,255,255,0.25)' : undefined }}>
+                    {initials(p.name)}
+                  </span>
+                )}
                 {p.name}
                 {selected && <span className="tiny" style={{ opacity: 0.85 }}>#{seatIndex + 1}</span>}
               </button>

@@ -33,7 +33,7 @@ public class GamesController : ControllerBase
             g.Id,
             g.StartedAt,
             g.FinishedAt,
-            Players = g.Players.OrderBy(p => p.Seat).Select(p => new { p.PlayerId, Name = p.Player!.Name, p.Seat })
+            Players = g.Players.OrderBy(p => p.Seat).Select(p => new { p.PlayerId, Name = p.Player!.Name, p.Seat, HasAvatar = p.Player!.AvatarData != null })
         }));
     }
 
@@ -161,7 +161,7 @@ public class GamesController : ControllerBase
             g.FinishedAt,
             g.Players
                 .OrderBy(p => p.Seat)
-                .Select(p => new GamePlayerDto(p.PlayerId, p.Player!.Name, p.Seat, totals[p.PlayerId]))
+                .Select(p => new GamePlayerDto(p.PlayerId, p.Player!.Name, p.Seat, totals[p.PlayerId], p.Player!.AvatarData != null))
                 .ToList(),
             g.Rounds
                 .OrderBy(r => r.RoundNumber)

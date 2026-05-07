@@ -493,6 +493,8 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 .avatar.lg { width: 44px; height: 44px; font-size: 0.95rem; }
 .avatar.sm { width: 28px; height: 28px; font-size: 0.72rem; }
+.avatar { overflow: hidden; }
+.avatar img { display: block; }
 
 /* Rank badge */
 .rank-badge {

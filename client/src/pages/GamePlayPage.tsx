@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import { api, Game, PlayerRoundInput } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
-import { formatScore, initials, scoreClass, formatDateTime } from '../ui/helpers';
+import { formatScore, scoreClass, formatDateTime } from '../ui/helpers';
+import { Avatar } from '../ui/Avatar';
 
 type PlayerInputState = PlayerRoundInput;
 
@@ -161,7 +162,7 @@ export default function GamePlayPage() {
           {ranking.map((p, idx) => (
             <div key={p.playerId} className={`leader-row ${idx === 0 ? 'top1' : ''}`}>
               <div className={`rank-badge r${idx + 1}`}>{idx + 1}</div>
-              <div className="avatar sm">{initials(p.name)}</div>
+              <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
               <div className="name">{p.name}</div>
               <span className={`score-pill ${scoreClass(p.totalScore)}`}>{formatScore(p.totalScore)}</span>
             </div>
@@ -192,7 +193,7 @@ export default function GamePlayPage() {
                 <div key={p.playerId} className={cardClass}>
                   <div className="player-card-head">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="avatar sm">{initials(p.name)}</div>
+                      <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
                       <h4>{p.name}</h4>
                     </div>
                     {input.rank && <div className={`rank-badge r${input.rank}`}>#{input.rank}</div>}

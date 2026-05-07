@@ -2,6 +2,7 @@ export interface Player {
   id: string;
   name: string;
   nickname?: string | null;
+  hasAvatar: boolean;
 }
 
 export interface GamePlayer {
@@ -9,6 +10,7 @@ export interface GamePlayer {
   name: string;
   seat: number;
   totalScore: number;
+  hasAvatar: boolean;
 }
 
 export interface RoundResult {
@@ -78,8 +80,12 @@ export const api = {
   updatePlayer: (id: string, name: string, nickname?: string) =>
     request<Player>(`/players/${id}`, { method: 'PUT', body: JSON.stringify({ name, nickname }) }),
   deletePlayer: (id: string) => request<void>(`/players/${id}`, { method: 'DELETE' }),
+  setAvatar: (id: string, dataUrl: string) =>
+    request<void>(`/players/${id}/avatar`, { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
+  deleteAvatar: (id: string) => request<void>(`/players/${id}/avatar`, { method: 'DELETE' }),
+  avatarUrl: (id: string) => `${BASE}/players/${id}/avatar`,
 
-  listGames: () => request<Array<{ id: string; startedAt: string; finishedAt: string | null; players: { playerId: string; name: string; seat: number }[] }>>('/games'),
+  listGames: () => request<Array<{ id: string; startedAt: string; finishedAt: string | null; players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[] }>>('/games'),
   getGame: (id: string) => request<Game>(`/games/${id}`),
   createGame: (playerIds: string[]) =>
     request<Game>('/games', { method: 'POST', body: JSON.stringify({ playerIds }) }),

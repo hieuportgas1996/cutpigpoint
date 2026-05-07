@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
-import { initials, relativeTime } from '../ui/helpers';
+import { relativeTime } from '../ui/helpers';
+import { Avatar } from '../ui/Avatar';
 
 interface GameSummary {
   id: string;
   startedAt: string;
   finishedAt: string | null;
-  players: { playerId: string; name: string; seat: number }[];
+  players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[];
 }
 
 export default function GamesPage() {
@@ -91,15 +92,15 @@ function GameRow({ g }: { g: GameSummary }) {
               {g.players.map((p, i) => (
                 <div
                   key={p.playerId}
-                  className="avatar sm"
                   style={{
                     marginLeft: i === 0 ? 0 : -8,
-                    border: '2px solid var(--bg-elev)',
-                    zIndex: 4 - i
+                    zIndex: 4 - i,
+                    borderRadius: '50%',
+                    boxShadow: '0 0 0 2px var(--bg-elev)'
                   }}
                   title={p.name}
                 >
-                  {initials(p.name)}
+                  <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
                 </div>
               ))}
             </div>
