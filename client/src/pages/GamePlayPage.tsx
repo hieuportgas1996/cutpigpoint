@@ -795,7 +795,7 @@ function JudgePanel({
   const pardoned = others.filter((p) => !inputFor(p.playerId).judgedVictim);
   const victimCount = victims.length;
   const totalExtra = victims.reduce((s, p) => s + heldExtra(p.playerId), 0);
-  const judgeBase = victimCount === 1 ? 4 : 12;
+  const judgeBase = victimCount === 1 ? 4 : victimCount === 2 ? 9 : 12;
   const judgeFinal = judgeBase + totalExtra;
 
   return (

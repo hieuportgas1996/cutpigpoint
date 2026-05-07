@@ -20,10 +20,11 @@ public class TienLenScoringService
     private const int WhiteWinSelfPoint = 6;
     private const int WhiteWinLossPoint = 2;
 
-    private const int JudgeFullSelfPoint = 12;     // case 1 & 2
-    private const int JudgePartialSelfPoint = 4;   // case 3 (1 victim only)
+    private const int JudgeAllVictimsSelfPoint = 12; // case 1: 3 victims
+    private const int JudgeTwoVictimsSelfPoint = 9;  // case 2: 2 victims (4+4) + 1 from pardoned
+    private const int JudgeOneVictimSelfPoint = 4;   // case 3: 1 victim
     private const int JudgeLossPoint = 4;
-    private const int JudgePardonPenalty = 1;      // case 2 only
+    private const int JudgePardonPenalty = 1;        // case 2 only
 
     public List<RoundResult> Compute(List<PlayerRoundInputDto> inputs, bool manualScoring)
     {
@@ -83,7 +84,12 @@ public class TienLenScoringService
         var pardoned = inputs.Where(i => i.PlayerId != judge.PlayerId && !i.JudgedVictim).ToList();
 
         // Judger base
-        totals[judge.PlayerId] = victims.Count == 1 ? JudgePartialSelfPoint : JudgeFullSelfPoint;
+        totals[judge.PlayerId] = victims.Count switch
+        {
+            1 => JudgeOneVictimSelfPoint,
+            2 => JudgeTwoVictimsSelfPoint,
+            _ => JudgeAllVictimsSelfPoint
+        };
 
         // Each victim: -4 minus held; judger gets the held amount
         foreach (var v in victims)
