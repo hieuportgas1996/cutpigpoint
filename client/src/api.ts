@@ -55,7 +55,8 @@ export interface PlayerRoundInput {
   manualScore: number | null;
 }
 
-const BASE = '/api';
+const RAW_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+const BASE = `${RAW_BASE}/api`;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
