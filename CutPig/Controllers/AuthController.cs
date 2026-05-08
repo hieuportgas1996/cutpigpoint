@@ -12,7 +12,7 @@ namespace CutPig.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(1);
+    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(8);
 
     private readonly AppDbContext _db;
 

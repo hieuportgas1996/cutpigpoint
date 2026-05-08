@@ -41,7 +41,7 @@ App tính điểm Tiến Lên Miền Nam (4 người) cho một nhóm bạn. Sta
   - `api/auth` — `POST /login`, `POST /logout`, `GET /me`. Chỉ `/login` public; còn lại bị `AuthMiddleware` chặn nếu thiếu Bearer token hợp lệ. Đổi username/password làm trực tiếp trong DB (không có endpoint update — chủ ý không expose CRUD account ra UI).
   - `api/players` — CRUD; `GET/PUT/DELETE /{id}/avatar`.
   - `api/games` — list, get, create, `POST /{id}/finish`, `POST /{id}/rounds`, `DELETE /{id}/rounds/{roundId}`, `DELETE /{id}` (chỉ cho game đã finished).
-- **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)): mọi `/api/*` (trừ `/api/auth/login`) yêu cầu header `Authorization: Bearer <token>`. Token sinh khi login (random 32 byte base64url), lưu trong bảng `AuthTokens` cùng `ExpiresAt = now + 1 day`. Hash mật khẩu PBKDF2-SHA256 100k iter trong [Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs). Bootstrap user đầu tiên từ `INITIAL_USERNAME`/`INITIAL_PASSWORD` env (default `admin`/`admin`) — chỉ chạy khi bảng trống.
+- **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)): mọi `/api/*` (trừ `/api/auth/login`) yêu cầu header `Authorization: Bearer <token>`. Token sinh khi login (random 32 byte base64url), lưu trong bảng `AuthTokens` cùng `ExpiresAt = now + 8 hours`. Hash mật khẩu PBKDF2-SHA256 100k iter trong [Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs). Bootstrap user đầu tiên từ `INITIAL_USERNAME`/`INITIAL_PASSWORD` env (default `admin`/`admin`) — chỉ chạy khi bảng trống.
 
 ## Domain model
 
