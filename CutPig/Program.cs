@@ -62,6 +62,28 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourOfAKindHeld\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourPairsHeld\" boolean NOT NULL DEFAULT false");
 
+        // Auth tables (EnsureCreated skips when DB already has any tables, so create explicitly for upgraded DBs)
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ""AppUsers"" (
+                ""Id"" uuid NOT NULL PRIMARY KEY,
+                ""Username"" text NOT NULL,
+                ""PasswordHash"" text NOT NULL,
+                ""CreatedAt"" timestamp with time zone NOT NULL,
+                ""UpdatedAt"" timestamp with time zone NOT NULL
+            )");
+        db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppUsers_Username"" ON ""AppUsers"" (""Username"")");
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ""AuthTokens"" (
+                ""Id"" uuid NOT NULL PRIMARY KEY,
+                ""Token"" text NOT NULL,
+                ""UserId"" uuid NOT NULL,
+                ""CreatedAt"" timestamp with time zone NOT NULL,
+                ""ExpiresAt"" timestamp with time zone NOT NULL,
+                CONSTRAINT ""FK_AuthTokens_AppUsers_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""AppUsers"" (""Id"") ON DELETE CASCADE
+            )");
+        db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AuthTokens_Token"" ON ""AuthTokens"" (""Token"")");
+        db.Database.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_AuthTokens_UserId"" ON ""AuthTokens"" (""UserId"")");
+
         // Bootstrap admin user if none exists
         if (!db.AppUsers.Any())
         {
