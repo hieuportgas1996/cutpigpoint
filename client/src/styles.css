@@ -103,11 +103,14 @@ h4 { font-size: 1rem; margin-bottom: 0.4em; }
   backdrop-filter: saturate(140%) blur(12px);
   -webkit-backdrop-filter: saturate(140%) blur(12px);
   border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
 }
 .nav-inner {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0.75rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
   display: flex;
   gap: 0.5rem;
   align-items: center;
