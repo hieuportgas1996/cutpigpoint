@@ -1,4 +1,6 @@
 using CutPig.Data;
+using CutPig.Domain;
+using CutPig.Middleware;
 using CutPig.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -59,6 +61,21 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasThreePairsHeld\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourOfAKindHeld\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourPairsHeld\" boolean NOT NULL DEFAULT false");
+
+        // Bootstrap admin user if none exists
+        if (!db.AppUsers.Any())
+        {
+            var initialUsername = Environment.GetEnvironmentVariable("INITIAL_USERNAME") ?? "admin";
+            var initialPassword = Environment.GetEnvironmentVariable("INITIAL_PASSWORD") ?? "admin";
+            db.AppUsers.Add(new AppUser
+            {
+                Username = initialUsername,
+                PasswordHash = PasswordHasher.Hash(initialPassword)
+            });
+            db.SaveChanges();
+            logger.LogWarning("Created initial admin user '{Username}'. Change the password immediately.", initialUsername);
+        }
+
         logger.LogInformation("Database ready.");
     }
     catch (Exception ex)
@@ -68,6 +85,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("AllowFrontend");
+app.UseMiddleware<AuthMiddleware>();
 app.MapControllers();
 app.MapGet("/", () => "CutPigPoint API is running.");
 app.MapGet("/health", (AppDbContext db) =>

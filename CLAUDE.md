@@ -9,3 +9,4 @@ App chấm điểm Tiến Lên Miền Nam (4 người). Server: ASP.NET Core 6 +
 - DB schema migrate bằng `EnsureCreated()` + chuỗi `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong [CutPig/Program.cs](CutPig/Program.cs). Thêm field mới vào `RoundResult`/`Player` ⇒ phải thêm cả ALTER tương ứng.
 - DTO server (C# record) và type client (`client/src/api.ts`) sync tay.
 - Scoring logic ở [CutPig/Services/TienLenScoringService.cs](CutPig/Services/TienLenScoringService.cs); validate cuối: round phải zero-sum (tổng = 0) và có cả score > 0 lẫn score < 0.
+- Auth: 1 user duy nhất (admin), token Bearer hết hạn 24h, `AuthMiddleware` chặn `/api/*` trừ `/api/auth/login`. Bootstrap user lần đầu từ env `INITIAL_USERNAME`/`INITIAL_PASSWORD` (default `admin`/`admin`).

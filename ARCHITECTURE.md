@@ -38,8 +38,10 @@ App tính điểm Tiến Lên Miền Nam (4 người) cho một nhóm bạn. Sta
   - DB init dùng `EnsureCreated()` + một loạt `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` để migrate idempotent (không dùng EF Migrations). Mọi cột mới phải thêm cả vào model `RoundResult`/`Player` **và** một dòng ALTER tương ứng trong Program.cs.
   - Endpoints health: `GET /` trả "running"; `GET /health` check DB connect.
 - **Routes**:
+  - `api/auth` — `POST /login`, `POST /logout`, `GET /me`, `PUT /account`. Chỉ `/login` public; còn lại bị `AuthMiddleware` chặn nếu thiếu Bearer token hợp lệ.
   - `api/players` — CRUD; `GET/PUT/DELETE /{id}/avatar`.
-  - `api/games` — list, get, create, `POST /{id}/finish`, `POST /{id}/rounds`, `DELETE /{id}/rounds/{roundId}`.
+  - `api/games` — list, get, create, `POST /{id}/finish`, `POST /{id}/rounds`, `DELETE /{id}/rounds/{roundId}`, `DELETE /{id}` (chỉ cho game đã finished).
+- **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)): mọi `/api/*` (trừ `/api/auth/login`) yêu cầu header `Authorization: Bearer <token>`. Token sinh khi login (random 32 byte base64url), lưu trong bảng `AuthTokens` cùng `ExpiresAt = now + 1 day`. Hash mật khẩu PBKDF2-SHA256 100k iter trong [Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs). Bootstrap user đầu tiên từ `INITIAL_USERNAME`/`INITIAL_PASSWORD` env (default `admin`/`admin`) — chỉ chạy khi bảng trống.
 
 ## Domain model
 
@@ -93,11 +95,13 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
 
 - **Stack**: React 18, react-router-dom v6, Vite, TypeScript.
 - **API base**: `import.meta.env.VITE_API_BASE` + `/api` (set ở Vercel cho prod, default empty cho dev qua proxy).
-- **Routes** ([App.tsx](client/src/App.tsx)):
+- **Routes** ([App.tsx](client/src/App.tsx)): ngoài `LoginPage` được render khi chưa auth, các route sau chỉ accessible sau khi đăng nhập.
   - `/` → GamesPage (list)
   - `/players` → PlayersPage (CRUD + avatar)
-  - `/new` → NewGamePage (chọn 4 player)
+  - `/new` → NewGamePage (chọn loại ván + người chơi)
   - `/games/:id` → GamePlayPage (gameplay + history)
+  - `/account` → AccountPage (đổi username/password)
+- **Auth client** ([client/src/auth/AuthContext.tsx](client/src/auth/AuthContext.tsx)): token lưu `localStorage[cutpig.auth.token]`. Mỗi request tự gắn `Authorization: Bearer`. Response 401 → clear token + state về `unauthenticated` → render `LoginPage`. Bootstrap: nếu có token cũ, gọi `/api/auth/me` để verify.
 - **Pages**:
   - **GamePlayPage** ([client/src/pages/GamePlayPage.tsx](client/src/pages/GamePlayPage.tsx)) là phức tạp nhất:
     - State: `inputs: PlayerInputState[]` (1 entry/player), `mode: 'normal' | 'whiteWin' | 'judge'`, `manualScoring`, `specialPlayerId`.
@@ -109,7 +113,7 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
 
 ## Deploy
 
-- **Server (Railway)**: Dockerfile multi-stage (sdk:6.0 build → aspnet:6.0 runtime). Railway tiêm `PORT`, `DATABASE_URL`. Đặt `FRONTEND_ORIGIN=https://<vercel-domain>` để CORS pass. Healthcheck `/` (vì `/health` 503 khi DB chưa lên).
+- **Server (Railway)**: Dockerfile multi-stage (sdk:6.0 build → aspnet:6.0 runtime). Railway tiêm `PORT`, `DATABASE_URL`. Đặt `FRONTEND_ORIGIN=https://<vercel-domain>` để CORS pass. Healthcheck `/` (vì `/health` 503 khi DB chưa lên). Optionally set `INITIAL_USERNAME`/`INITIAL_PASSWORD` cho lần bootstrap đầu — sau đó nên đổi password qua UI.
 - **Frontend (Vercel)**: `client/` là root project. `VITE_API_BASE=https://<railway-domain>` (no trailing slash). Build = `npm run build`, output `dist/`.
 
 ## Quy ước

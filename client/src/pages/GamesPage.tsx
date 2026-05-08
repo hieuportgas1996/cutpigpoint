@@ -34,7 +34,7 @@ export default function GamesPage() {
       <div className="hero">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ marginBottom: 0 }}>Tiến Lên Miền Nam</h1>
+            <h1 style={{ marginBottom: 0 }}>Tính điểm các trò chơi trí tuệ</h1>
             <div className="muted">Tính điểm tự động • Lưu trữ lịch sử ván chơi</div>
           </div>
           <Link to="/new">

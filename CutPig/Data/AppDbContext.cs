@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     public DbSet<GamePlayer> GamePlayers => Set<GamePlayer>();
     public DbSet<GameRound> GameRounds => Set<GameRound>();
     public DbSet<RoundResult> RoundResults => Set<RoundResult>();
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
+    public DbSet<AuthToken> AuthTokens => Set<AuthToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +48,19 @@ public class AppDbContext : DbContext
         {
             b.HasKey(x => x.Id);
             b.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AppUser>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.Username).IsUnique();
+        });
+
+        modelBuilder.Entity<AuthToken>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.Token).IsUnique();
+            b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -1,5 +1,10 @@
 namespace CutPig.Dtos;
 
+public record LoginRequest(string Username, string Password);
+public record LoginResponse(string Token, DateTime ExpiresAt, string Username);
+public record MeResponse(string Username);
+public record UpdateAccountRequest(string CurrentPassword, string? NewUsername, string? NewPassword);
+
 public record CreatePlayerRequest(string Name, string? Nickname);
 
 public record UpdatePlayerRequest(string Name, string? Nickname);

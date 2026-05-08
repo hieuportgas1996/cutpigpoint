@@ -89,11 +89,39 @@ export interface PlayerRoundInput {
 const RAW_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 const BASE = `${RAW_BASE}/api`;
 
+const TOKEN_KEY = 'cutpig.auth.token';
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export const auth = {
+  getToken: (): string | null => {
+    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  },
+  setToken: (token: string | null) => {
+    try {
+      if (token) localStorage.setItem(TOKEN_KEY, token);
+      else localStorage.removeItem(TOKEN_KEY);
+    } catch { /* ignore */ }
+  },
+  onUnauthorized: (handler: UnauthorizedHandler | null) => {
+    unauthorizedHandler = handler;
+  }
+};
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((options.headers as Record<string, string>) ?? {})
+  };
+  const token = auth.getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    auth.setToken(null);
+    unauthorizedHandler?.();
+    throw new Error('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Request failed: ${res.status}`);
@@ -126,5 +154,18 @@ export const api = {
     }),
   deleteRound: (gameId: string, roundId: string) =>
     request<void>(`/games/${gameId}/rounds/${roundId}`, { method: 'DELETE' }),
-  deleteGame: (id: string) => request<void>(`/games/${id}`, { method: 'DELETE' })
+  deleteGame: (id: string) => request<void>(`/games/${id}`, { method: 'DELETE' }),
+
+  login: (username: string, password: string) =>
+    request<{ token: string; expiresAt: string; username: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    }),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  me: () => request<{ username: string }>('/auth/me'),
+  updateAccount: (currentPassword: string, newUsername: string | null, newPassword: string | null) =>
+    request<{ username: string }>('/auth/account', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newUsername, newPassword })
+    })
 };
