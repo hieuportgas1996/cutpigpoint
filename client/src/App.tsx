@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import PlayersPage from './pages/PlayersPage';
 import GamesPage from './pages/GamesPage';
 import NewGamePage from './pages/NewGamePage';
@@ -76,6 +76,7 @@ function AppShell() {
           <Route path="/players" element={<PlayersPage />} />
           <Route path="/new" element={<NewGamePage />} />
           <Route path="/games/:id" element={<GamePlayPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
