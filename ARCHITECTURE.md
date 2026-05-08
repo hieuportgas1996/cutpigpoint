@@ -65,7 +65,7 @@ Cascade: xoá Game → xoá GamePlayers + GameRounds; xoá Round → xoá Result
 
 ## Tien Len scoring ([CutPig/Services/TienLenScoringService.cs](CutPig/Services/TienLenScoringService.cs))
 
-Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inputs, manualScoring)` → gọi `ComputeCore` rồi luôn chạy `ValidateHasWinnerAndLoser`.
+Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inputs, manualScoring)` → gọi `ComputeCore` rồi luôn chạy `ValidateZeroSum`.
 
 **Hằng số điểm**:
 - Rank: #1=+2, #2=+1, #3=−1, #4=−2.
@@ -85,7 +85,7 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
    - **Case 3** (1 victim, 2 pardoned): 2 pardoned phải có rank đúng {2,3} và chơi sub-round bình thường giữa nhau (rank points + heo + bonus 1-vs-1, victim phải nằm trong scope pardoned).
 4. **Normal**: 4 players, rank phải là permutation của {1,2,3,4}. Cộng rank points + heo (cut +N, lost −N) + bonus 1-vs-1 (winner +N, victim đã chọn −N).
 
-**Validation chung** (mọi mode): round phải có ít nhất 1 player score > 0 và 1 player score < 0 (`ValidateHasWinnerAndLoser`). Trước đây từng dùng `ValidateZeroSum` nhưng yêu cầu thực tế của user không phải zero-sum.
+**Validation chung** (mọi mode): round phải zero-sum — tổng `Score` = 0, và phải có ít nhất 1 player score > 0 + 1 player score < 0 (`ValidateZeroSum`). Các mode tự động (normal/whiteWin/judge) luôn zero-sum theo công thức; manual mode thì user phải tự cân đối.
 
 `InvalidOperationException` từ scoring → controller trả `400 BadRequest` với message gốc.
 

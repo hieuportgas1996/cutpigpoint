@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, Game, GamePlayer, PlayerRoundInput } from '../api';
+import { api, Game, GamePlayer, GameType, PlayerRoundInput } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
 import { formatScore, scoreClass, formatDateTime } from '../ui/helpers';
@@ -145,11 +145,13 @@ export default function GamePlayPage() {
   }
 
   async function submitRound() {
-    if (!id) return;
+    if (!id || !game) return;
     setSubmitting(true);
     try {
-      const payload = manualScoring ? inputs : buildSubmitInputs();
-      await api.addRound(id, manualScoring, payload);
+      const isManual = game.type === GameType.Manual;
+      const useManualScoring = isManual || manualScoring;
+      const payload = useManualScoring ? inputs : buildSubmitInputs();
+      await api.addRound(id, useManualScoring, payload);
       toast.push('success', `Đã lưu round #${(game?.rounds.length ?? 0) + 1}`);
       await refresh();
     } catch (e) {
@@ -195,16 +197,21 @@ export default function GamePlayPage() {
   const finished = !!game.finishedAt;
   const nextRoundNum = game.rounds.length + 1;
   const champion = finished && ranking.length > 0 ? ranking[0] : null;
+  const isManualGame = game.type === GameType.Manual;
+  const effectiveManualScoring = isManualGame || manualScoring;
 
-  const manualHasPositive = manualScoring && inputs.some((i) => (i.manualScore ?? 0) > 0);
-  const manualHasNegative = manualScoring && inputs.some((i) => (i.manualScore ?? 0) < 0);
-  const manualValid = !manualScoring || (manualHasPositive && manualHasNegative);
+  const manualHasPositive = effectiveManualScoring && inputs.some((i) => (i.manualScore ?? 0) > 0);
+  const manualHasNegative = effectiveManualScoring && inputs.some((i) => (i.manualScore ?? 0) < 0);
+  const manualSum = effectiveManualScoring ? inputs.reduce((s, i) => s + (i.manualScore ?? 0), 0) : 0;
+  const tienLenManualValid = !manualScoring || (manualHasPositive && manualHasNegative && manualSum === 0);
+  const manualGameValid = inputs.some((i) => i.manualScore !== null && i.manualScore !== 0);
+  const manualValid = isManualGame ? manualGameValid : tienLenManualValid;
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>Ván Tiến Lên Miền Nam</h1>
+          <h1>{isManualGame ? 'Ván tự do (chấm tay)' : 'Ván Tiến Lên Miền Nam'}</h1>
           <div className="muted small">
             <Icon name="clock" size={12} /> Bắt đầu {formatDateTime(game.startedAt)}
             {finished && ` • Kết thúc ${formatDateTime(game.finishedAt!)}`}
@@ -255,20 +262,22 @@ export default function GamePlayPage() {
           <div className="card-header">
             <h3 style={{ margin: 0 }}>Round #{nextRoundNum}</h3>
             <div className="spacer" />
-            <label className="inline">
-              <input
-                type="checkbox"
-                checked={manualScoring}
-                onChange={(e) => {
-                  setManualScoring(e.target.checked);
-                  if (e.target.checked) setMode('normal');
-                }}
-              />
-              <span className="small">Nhập điểm thủ công</span>
-            </label>
+            {!isManualGame && (
+              <label className="inline">
+                <input
+                  type="checkbox"
+                  checked={manualScoring}
+                  onChange={(e) => {
+                    setManualScoring(e.target.checked);
+                    if (e.target.checked) setMode('normal');
+                  }}
+                />
+                <span className="small">Nhập điểm thủ công</span>
+              </label>
+            )}
           </div>
 
-          {!manualScoring && (
+          {!isManualGame && !manualScoring && (
             <ModeSwitcher
               mode={mode}
               specialPlayerId={specialPlayerId}
@@ -277,7 +286,7 @@ export default function GamePlayPage() {
             />
           )}
 
-          {!manualScoring && mode === 'normal' && (
+          {!isManualGame && !manualScoring && mode === 'normal' && (
             <div className="player-grid">
               {game.players.map((p) => (
                 <NormalPlayerCard
@@ -293,14 +302,14 @@ export default function GamePlayPage() {
             </div>
           )}
 
-          {!manualScoring && mode === 'whiteWin' && specialPlayerId && (
+          {!isManualGame && !manualScoring && mode === 'whiteWin' && specialPlayerId && (
             <WhiteWinSummary
               winner={game.players.find((p) => p.playerId === specialPlayerId)!}
               others={game.players.filter((p) => p.playerId !== specialPlayerId)}
             />
           )}
 
-          {!manualScoring && mode === 'judge' && specialPlayerId && (
+          {!isManualGame && !manualScoring && mode === 'judge' && specialPlayerId && (
             <JudgePanel
               judge={game.players.find((p) => p.playerId === specialPlayerId)!}
               others={game.players.filter((p) => p.playerId !== specialPlayerId)}
@@ -310,7 +319,7 @@ export default function GamePlayPage() {
             />
           )}
 
-          {manualScoring && (
+          {effectiveManualScoring && (
             <div className="player-grid">
               {game.players.map((p) => {
                 const input = inputs.find((i) => i.playerId === p.playerId)!;
@@ -342,7 +351,7 @@ export default function GamePlayPage() {
             </div>
           )}
 
-          {manualScoring && (
+          {effectiveManualScoring && (
             <div
               className="mt-2"
               style={{
@@ -355,9 +364,15 @@ export default function GamePlayPage() {
               }}
             >
               <Icon name={manualValid ? 'info' : 'alert'} size={14} />{' '}
-              {manualValid
-                ? 'Hợp lệ — có cả điểm dương và điểm âm'
-                : 'Round phải có cả người điểm dương và người điểm âm'}
+              {isManualGame
+                ? manualValid
+                  ? `Tổng round: ${manualSum > 0 ? '+' : ''}${manualSum} • Nhập điểm cộng/trừ tự do, không bắt buộc tổng = 0`
+                  : 'Cần nhập điểm cho ít nhất 1 người (khác 0)'
+                : manualValid
+                ? `Hợp lệ — tổng điểm = 0`
+                : !manualHasPositive || !manualHasNegative
+                ? 'Round phải có cả người điểm dương và người điểm âm'
+                : `Tổng điểm phải bằng 0 (hiện tại: ${manualSum > 0 ? '+' : ''}${manualSum})`}
             </div>
           )}
 

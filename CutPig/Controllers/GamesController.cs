@@ -31,6 +31,7 @@ public class GamesController : ControllerBase
         return Ok(games.Select(g => new
         {
             g.Id,
+            Type = (int)g.Type,
             g.StartedAt,
             g.FinishedAt,
             Players = g.Players.OrderBy(p => p.Seat).Select(p => new { p.PlayerId, Name = p.Player!.Name, p.Seat, HasAvatar = p.Player!.AvatarData != null })
@@ -48,15 +49,35 @@ public class GamesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<GameDto>> Create([FromBody] CreateGameRequest req)
     {
-        if (req.PlayerIds == null || req.PlayerIds.Count != 4)
-            return BadRequest("Tien Len Mien Nam requires exactly 4 players.");
-        if (req.PlayerIds.Distinct().Count() != 4)
-            return BadRequest("Players must be unique.");
+        var type = req.Type.HasValue ? (GameType)req.Type.Value : GameType.TienLenMienNam;
+        if (!Enum.IsDefined(typeof(GameType), type))
+            return BadRequest("Loại ván không hợp lệ.");
+
+        if (req.PlayerIds == null || req.PlayerIds.Count == 0)
+            return BadRequest("Cần chọn người chơi.");
+
+        if (type == GameType.TienLenMienNam)
+        {
+            if (req.PlayerIds.Count != 4)
+                return BadRequest("Tiến Lên Miền Nam cần đúng 4 người chơi.");
+        }
+        else if (type == GameType.Manual)
+        {
+            if (req.PlayerIds.Count < 2)
+                return BadRequest("Ván tự do cần ít nhất 2 người chơi.");
+        }
+        else
+        {
+            return BadRequest("Loại ván chưa được hỗ trợ.");
+        }
+
+        if (req.PlayerIds.Distinct().Count() != req.PlayerIds.Count)
+            return BadRequest("Người chơi không được trùng nhau.");
 
         var existing = await _db.Players.Where(p => req.PlayerIds.Contains(p.Id)).ToListAsync();
-        if (existing.Count != 4) return BadRequest("One or more players not found.");
+        if (existing.Count != req.PlayerIds.Count) return BadRequest("Một hoặc nhiều người chơi không tồn tại.");
 
-        var game = new Game { Type = GameType.TienLenMienNam };
+        var game = new Game { Type = type };
         for (int i = 0; i < req.PlayerIds.Count; i++)
         {
             game.Players.Add(new GamePlayer { PlayerId = req.PlayerIds[i], Seat = i + 1 });
@@ -87,27 +108,41 @@ public class GamesController : ControllerBase
             .Include(g => g.Rounds)
             .FirstOrDefaultAsync(g => g.Id == id);
         if (game == null) return NotFound();
-        if (game.FinishedAt != null) return BadRequest("Game is already finished.");
+        if (game.FinishedAt != null) return BadRequest("Ván đã kết thúc.");
 
         var playerIds = game.Players.Select(p => p.PlayerId).ToHashSet();
-        if (req.Players.Count != 4 || req.Players.Any(p => !playerIds.Contains(p.PlayerId)))
-            return BadRequest("Round players must match game players.");
+        if (req.Players.Count != playerIds.Count || req.Players.Any(p => !playerIds.Contains(p.PlayerId)))
+            return BadRequest("Người chơi của round phải khớp với người chơi của ván.");
 
         List<RoundResult> results;
-        try
+        bool manualScoring = req.ManualScoring;
+
+        if (game.Type == GameType.Manual)
         {
-            results = _scoring.Compute(req.Players, req.ManualScoring);
+            manualScoring = true;
+            results = req.Players.Select(p => new RoundResult
+            {
+                PlayerId = p.PlayerId,
+                Score = p.ManualScore ?? 0
+            }).ToList();
         }
-        catch (InvalidOperationException ex)
+        else
         {
-            return BadRequest(ex.Message);
+            try
+            {
+                results = _scoring.Compute(req.Players, manualScoring);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         var round = new GameRound
         {
             GameId = game.Id,
             RoundNumber = (game.Rounds.Count == 0 ? 0 : game.Rounds.Max(r => r.RoundNumber)) + 1,
-            ManualScoring = req.ManualScoring,
+            ManualScoring = manualScoring,
             Results = results
         };
         _db.GameRounds.Add(round);
@@ -127,6 +162,17 @@ public class GamesController : ControllerBase
         var round = await _db.GameRounds.FirstOrDefaultAsync(r => r.Id == roundId && r.GameId == id);
         if (round == null) return NotFound();
         _db.GameRounds.Remove(round);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var game = await _db.Games.FindAsync(id);
+        if (game == null) return NotFound();
+        if (game.FinishedAt == null) return BadRequest("Chỉ xoá được ván đã kết thúc.");
+        _db.Games.Remove(game);
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -153,6 +199,7 @@ public class GamesController : ControllerBase
 
         return new GameDto(
             g.Id,
+            (int)g.Type,
             g.StartedAt,
             g.FinishedAt,
             g.Players

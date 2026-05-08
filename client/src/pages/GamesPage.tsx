@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api';
+import { api, GameType, GameTypeValue } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
 import { relativeTime } from '../ui/helpers';
@@ -8,6 +8,7 @@ import { Avatar } from '../ui/Avatar';
 
 interface GameSummary {
   id: string;
+  type: GameTypeValue;
   startedAt: string;
   finishedAt: string | null;
   players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[];
@@ -72,7 +73,22 @@ export default function GamesPage() {
             <>
               <div className="section-title mt-3">Đã kết thúc ({doneGames.length})</div>
               <div className="col">
-                {doneGames.map((g) => <GameRow key={g.id} g={g} />)}
+                {doneGames.map((g) => (
+                  <GameRow
+                    key={g.id}
+                    g={g}
+                    onDelete={async () => {
+                      if (!confirm('Xoá ván này? Không thể hoàn tác.')) return;
+                      try {
+                        await api.deleteGame(g.id);
+                        setGames((prev) => prev.filter((x) => x.id !== g.id));
+                        toast.push('info', 'Đã xoá ván');
+                      } catch (e) {
+                        toast.push('error', (e as Error).message);
+                      }
+                    }}
+                  />
+                ))}
               </div>
             </>
           )}
@@ -82,7 +98,7 @@ export default function GamesPage() {
   );
 }
 
-function GameRow({ g }: { g: GameSummary }) {
+function GameRow({ g, onDelete }: { g: GameSummary; onDelete?: () => void }) {
   return (
     <Link to={`/games/${g.id}`} style={{ color: 'inherit' }}>
       <div className="card" style={{ marginBottom: 0, cursor: 'pointer' }}>
@@ -106,8 +122,9 @@ function GameRow({ g }: { g: GameSummary }) {
             </div>
             <div style={{ marginLeft: '0.85rem' }}>
               <div className="bold">{g.players.map((p) => p.name).join(' • ')}</div>
-              <div className="small dim">
+              <div className="small dim" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Icon name="clock" size={12} /> {relativeTime(g.startedAt)}
+                <span className="tiny dim">• {g.type === GameType.Manual ? 'Tự do' : 'Tiến Lên'}</span>
               </div>
             </div>
           </div>
@@ -115,6 +132,20 @@ function GameRow({ g }: { g: GameSummary }) {
             <span className={`status ${g.finishedAt ? 'done' : 'live'}`}>
               {g.finishedAt ? 'Đã xong' : 'Đang chơi'}
             </span>
+            {onDelete && (
+              <button
+                className="ghost icon-only danger"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                aria-label="Xoá ván"
+                title="Xoá ván"
+              >
+                <Icon name="trash" size={14} />
+              </button>
+            )}
             <Icon name="chevron-right" size={16} />
           </div>
         </div>

@@ -8,12 +8,13 @@ public record PlayerDto(Guid Id, string Name, string? Nickname, bool HasAvatar);
 
 public record UpdateAvatarRequest(string DataUrl);
 
-public record CreateGameRequest(List<Guid> PlayerIds);
+public record CreateGameRequest(List<Guid> PlayerIds, int? Type);
 
 public record GamePlayerDto(Guid PlayerId, string Name, int Seat, int TotalScore, bool HasAvatar);
 
 public record GameDto(
     Guid Id,
+    int Type,
     DateTime StartedAt,
     DateTime? FinishedAt,
     List<GamePlayerDto> Players,

@@ -45,8 +45,17 @@ export interface Round {
   results: RoundResult[];
 }
 
+export const GameType = {
+  TienLenMienNam: 1,
+  Bida9Ball: 2,
+  BidaDen: 3,
+  Manual: 4
+} as const;
+export type GameTypeValue = typeof GameType[keyof typeof GameType];
+
 export interface Game {
   id: string;
+  type: GameTypeValue;
   startedAt: string;
   finishedAt: string | null;
   players: GamePlayer[];
@@ -105,10 +114,10 @@ export const api = {
   deleteAvatar: (id: string) => request<void>(`/players/${id}/avatar`, { method: 'DELETE' }),
   avatarUrl: (id: string) => `${BASE}/players/${id}/avatar`,
 
-  listGames: () => request<Array<{ id: string; startedAt: string; finishedAt: string | null; players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[] }>>('/games'),
+  listGames: () => request<Array<{ id: string; type: GameTypeValue; startedAt: string; finishedAt: string | null; players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[] }>>('/games'),
   getGame: (id: string) => request<Game>(`/games/${id}`),
-  createGame: (playerIds: string[]) =>
-    request<Game>('/games', { method: 'POST', body: JSON.stringify({ playerIds }) }),
+  createGame: (playerIds: string[], type: GameTypeValue = GameType.TienLenMienNam) =>
+    request<Game>('/games', { method: 'POST', body: JSON.stringify({ playerIds, type }) }),
   finishGame: (id: string) => request<Game>(`/games/${id}/finish`, { method: 'POST' }),
   addRound: (id: string, manualScoring: boolean, players: PlayerRoundInput[]) =>
     request<Round>(`/games/${id}/rounds`, {
@@ -116,5 +125,6 @@ export const api = {
       body: JSON.stringify({ manualScoring, players })
     }),
   deleteRound: (gameId: string, roundId: string) =>
-    request<void>(`/games/${gameId}/rounds/${roundId}`, { method: 'DELETE' })
+    request<void>(`/games/${gameId}/rounds/${roundId}`, { method: 'DELETE' }),
+  deleteGame: (id: string) => request<void>(`/games/${id}`, { method: 'DELETE' })
 };
