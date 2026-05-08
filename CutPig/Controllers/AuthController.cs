@@ -74,46 +74,6 @@ public class AuthController : ControllerBase
         return new MeResponse(user.Username);
     }
 
-    [HttpPut("account")]
-    public async Task<ActionResult<MeResponse>> UpdateAccount([FromBody] UpdateAccountRequest req)
-    {
-        var userId = (Guid?)HttpContext.Items["UserId"];
-        if (userId == null) return Unauthorized();
-        var user = await _db.AppUsers.FindAsync(userId.Value);
-        if (user == null) return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(req.CurrentPassword) || !PasswordHasher.Verify(req.CurrentPassword, user.PasswordHash))
-            return BadRequest("Mật khẩu hiện tại không đúng.");
-
-        var changedUsername = !string.IsNullOrWhiteSpace(req.NewUsername) && req.NewUsername != user.Username;
-        var changedPassword = !string.IsNullOrWhiteSpace(req.NewPassword);
-        if (!changedUsername && !changedPassword)
-            return BadRequest("Không có thay đổi nào.");
-
-        if (changedUsername)
-        {
-            var trimmed = req.NewUsername!.Trim();
-            if (trimmed.Length < 3) return BadRequest("Tên đăng nhập tối thiểu 3 ký tự.");
-            if (await _db.AppUsers.AnyAsync(u => u.Id != user.Id && u.Username == trimmed))
-                return BadRequest("Tên đăng nhập đã tồn tại.");
-            user.Username = trimmed;
-        }
-
-        if (changedPassword)
-        {
-            if (req.NewPassword!.Length < 6) return BadRequest("Mật khẩu mới tối thiểu 6 ký tự.");
-            user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
-            // Đổi password → revoke tất cả token khác
-            var others = await _db.AuthTokens.Where(t => t.UserId == user.Id).ToListAsync();
-            _db.AuthTokens.RemoveRange(others);
-        }
-
-        user.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
-        return new MeResponse(user.Username);
-    }
-
     private string? ExtractToken()
     {
         var header = Request.Headers.Authorization.ToString();

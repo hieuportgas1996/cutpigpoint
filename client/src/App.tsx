@@ -4,7 +4,6 @@ import GamesPage from './pages/GamesPage';
 import NewGamePage from './pages/NewGamePage';
 import GamePlayPage from './pages/GamePlayPage';
 import LoginPage from './pages/LoginPage';
-import AccountPage from './pages/AccountPage';
 import { ToastProvider } from './ui/Toast';
 import { Icon } from './ui/Icon';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -55,10 +54,9 @@ function AppShell() {
               <span className="hide-mobile">Ván mới</span>
               <span className="show-mobile"><Icon name="plus" size={16} /></span>
             </NavLink>
-            <NavLink to="/account">
-              <span className="hide-mobile">{state.username}</span>
-              <span className="show-mobile"><Icon name="users" size={16} /></span>
-            </NavLink>
+            <span className="muted small hide-mobile" style={{ padding: '0 0.5rem' }}>
+              {state.username}
+            </span>
             <button
               type="button"
               className="ghost sm"
@@ -78,7 +76,6 @@ function AppShell() {
           <Route path="/players" element={<PlayersPage />} />
           <Route path="/new" element={<NewGamePage />} />
           <Route path="/games/:id" element={<GamePlayPage />} />
-          <Route path="/account" element={<AccountPage />} />
         </Routes>
       </main>
     </>

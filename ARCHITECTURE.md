@@ -38,7 +38,7 @@ App tính điểm Tiến Lên Miền Nam (4 người) cho một nhóm bạn. Sta
   - DB init dùng `EnsureCreated()` + một loạt `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` để migrate idempotent (không dùng EF Migrations). Mọi cột mới phải thêm cả vào model `RoundResult`/`Player` **và** một dòng ALTER tương ứng trong Program.cs.
   - Endpoints health: `GET /` trả "running"; `GET /health` check DB connect.
 - **Routes**:
-  - `api/auth` — `POST /login`, `POST /logout`, `GET /me`, `PUT /account`. Chỉ `/login` public; còn lại bị `AuthMiddleware` chặn nếu thiếu Bearer token hợp lệ.
+  - `api/auth` — `POST /login`, `POST /logout`, `GET /me`. Chỉ `/login` public; còn lại bị `AuthMiddleware` chặn nếu thiếu Bearer token hợp lệ. Đổi username/password làm trực tiếp trong DB (không có endpoint update — chủ ý không expose CRUD account ra UI).
   - `api/players` — CRUD; `GET/PUT/DELETE /{id}/avatar`.
   - `api/games` — list, get, create, `POST /{id}/finish`, `POST /{id}/rounds`, `DELETE /{id}/rounds/{roundId}`, `DELETE /{id}` (chỉ cho game đã finished).
 - **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)): mọi `/api/*` (trừ `/api/auth/login`) yêu cầu header `Authorization: Bearer <token>`. Token sinh khi login (random 32 byte base64url), lưu trong bảng `AuthTokens` cùng `ExpiresAt = now + 1 day`. Hash mật khẩu PBKDF2-SHA256 100k iter trong [Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs). Bootstrap user đầu tiên từ `INITIAL_USERNAME`/`INITIAL_PASSWORD` env (default `admin`/`admin`) — chỉ chạy khi bảng trống.
@@ -100,7 +100,6 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
   - `/players` → PlayersPage (CRUD + avatar)
   - `/new` → NewGamePage (chọn loại ván + người chơi)
   - `/games/:id` → GamePlayPage (gameplay + history)
-  - `/account` → AccountPage (đổi username/password)
 - **Auth client** ([client/src/auth/AuthContext.tsx](client/src/auth/AuthContext.tsx)): token lưu `localStorage[cutpig.auth.token]`. Mỗi request tự gắn `Authorization: Bearer`. Response 401 → clear token + state về `unauthenticated` → render `LoginPage`. Bootstrap: nếu có token cũ, gọi `/api/auth/me` để verify.
 - **Pages**:
   - **GamePlayPage** ([client/src/pages/GamePlayPage.tsx](client/src/pages/GamePlayPage.tsx)) là phức tạp nhất:

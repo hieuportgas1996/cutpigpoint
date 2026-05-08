@@ -10,7 +10,6 @@ interface AuthContextValue {
   state: AuthState;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  setUsername: (username: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,12 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'unauthenticated' });
   }, []);
 
-  const setUsername = useCallback((username: string) => {
-    setState((prev) => (prev.status === 'authenticated' ? { ...prev, username } : prev));
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ state, login, logout, setUsername }}>
+    <AuthContext.Provider value={{ state, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

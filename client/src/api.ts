@@ -162,10 +162,5 @@ export const api = {
       body: JSON.stringify({ username, password })
     }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
-  me: () => request<{ username: string }>('/auth/me'),
-  updateAccount: (currentPassword: string, newUsername: string | null, newPassword: string | null) =>
-    request<{ username: string }>('/auth/account', {
-      method: 'PUT',
-      body: JSON.stringify({ currentPassword, newUsername, newPassword })
-    })
+  me: () => request<{ username: string }>('/auth/me')
 };
