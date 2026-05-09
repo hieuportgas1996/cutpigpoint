@@ -395,8 +395,11 @@ function BidaBallConfig({
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    value={b.points}
-                    onChange={(e) => onSetPoints(b.ball, Math.max(1, Number(e.target.value || 0)))}
+                    value={b.points === 0 ? '' : b.points}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      onSetPoints(b.ball, raw === '' ? 0 : Math.max(0, Number(raw)));
+                    }}
                     style={{ width: 80 }}
                   />
                   <span className="small dim">điểm</span>

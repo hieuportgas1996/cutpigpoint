@@ -266,6 +266,8 @@ public class GamesController : ControllerBase
         r.JudgedVictim,
         r.BlackPigsHeld, r.RedPigsHeld,
         r.HasThreePairsHeld, r.HasFourOfAKindHeld, r.HasFourPairsHeld,
+        r.WonByThreeOfSpades,
+        r.LostByThreeOfSpades,
         r.BreakAndCleared,
         Bida9BallScoringService.ParseHits(r.BallHitsJson),
         r.Score);

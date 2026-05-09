@@ -30,6 +30,8 @@ function emptyInput(playerId: string): PlayerInputState {
     hasThreePairsHeld: false,
     hasFourOfAKindHeld: false,
     hasFourPairsHeld: false,
+    wonByThreeOfSpades: false,
+    lostByThreeOfSpades: false,
     breakAndCleared: false,
     ballHits: null,
     manualScore: null
@@ -86,7 +88,16 @@ export default function GamePlayPage() {
 
   function setRank(playerId: string, rank: number | null) {
     setInputs((prev) =>
-      prev.map((it) => (it.playerId === playerId ? { ...it, rank } : it))
+      prev.map((it) =>
+        it.playerId === playerId
+          ? {
+              ...it,
+              rank,
+              wonByThreeOfSpades: rank === 1 ? it.wonByThreeOfSpades : false,
+              lostByThreeOfSpades: rank === 4 ? it.lostByThreeOfSpades : false
+            }
+          : it
+      )
     );
   }
 
@@ -742,6 +753,20 @@ function NormalPlayerCard({
             );
           })}
         </div>
+        {input.rank === 1 && (
+          <SimpleToggle
+            label="Về nhất 3 bích (+3, mỗi người khác −1)"
+            checked={input.wonByThreeOfSpades}
+            onChange={(v) => onUpdate({ wonByThreeOfSpades: v })}
+          />
+        )}
+        {input.rank === 4 && (
+          <SimpleToggle
+            label="Về chót 3 bích (−3, mỗi người khác +1)"
+            checked={input.lostByThreeOfSpades}
+            onChange={(v) => onUpdate({ lostByThreeOfSpades: v })}
+          />
+        )}
       </div>
 
       <div>

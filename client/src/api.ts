@@ -45,6 +45,8 @@ export interface RoundResult {
   hasThreePairsHeld: boolean;
   hasFourOfAKindHeld: boolean;
   hasFourPairsHeld: boolean;
+  wonByThreeOfSpades: boolean;
+  lostByThreeOfSpades: boolean;
   breakAndCleared: boolean;
   ballHits: BallHit[] | null;
   score: number;
@@ -97,6 +99,8 @@ export interface PlayerRoundInput {
   hasThreePairsHeld: boolean;
   hasFourOfAKindHeld: boolean;
   hasFourPairsHeld: boolean;
+  wonByThreeOfSpades: boolean;
+  lostByThreeOfSpades: boolean;
   breakAndCleared: boolean;
   ballHits: BallHit[] | null;
   manualScore: number | null;

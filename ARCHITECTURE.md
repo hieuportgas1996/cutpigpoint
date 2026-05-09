@@ -73,6 +73,8 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
 - Rank: #1=+2, #2=+1, #3=−1, #4=−2.
 - Heo: đen 1, đỏ 2.
 - Bonus: 3 đôi thông 3, tứ quý 4, 4 đôi thông 5.
+- Về nhất 3 bích (chỉ #1, normal mode): #1 +3, mỗi player còn lại −1.
+- Về chót 3 bích (chỉ #4, normal mode): #4 −3, mỗi player còn lại +1.
 - Về trắng: tự +6, mỗi người khác −2.
 - Phán xét self points theo số victim: 3 victim=+12, 2 victim=+9, 1 victim=+4. Loss mỗi victim −4 + held. Pardon penalty case 2 = −1.
 

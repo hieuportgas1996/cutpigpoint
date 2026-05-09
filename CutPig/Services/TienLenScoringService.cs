@@ -26,6 +26,9 @@ public class TienLenScoringService
     private const int JudgeLossPoint = 4;
     private const int JudgePardonPenalty = 1;        // case 2 only
 
+    private const int ThreeOfSpadesPenalty = 1;      // normal mode: rank #1 đón 3 bích → mỗi người khác -1, #1 +3
+    private const int LastThreeOfSpadesPenalty = 1;  // normal mode: rank #4 chót 3 bích → mỗi người khác +1, #4 -3
+
     public List<RoundResult> Compute(List<PlayerRoundInputDto> inputs, bool manualScoring)
     {
         var results = ComputeCore(inputs, manualScoring);
@@ -210,6 +213,42 @@ public class TienLenScoringService
             ApplyBonus(totals, p.PlayerId, p.FourPairsStraight, p.FourPairsVictimId, FourPairsPoint, "4 đôi thông", inputs);
         }
 
+        // 3 bích về nhất: chỉ #1 được tick. #1 +3, mỗi người khác -1.
+        var threeSpadesWinners = inputs.Where(i => i.WonByThreeOfSpades).ToList();
+        if (threeSpadesWinners.Count > 1)
+            throw new InvalidOperationException("Chỉ một người được đón 3 bích mỗi round.");
+        if (threeSpadesWinners.Count == 1)
+        {
+            var winner = threeSpadesWinners[0];
+            if (winner.Rank != 1)
+                throw new InvalidOperationException("Chỉ người về nhất mới được đón 3 bích.");
+            foreach (var p in inputs)
+            {
+                if (p.PlayerId == winner.PlayerId)
+                    totals[p.PlayerId] += ThreeOfSpadesPenalty * (inputs.Count - 1);
+                else
+                    totals[p.PlayerId] -= ThreeOfSpadesPenalty;
+            }
+        }
+
+        // 3 bích về chót: chỉ #4 được tick. #4 -3, mỗi người khác +1.
+        var threeSpadesLosers = inputs.Where(i => i.LostByThreeOfSpades).ToList();
+        if (threeSpadesLosers.Count > 1)
+            throw new InvalidOperationException("Chỉ một người về chót 3 bích mỗi round.");
+        if (threeSpadesLosers.Count == 1)
+        {
+            var loser = threeSpadesLosers[0];
+            if (loser.Rank != 4)
+                throw new InvalidOperationException("Chỉ người về chót mới bị tính 3 bích về chót.");
+            foreach (var p in inputs)
+            {
+                if (p.PlayerId == loser.PlayerId)
+                    totals[p.PlayerId] -= LastThreeOfSpadesPenalty * (inputs.Count - 1);
+                else
+                    totals[p.PlayerId] += LastThreeOfSpadesPenalty;
+            }
+        }
+
         return inputs.Select(i => Snapshot(i, totals[i.PlayerId])).ToList();
     }
 
@@ -273,6 +312,8 @@ public class TienLenScoringService
         HasThreePairsHeld = i.HasThreePairsHeld,
         HasFourOfAKindHeld = i.HasFourOfAKindHeld,
         HasFourPairsHeld = i.HasFourPairsHeld,
+        WonByThreeOfSpades = i.WonByThreeOfSpades,
+        LostByThreeOfSpades = i.LostByThreeOfSpades,
         Score = score
     };
 }

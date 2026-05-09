@@ -99,59 +99,58 @@ export default function GamesPage() {
 }
 
 function GameRow({ g, onDelete }: { g: GameSummary; onDelete?: () => void }) {
+  const typeLabel =
+    g.type === GameType.Manual ? 'Tự do' :
+    g.type === GameType.Bida9Ball ? 'Bida 9 Bi' :
+    'Tiến Lên';
+  const names = g.players.map((p) => p.name).join(' • ');
   return (
     <Link to={`/games/${g.id}`} style={{ color: 'inherit' }}>
-      <div className="card" style={{ marginBottom: 0, cursor: 'pointer' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '-0.4rem' }}>
-            <div style={{ display: 'flex' }}>
-              {g.players.map((p, i) => (
-                <div
-                  key={p.playerId}
-                  style={{
-                    marginLeft: i === 0 ? 0 : -8,
-                    zIndex: 4 - i,
-                    borderRadius: '50%',
-                    boxShadow: '0 0 0 2px var(--bg-elev)'
-                  }}
-                  title={p.name}
-                >
-                  <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
-                </div>
-              ))}
+      <div className="card game-row" style={{ marginBottom: 0, cursor: 'pointer' }}>
+        <div className="game-row-avatars">
+          {g.players.map((p, i) => (
+            <div
+              key={p.playerId}
+              style={{
+                marginLeft: i === 0 ? 0 : -8,
+                zIndex: 10 - i,
+                borderRadius: '50%',
+                boxShadow: '0 0 0 2px var(--bg-elev)'
+              }}
+              title={p.name}
+            >
+              <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
             </div>
-            <div style={{ marginLeft: '0.85rem' }}>
-              <div className="bold">{g.players.map((p) => p.name).join(' • ')}</div>
-              <div className="small dim" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Icon name="clock" size={12} /> {relativeTime(g.startedAt)}
-                <span className="tiny dim">• {
-                  g.type === GameType.Manual ? 'Tự do' :
-                  g.type === GameType.Bida9Ball ? 'Bida 9 Bi' :
-                  'Tiến Lên'
-                }</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className={`status ${g.finishedAt ? 'done' : 'live'}`}>
-              {g.finishedAt ? 'Đã xong' : 'Đang chơi'}
+          ))}
+        </div>
+        <div className="game-row-info">
+          <div className="bold game-row-names" title={names}>{names}</div>
+          <div className="small dim game-row-meta">
+            <span className="game-row-meta-item">
+              <Icon name="clock" size={12} /> {relativeTime(g.startedAt)}
             </span>
-            {onDelete && (
-              <button
-                className="ghost icon-only danger"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                aria-label="Xoá ván"
-                title="Xoá ván"
-              >
-                <Icon name="trash" size={14} />
-              </button>
-            )}
-            <Icon name="chevron-right" size={16} />
+            <span className="game-row-meta-item tiny">• {typeLabel}</span>
           </div>
+        </div>
+        <div className="game-row-aside">
+          <span className={`status ${g.finishedAt ? 'done' : 'live'}`}>
+            {g.finishedAt ? 'Đã xong' : 'Đang chơi'}
+          </span>
+          {onDelete && (
+            <button
+              className="ghost icon-only danger"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete();
+              }}
+              aria-label="Xoá ván"
+              title="Xoá ván"
+            >
+              <Icon name="trash" size={14} />
+            </button>
+          )}
+          <Icon name="chevron-right" size={16} />
         </div>
       </div>
     </Link>

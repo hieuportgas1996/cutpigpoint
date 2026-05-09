@@ -50,6 +50,8 @@ public record PlayerRoundInputDto(
     bool HasThreePairsHeld,
     bool HasFourOfAKindHeld,
     bool HasFourPairsHeld,
+    bool WonByThreeOfSpades,
+    bool LostByThreeOfSpades,
     bool BreakAndCleared,
     List<BallHitDto>? BallHits,
     int? ManualScore);
@@ -77,6 +79,8 @@ public record RoundResultDto(
     bool HasThreePairsHeld,
     bool HasFourOfAKindHeld,
     bool HasFourPairsHeld,
+    bool WonByThreeOfSpades,
+    bool LostByThreeOfSpades,
     bool BreakAndCleared,
     List<BallHitDto>? BallHits,
     int Score);

@@ -57,6 +57,12 @@ public class RoundResult
     public bool HasFourOfAKindHeld { get; set; }
     public bool HasFourPairsHeld { get; set; }
 
+    // TLMN normal mode: rank #1 đón 3 bích → +3 cho #1, -1 cho mỗi player còn lại.
+    public bool WonByThreeOfSpades { get; set; }
+
+    // TLMN normal mode: rank #4 về chót 3 bích → -3 cho #4, +1 cho mỗi player còn lại.
+    public bool LostByThreeOfSpades { get; set; }
+
     // Bida 9 Ball: phá-chấm flag (1 player được +12, 2 còn lại -6).
     public bool BreakAndCleared { get; set; }
 
