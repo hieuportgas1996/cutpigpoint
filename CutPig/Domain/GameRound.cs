@@ -57,5 +57,12 @@ public class RoundResult
     public bool HasFourOfAKindHeld { get; set; }
     public bool HasFourPairsHeld { get; set; }
 
+    // Bida 9 Ball: phá-chấm flag (1 player được +12, 2 còn lại -6).
+    public bool BreakAndCleared { get; set; }
+
+    // Bida 9 Ball: JSON list `[{ "ball": int, "points": int, "victimPlayerId": guid }, ...]`
+    // — mỗi entry là 1 lần ăn 1 bi tính điểm trong ván, kèm victim bị trừ.
+    public string? BallHitsJson { get; set; }
+
     public int Score { get; set; }
 }

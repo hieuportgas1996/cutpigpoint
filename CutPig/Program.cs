@@ -20,6 +20,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<TienLenScoringService>();
+builder.Services.AddScoped<Bida9BallScoringService>();
 
 var allowedOrigins = ResolveAllowedOrigins(builder.Configuration);
 
@@ -61,6 +62,9 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasThreePairsHeld\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourOfAKindHeld\" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"HasFourPairsHeld\" boolean NOT NULL DEFAULT false");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"BreakAndCleared\" boolean NOT NULL DEFAULT false");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"RoundResults\" ADD COLUMN IF NOT EXISTS \"BallHitsJson\" text");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Games\" ADD COLUMN IF NOT EXISTS \"BallConfigJson\" text");
 
         // Auth tables (EnsureCreated skips when DB already has any tables, so create explicitly for upgraded DBs)
         db.Database.ExecuteSqlRaw(@"

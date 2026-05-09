@@ -12,12 +12,14 @@ namespace CutPig.Controllers;
 public class GamesController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly TienLenScoringService _scoring;
+    private readonly TienLenScoringService _tienLen;
+    private readonly Bida9BallScoringService _bida9;
 
-    public GamesController(AppDbContext db, TienLenScoringService scoring)
+    public GamesController(AppDbContext db, TienLenScoringService tienLen, Bida9BallScoringService bida9)
     {
         _db = db;
-        _scoring = scoring;
+        _tienLen = tienLen;
+        _bida9 = bida9;
     }
 
     [HttpGet]
@@ -56,10 +58,28 @@ public class GamesController : ControllerBase
         if (req.PlayerIds == null || req.PlayerIds.Count == 0)
             return BadRequest("Cần chọn người chơi.");
 
+        string? ballConfigJson = null;
+
         if (type == GameType.TienLenMienNam)
         {
             if (req.PlayerIds.Count != 4)
                 return BadRequest("Tiến Lên Miền Nam cần đúng 4 người chơi.");
+        }
+        else if (type == GameType.Bida9Ball)
+        {
+            if (req.PlayerIds.Count != Bida9BallScoringService.RequiredPlayerCount)
+                return BadRequest($"Bida 9 Ball cần đúng {Bida9BallScoringService.RequiredPlayerCount} người chơi.");
+            if (req.BallConfig == null || req.BallConfig.Count == 0)
+                return BadRequest("Bida 9 Ball cần chọn ít nhất 1 bi tính điểm.");
+            try
+            {
+                Bida9BallScoringService.ValidateBallConfig(req.BallConfig);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            ballConfigJson = Bida9BallScoringService.SerializeConfig(req.BallConfig);
         }
         else if (type == GameType.Manual)
         {
@@ -77,7 +97,7 @@ public class GamesController : ControllerBase
         var existing = await _db.Players.Where(p => req.PlayerIds.Contains(p.Id)).ToListAsync();
         if (existing.Count != req.PlayerIds.Count) return BadRequest("Một hoặc nhiều người chơi không tồn tại.");
 
-        var game = new Game { Type = type };
+        var game = new Game { Type = type, BallConfigJson = ballConfigJson };
         for (int i = 0; i < req.PlayerIds.Count; i++)
         {
             game.Players.Add(new GamePlayer { PlayerId = req.PlayerIds[i], Seat = i + 1 });
@@ -126,11 +146,23 @@ public class GamesController : ControllerBase
                 Score = p.ManualScore ?? 0
             }).ToList();
         }
+        else if (game.Type == GameType.Bida9Ball)
+        {
+            try
+            {
+                var ballConfig = Bida9BallScoringService.ParseConfig(game.BallConfigJson);
+                results = _bida9.Compute(req.Players, ballConfig, manualScoring);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
         else
         {
             try
             {
-                results = _scoring.Compute(req.Players, manualScoring);
+                results = _tienLen.Compute(req.Players, manualScoring);
             }
             catch (InvalidOperationException ex)
             {
@@ -197,11 +229,19 @@ public class GamesController : ControllerBase
             }
         }
 
+        List<BallConfigDto>? ballConfig = null;
+        if (g.Type == GameType.Bida9Ball && !string.IsNullOrWhiteSpace(g.BallConfigJson))
+        {
+            try { ballConfig = Bida9BallScoringService.ParseConfig(g.BallConfigJson); }
+            catch { ballConfig = null; }
+        }
+
         return new GameDto(
             g.Id,
             (int)g.Type,
             g.StartedAt,
             g.FinishedAt,
+            ballConfig,
             g.Players
                 .OrderBy(p => p.Seat)
                 .Select(p => new GamePlayerDto(p.PlayerId, p.Player!.Name, p.Seat, totals[p.PlayerId], p.Player!.AvatarData != null))
@@ -226,5 +266,7 @@ public class GamesController : ControllerBase
         r.JudgedVictim,
         r.BlackPigsHeld, r.RedPigsHeld,
         r.HasThreePairsHeld, r.HasFourOfAKindHeld, r.HasFourPairsHeld,
+        r.BreakAndCleared,
+        Bida9BallScoringService.ParseHits(r.BallHitsJson),
         r.Score);
 }

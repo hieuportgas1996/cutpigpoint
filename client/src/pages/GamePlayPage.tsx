@@ -30,17 +30,22 @@ function emptyInput(playerId: string): PlayerInputState {
     hasThreePairsHeld: false,
     hasFourOfAKindHeld: false,
     hasFourPairsHeld: false,
+    breakAndCleared: false,
+    ballHits: null,
     manualScore: null
   };
 }
 
 type RoundMode = 'normal' | 'whiteWin' | 'judge';
+type BidaMode = 'normal' | 'breakClear';
 
 export default function GamePlayPage() {
   const { id } = useParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
   const [manualScoring, setManualScoring] = useState(false);
   const [mode, setMode] = useState<RoundMode>('normal');
+  const [bidaMode, setBidaMode] = useState<BidaMode>('normal');
+  const [breakerId, setBreakerId] = useState<string | null>(null);
   const [specialPlayerId, setSpecialPlayerId] = useState<string | null>(null);
   const [inputs, setInputs] = useState<PlayerInputState[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -61,6 +66,8 @@ export default function GamePlayPage() {
     setInputs(g.players.map((p) => emptyInput(p.playerId)));
     setManualScoring(false);
     setMode('normal');
+    setBidaMode('normal');
+    setBreakerId(null);
     setSpecialPlayerId(null);
   }
 
@@ -144,13 +151,65 @@ export default function GamePlayPage() {
     });
   }
 
+  function addBallHit(playerId: string, ball: number, points: number) {
+    setInputs((prev) =>
+      prev.map((it) =>
+        it.playerId === playerId
+          ? { ...it, ballHits: [...(it.ballHits ?? []), { ball, points, victimPlayerId: '' }] }
+          : it
+      )
+    );
+  }
+
+  function removeBallHit(playerId: string, idx: number) {
+    setInputs((prev) =>
+      prev.map((it) =>
+        it.playerId === playerId
+          ? { ...it, ballHits: (it.ballHits ?? []).filter((_, i) => i !== idx) }
+          : it
+      )
+    );
+  }
+
+  function setBallHitVictim(playerId: string, idx: number, victimId: string) {
+    setInputs((prev) =>
+      prev.map((it) =>
+        it.playerId === playerId
+          ? {
+              ...it,
+              ballHits: (it.ballHits ?? []).map((h, i) =>
+                i === idx ? { ...h, victimPlayerId: victimId } : h
+              )
+            }
+          : it
+      )
+    );
+  }
+
+  function buildBidaInputs(): PlayerInputState[] {
+    if (bidaMode === 'breakClear') {
+      return inputs.map((it) => ({
+        ...emptyInput(it.playerId),
+        breakAndCleared: it.playerId === breakerId
+      }));
+    }
+    return inputs.map((it) => ({
+      ...emptyInput(it.playerId),
+      ballHits: it.ballHits && it.ballHits.length > 0 ? it.ballHits : null
+    }));
+  }
+
   async function submitRound() {
     if (!id || !game) return;
     setSubmitting(true);
     try {
       const isManual = game.type === GameType.Manual;
-      const useManualScoring = isManual || manualScoring;
-      const payload = useManualScoring ? inputs : buildSubmitInputs();
+      const isBida = game.type === GameType.Bida9Ball;
+      const useManualScoring = isManual || (manualScoring && !isBida);
+      let payload: PlayerInputState[];
+      if (useManualScoring) payload = inputs;
+      else if (isBida) payload = buildBidaInputs();
+      else payload = buildSubmitInputs();
       await api.addRound(id, useManualScoring, payload);
       toast.push('success', `Đã lưu round #${(game?.rounds.length ?? 0) + 1}`);
       await refresh();
@@ -198,7 +257,8 @@ export default function GamePlayPage() {
   const nextRoundNum = game.rounds.length + 1;
   const champion = finished && ranking.length > 0 ? ranking[0] : null;
   const isManualGame = game.type === GameType.Manual;
-  const effectiveManualScoring = isManualGame || manualScoring;
+  const isBidaGame = game.type === GameType.Bida9Ball;
+  const effectiveManualScoring = isManualGame || (manualScoring && !isBidaGame);
 
   const manualHasPositive = effectiveManualScoring && inputs.some((i) => (i.manualScore ?? 0) > 0);
   const manualHasNegative = effectiveManualScoring && inputs.some((i) => (i.manualScore ?? 0) < 0);
@@ -207,11 +267,28 @@ export default function GamePlayPage() {
   const manualGameValid = inputs.some((i) => i.manualScore !== null && i.manualScore !== 0);
   const manualValid = isManualGame ? manualGameValid : tienLenManualValid;
 
+  const totalBidaHits = inputs.reduce((s, i) => s + (i.ballHits?.length ?? 0), 0);
+  const allBidaHitsHaveVictim = inputs.every((i) =>
+    !i.ballHits || i.ballHits.every((h) => !!h.victimPlayerId && h.victimPlayerId !== i.playerId)
+  );
+  const bidaTotalBallPoints = (game.ballConfig ?? []).reduce((s, b) => s + b.points, 0);
+  const bidaLosers = Math.max(1, game.players.length - 1);
+  const bidaBreakerEvenSplit = (bidaTotalBallPoints * 2) % bidaLosers === 0;
+  const bidaValid = isBidaGame
+    ? bidaMode === 'breakClear'
+      ? !!breakerId && bidaBreakerEvenSplit
+      : totalBidaHits > 0 && allBidaHitsHaveVictim
+    : true;
+
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>{isManualGame ? 'Ván tự do (chấm tay)' : 'Ván Tiến Lên Miền Nam'}</h1>
+          <h1>
+            {isManualGame ? 'Ván tự do (chấm tay)' :
+             isBidaGame ? 'Ván Bida 9 Bi' :
+             'Ván Tiến Lên Miền Nam'}
+          </h1>
           <div className="muted small">
             <Icon name="clock" size={12} /> Bắt đầu {formatDateTime(game.startedAt)}
             {finished && ` • Kết thúc ${formatDateTime(game.finishedAt!)}`}
@@ -262,7 +339,7 @@ export default function GamePlayPage() {
           <div className="card-header">
             <h3 style={{ margin: 0 }}>Round #{nextRoundNum}</h3>
             <div className="spacer" />
-            {!isManualGame && (
+            {!isManualGame && !isBidaGame && (
               <label className="inline">
                 <input
                   type="checkbox"
@@ -277,7 +354,26 @@ export default function GamePlayPage() {
             )}
           </div>
 
-          {!isManualGame && !manualScoring && (
+          {isBidaGame && (
+            <BidaRoundPanel
+              players={game.players}
+              ballConfig={game.ballConfig ?? []}
+              inputs={inputs}
+              mode={bidaMode}
+              breakerId={breakerId}
+              onModeChange={(m) => {
+                setBidaMode(m);
+                setBreakerId(null);
+                setInputs(game.players.map((p) => emptyInput(p.playerId)));
+              }}
+              onBreakerChange={setBreakerId}
+              onAddHit={addBallHit}
+              onRemoveHit={removeBallHit}
+              onSetVictim={setBallHitVictim}
+            />
+          )}
+
+          {!isManualGame && !isBidaGame && !manualScoring && (
             <ModeSwitcher
               mode={mode}
               specialPlayerId={specialPlayerId}
@@ -286,7 +382,7 @@ export default function GamePlayPage() {
             />
           )}
 
-          {!isManualGame && !manualScoring && mode === 'normal' && (
+          {!isManualGame && !isBidaGame && !manualScoring && mode === 'normal' && (
             <div className="player-grid">
               {game.players.map((p) => (
                 <NormalPlayerCard
@@ -302,14 +398,14 @@ export default function GamePlayPage() {
             </div>
           )}
 
-          {!isManualGame && !manualScoring && mode === 'whiteWin' && specialPlayerId && (
+          {!isManualGame && !isBidaGame && !manualScoring && mode === 'whiteWin' && specialPlayerId && (
             <WhiteWinSummary
               winner={game.players.find((p) => p.playerId === specialPlayerId)!}
               others={game.players.filter((p) => p.playerId !== specialPlayerId)}
             />
           )}
 
-          {!isManualGame && !manualScoring && mode === 'judge' && specialPlayerId && (
+          {!isManualGame && !isBidaGame && !manualScoring && mode === 'judge' && specialPlayerId && (
             <JudgePanel
               judge={game.players.find((p) => p.playerId === specialPlayerId)!}
               others={game.players.filter((p) => p.playerId !== specialPlayerId)}
@@ -378,7 +474,7 @@ export default function GamePlayPage() {
 
           <button
             onClick={submitRound}
-            disabled={submitting || !manualValid}
+            disabled={submitting || (isBidaGame ? !bidaValid : !manualValid)}
             className="block-mobile mt-2"
           >
             <Icon name="check" size={16} />
@@ -414,6 +510,8 @@ export default function GamePlayPage() {
                     ? 'PX'
                     : r.results.find((x) => x.whiteWin)
                     ? 'VT'
+                    : r.results.find((x) => x.breakAndCleared)
+                    ? 'PC'
                     : r.manualScoring
                     ? 'TC'
                     : null;
@@ -1073,6 +1171,243 @@ function SimpleToggle({
         <span className="small">{label}</span>
       </span>
     </label>
+  );
+}
+
+/* ---------- Bida 9 Ball round panel ---------- */
+
+function BidaRoundPanel({
+  players,
+  ballConfig,
+  inputs,
+  mode,
+  breakerId,
+  onModeChange,
+  onBreakerChange,
+  onAddHit,
+  onRemoveHit,
+  onSetVictim
+}: {
+  players: GamePlayer[];
+  ballConfig: { ball: number; points: number }[];
+  inputs: PlayerInputState[];
+  mode: BidaMode;
+  breakerId: string | null;
+  onModeChange: (m: BidaMode) => void;
+  onBreakerChange: (id: string | null) => void;
+  onAddHit: (playerId: string, ball: number, points: number) => void;
+  onRemoveHit: (playerId: string, idx: number) => void;
+  onSetVictim: (playerId: string, idx: number, victimId: string) => void;
+}) {
+  function inputFor(pid: string) {
+    return inputs.find((i) => i.playerId === pid)!;
+  }
+  const totalBallPoints = ballConfig.reduce((s, b) => s + b.points, 0);
+  const losersCount = Math.max(1, players.length - 1);
+  const breakerWinScore = totalBallPoints * 2;
+  const breakerLoserScore = -Math.floor(breakerWinScore / losersCount);
+  const breakerEvenSplit = breakerWinScore % losersCount === 0;
+
+  const totals = useMemo(() => {
+    const map = new Map<string, number>();
+    players.forEach((p) => map.set(p.playerId, 0));
+    if (mode === 'breakClear') {
+      if (breakerId) {
+        map.set(breakerId, breakerWinScore);
+        players.forEach((p) => {
+          if (p.playerId !== breakerId) map.set(p.playerId, breakerLoserScore);
+        });
+      }
+      return map;
+    }
+    inputs.forEach((it) => {
+      (it.ballHits ?? []).forEach((h) => {
+        if (!h.victimPlayerId) return;
+        map.set(it.playerId, (map.get(it.playerId) ?? 0) + h.points);
+        map.set(h.victimPlayerId, (map.get(h.victimPlayerId) ?? 0) - h.points);
+      });
+    });
+    return map;
+  }, [inputs, mode, breakerId, players, breakerWinScore, breakerLoserScore]);
+
+  return (
+    <>
+      <div className="card" style={{ background: 'var(--bg-1)', marginBottom: '1rem', padding: '0.85rem 1rem' }}>
+        <div className="section-title">Chế độ round Bida</div>
+        <div className="row mt-1">
+          <button
+            type="button"
+            className={mode === 'normal' ? '' : 'secondary'}
+            onClick={() => onModeChange('normal')}
+          >
+            Ăn bi bình thường
+          </button>
+          <button
+            type="button"
+            className={mode === 'breakClear' ? '' : 'secondary'}
+            onClick={() => onModeChange('breakClear')}
+          >
+            <Icon name="star" size={14} /> Phá-chấm
+          </button>
+        </div>
+        {mode === 'breakClear' ? (
+          <div className="muted tiny mt-1">
+            <Icon name="info" size={11} /> Tổng điểm các bi = {totalBallPoints}. Người phá chấm xong: +{breakerWinScore}, mỗi người còn lại {breakerLoserScore}.
+            {!breakerEvenSplit && <> ⚠️ Tổng điểm không chia đều cho {losersCount} người thua — hãy điều chỉnh điểm bi.</>}
+          </div>
+        ) : (
+          <div className="muted tiny mt-1">
+            <Icon name="info" size={11} /> Mỗi lần ăn 1 bi tính điểm: chọn bi và người bị trừ. Có thể nhiều entry/người.
+          </div>
+        )}
+      </div>
+
+      {mode === 'breakClear' ? (
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(96,165,250,0.12), rgba(167,139,250,0.12))',
+          border: '1px solid var(--accent)',
+          marginBottom: 0
+        }}>
+          <div className="section-title">Chọn người phá-chấm</div>
+          <div className="row mt-1" style={{ flexWrap: 'wrap' }}>
+            {players.map((p) => (
+              <button
+                key={p.playerId}
+                type="button"
+                className={breakerId === p.playerId ? '' : 'secondary'}
+                onClick={() => onBreakerChange(breakerId === p.playerId ? null : p.playerId)}
+                style={{ padding: '0.4rem 0.7rem 0.4rem 0.4rem', gap: '0.5rem' }}
+              >
+                <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+                <span>{p.name}</span>
+                {breakerId === p.playerId && <Icon name="check" size={14} />}
+              </button>
+            ))}
+          </div>
+
+          {breakerId && (
+            <div className="col mt-2">
+              {players.map((p) => {
+                const score = totals.get(p.playerId) ?? 0;
+                return (
+                  <div key={p.playerId} className="leader-row" style={{ background: 'var(--bg-2)' }}>
+                    <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+                    <div className="name">{p.name}</div>
+                    <span className={`score-pill ${scoreClass(score)}`}>{formatScore(score)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="player-grid">
+          {players.map((p) => {
+            const it = inputFor(p.playerId);
+            const hits = it.ballHits ?? [];
+            const others = players.filter((x) => x.playerId !== p.playerId);
+            const playerScore = totals.get(p.playerId) ?? 0;
+            return (
+              <div key={p.playerId} className="player-card">
+                <div className="player-card-head">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Avatar playerId={p.playerId} name={p.name} hasAvatar={p.hasAvatar} size="sm" />
+                    <h4>{p.name}</h4>
+                  </div>
+                  <span className={`score-pill ${scoreClass(playerScore)}`}>{formatScore(playerScore)}</span>
+                </div>
+
+                <div>
+                  <div className="section-title">Ăn bi</div>
+                  <div className="muted tiny mb-1">
+                    <Icon name="info" size={11} /> Chạm vào bi để thêm 1 lần ăn.
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {ballConfig.map((b) => (
+                      <button
+                        key={b.ball}
+                        type="button"
+                        className="secondary"
+                        onClick={() => onAddHit(p.playerId, b.ball, b.points)}
+                        style={{
+                          minWidth: 60,
+                          padding: '0.35rem 0.55rem',
+                          fontWeight: 700,
+                          gap: '0.3rem'
+                        }}
+                        title={`Bi ${b.ball} (+${b.points})`}
+                      >
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 24, height: 24,
+                          borderRadius: '50%',
+                          background: 'var(--accent-grad-soft)',
+                          fontSize: '0.85rem'
+                        }}>{b.ball}</span>
+                        <span className="tiny dim">+{b.points}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {hits.length > 0 && (
+                  <div>
+                    <div className="section-title">Đã ăn ({hits.length})</div>
+                    <div className="col mt-1">
+                      {hits.map((h, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.45rem 0.6rem',
+                            background: 'var(--bg-1)',
+                            border: `1px solid ${h.victimPlayerId ? 'var(--border)' : 'var(--danger)'}`,
+                            borderRadius: 'var(--radius-sm)'
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 28, height: 28,
+                            borderRadius: '50%',
+                            background: 'var(--accent-grad-soft)',
+                            fontWeight: 700
+                          }}>{h.ball}</span>
+                          <span className="tiny dim bold">+{h.points}</span>
+                          <select
+                            value={h.victimPlayerId}
+                            onChange={(e) => onSetVictim(p.playerId, idx, e.target.value)}
+                            style={{ flex: 1, fontSize: '0.85rem' }}
+                          >
+                            <option value="">— Chọn người bị trừ —</option>
+                            {others.map((o) => (
+                              <option key={o.playerId} value={o.playerId}>{o.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="ghost icon-only"
+                            onClick={() => onRemoveHit(p.playerId, idx)}
+                            aria-label="Xoá"
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 

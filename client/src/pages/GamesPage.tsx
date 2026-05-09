@@ -124,7 +124,11 @@ function GameRow({ g, onDelete }: { g: GameSummary; onDelete?: () => void }) {
               <div className="bold">{g.players.map((p) => p.name).join(' • ')}</div>
               <div className="small dim" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Icon name="clock" size={12} /> {relativeTime(g.startedAt)}
-                <span className="tiny dim">• {g.type === GameType.Manual ? 'Tự do' : 'Tiến Lên'}</span>
+                <span className="tiny dim">• {
+                  g.type === GameType.Manual ? 'Tự do' :
+                  g.type === GameType.Bida9Ball ? 'Bida 9 Bi' :
+                  'Tiến Lên'
+                }</span>
               </div>
             </div>
           </div>

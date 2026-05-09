@@ -10,6 +10,9 @@ public class Game
 
     public DateTime? FinishedAt { get; set; }
 
+    // JSON `[{ "ball": int, "points": int }, ...]` cho Bida 9 Ball (đúng 3 bi). Null cho game type khác.
+    public string? BallConfigJson { get; set; }
+
     public List<GamePlayer> Players { get; set; } = new();
 
     public List<GameRound> Rounds { get; set; } = new();

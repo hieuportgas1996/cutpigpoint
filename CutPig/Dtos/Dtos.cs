@@ -12,7 +12,9 @@ public record PlayerDto(Guid Id, string Name, string? Nickname, bool HasAvatar);
 
 public record UpdateAvatarRequest(string DataUrl);
 
-public record CreateGameRequest(List<Guid> PlayerIds, int? Type);
+public record BallConfigDto(int Ball, int Points);
+
+public record CreateGameRequest(List<Guid> PlayerIds, int? Type, List<BallConfigDto>? BallConfig);
 
 public record GamePlayerDto(Guid PlayerId, string Name, int Seat, int TotalScore, bool HasAvatar);
 
@@ -21,8 +23,11 @@ public record GameDto(
     int Type,
     DateTime StartedAt,
     DateTime? FinishedAt,
+    List<BallConfigDto>? BallConfig,
     List<GamePlayerDto> Players,
     List<RoundDto> Rounds);
+
+public record BallHitDto(int Ball, int Points, Guid VictimPlayerId);
 
 public record PlayerRoundInputDto(
     Guid PlayerId,
@@ -45,6 +50,8 @@ public record PlayerRoundInputDto(
     bool HasThreePairsHeld,
     bool HasFourOfAKindHeld,
     bool HasFourPairsHeld,
+    bool BreakAndCleared,
+    List<BallHitDto>? BallHits,
     int? ManualScore);
 
 public record CreateRoundRequest(bool ManualScoring, List<PlayerRoundInputDto> Players);
@@ -70,6 +77,8 @@ public record RoundResultDto(
     bool HasThreePairsHeld,
     bool HasFourOfAKindHeld,
     bool HasFourPairsHeld,
+    bool BreakAndCleared,
+    List<BallHitDto>? BallHits,
     int Score);
 
 public record RoundDto(

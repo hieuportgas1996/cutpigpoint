@@ -91,6 +91,33 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
 
 `InvalidOperationException` từ scoring → controller trả `400 BadRequest` với message gốc.
 
+## Bida 9 Ball scoring ([CutPig/Services/Bida9BallScoringService.cs](CutPig/Services/Bida9BallScoringService.cs))
+
+Game type `Bida9Ball` cho **3 player**. 1 round = 1 ván hoàn chỉnh, kết quả lưu vào `RoundResult` cho từng player; tổng điểm game = sum theo round. Không dùng `Rank` mà dùng cấu hình bi + log các "ăn bi".
+
+**Cấu hình ván** (lưu trong `Game.BallConfigJson`, cố định khi tạo game):
+- Số bi linh hoạt: **1..9 bi** tuỳ chọn từ tập `{1..9}` (mặc định 3,6,9).
+- Mỗi bi có điểm user tự gán (mặc định 3=1, 6=2, 9=3, các bi khác = số bi).
+
+**Chế độ tính điểm round**:
+1. **Phá-chấm** (`breakAndCleared=true` cho 1 player): điểm tính theo tổng cấu hình bi.
+   - `S = sum(points các bi đã chọn)`.
+   - Người phá `+ 2S`; mỗi (N-1) người còn lại `− 2S/(N-1)`. Với N=3: winner +2S, mỗi loser −S.
+   - Server reject nếu `2S` không chia hết cho `N-1`. Frontend cảnh báo và disable submit.
+   - Bỏ qua mọi input khác (không có ball hit).
+2. **Bình thường**: mỗi player có list `BallHit { ball, points, victimPlayerId }` — mỗi entry = 1 lần ăn 1 bi tính điểm, kèm victim bị trừ.
+   - Người ăn `+points(ball)`; victim `−points(ball)`.
+   - Multi-victim hoặc single-victim cho cả tổ hợp đều support: mỗi entry chọn victim riêng.
+   - `points` trong hit phải khớp cấu hình của bi.
+
+**Validation**:
+- `BallHit.ball` phải thuộc cấu hình của game; `BallHit.points` khớp cấu hình.
+- `victimPlayerId` ≠ người ăn, phải thuộc bàn chơi.
+- Mode phá-chấm: đúng 1 player có `breakAndCleared=true`, không player nào có ball hit.
+- Zero-sum: tổng `Score` = 0 và có cả score > 0 lẫn < 0 (giống TLMN).
+
+**Bida đền (`BidaDen`) và Bida bài**: chỉ chừa enum, sẽ implement sau — không thêm service ở phase này.
+
 ## Frontend (client/)
 
 - **Stack**: React 18, react-router-dom v6, Vite, TypeScript.
@@ -117,7 +144,9 @@ Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inpu
 
 ## Quy ước
 
-- Game type hiện chỉ Tien Len Mien Nam; enum đã chừa chỗ cho Bida nhưng chưa có service tương ứng.
-- Khi thêm field vào `RoundResult` hoặc `Player`: nhớ thêm dòng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ở Program.cs (DB cũ trên Railway sẽ không tự migrate qua `EnsureCreated`).
+- Game type: Tien Len Mien Nam (đã có), Bida 9 Ball (đang/sẽ thêm — spec ở section trên). Bida đền và Bida bài chừa enum, implement sau.
+- Game Bida 9 Ball có **3 player** (khác TLMN 4 player) — `GamePlayer.Seat` 1..3; FE `NewGamePage` cần branch theo `GameType`.
+- Cấu hình bi (3 bi + điểm) là thuộc tính của Game (Bida9Ball), không phải của round → cần thêm field vào `Game` (vd `BallConfigJson`) kèm ALTER TABLE tương ứng.
+- Khi thêm field vào `RoundResult`, `Player`, hoặc `Game`: nhớ thêm dòng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ở Program.cs (DB cũ trên Railway sẽ không tự migrate qua `EnsureCreated`).
 - DTO dạng C# `record`, frontend type mirror trong `client/src/api.ts` — phải sync tay.
 - Tiếng Việt cho mọi text user-facing (toast, label, error message từ scoring).

@@ -13,6 +13,17 @@ export interface GamePlayer {
   hasAvatar: boolean;
 }
 
+export interface BallConfig {
+  ball: number;
+  points: number;
+}
+
+export interface BallHit {
+  ball: number;
+  points: number;
+  victimPlayerId: string;
+}
+
 export interface RoundResult {
   playerId: string;
   rank: number | null;
@@ -34,6 +45,8 @@ export interface RoundResult {
   hasThreePairsHeld: boolean;
   hasFourOfAKindHeld: boolean;
   hasFourPairsHeld: boolean;
+  breakAndCleared: boolean;
+  ballHits: BallHit[] | null;
   score: number;
 }
 
@@ -58,6 +71,7 @@ export interface Game {
   type: GameTypeValue;
   startedAt: string;
   finishedAt: string | null;
+  ballConfig: BallConfig[] | null;
   players: GamePlayer[];
   rounds: Round[];
 }
@@ -83,6 +97,8 @@ export interface PlayerRoundInput {
   hasThreePairsHeld: boolean;
   hasFourOfAKindHeld: boolean;
   hasFourPairsHeld: boolean;
+  breakAndCleared: boolean;
+  ballHits: BallHit[] | null;
   manualScore: number | null;
 }
 
@@ -144,8 +160,8 @@ export const api = {
 
   listGames: () => request<Array<{ id: string; type: GameTypeValue; startedAt: string; finishedAt: string | null; players: { playerId: string; name: string; seat: number; hasAvatar: boolean }[] }>>('/games'),
   getGame: (id: string) => request<Game>(`/games/${id}`),
-  createGame: (playerIds: string[], type: GameTypeValue = GameType.TienLenMienNam) =>
-    request<Game>('/games', { method: 'POST', body: JSON.stringify({ playerIds, type }) }),
+  createGame: (playerIds: string[], type: GameTypeValue = GameType.TienLenMienNam, ballConfig?: BallConfig[]) =>
+    request<Game>('/games', { method: 'POST', body: JSON.stringify({ playerIds, type, ballConfig: ballConfig ?? null }) }),
   finishGame: (id: string) => request<Game>(`/games/${id}/finish`, { method: 'POST' }),
   addRound: (id: string, manualScoring: boolean, players: PlayerRoundInput[]) =>
     request<Round>(`/games/${id}/rounds`, {

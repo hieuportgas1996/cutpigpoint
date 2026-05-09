@@ -38,10 +38,9 @@ export default function LoginPage() {
         style={{ width: '100%', maxWidth: 380, marginBottom: 0 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <span className="brand-icon"><Icon name="pig" size={18} /></span>
+          <span className="brand-icon"><Icon name="cards" size={18} /></span>
           <h2 style={{ margin: 0 }}>Cut Pig Point</h2>
         </div>
-        {/* <div className="muted small mb-2">Đăng nhập để tiếp tục</div> */}
         <div>
           <label htmlFor="username">Tên đăng nhập</label>
           <input

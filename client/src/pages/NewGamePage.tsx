@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, GameType, Player } from '../api';
+import { api, BallConfig, GameType, Player } from '../api';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../ui/Toast';
 import { initials } from '../ui/helpers';
 import { Avatar } from '../ui/Avatar';
 
-type Mode = 'tienlen' | 'manual';
+type Mode = 'tienlen' | 'bida9' | 'manual';
+
+const BIDA_DEFAULT_POINTS: Record<number, number> = { 3: 1, 6: 2, 9: 3 };
 
 export default function NewGamePage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [mode, setMode] = useState<Mode>('tienlen');
   const [tlSeats, setTlSeats] = useState<Array<string | ''>>(['', '', '', '']);
+  const [bidaSeats, setBidaSeats] = useState<Array<string | ''>>(['', '', '']);
+  const [bidaBalls, setBidaBalls] = useState<BallConfig[]>([
+    { ball: 3, points: 1 },
+    { ball: 6, points: 2 },
+    { ball: 9, points: 3 }
+  ]);
   const [manualIds, setManualIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const nav = useNavigate();
@@ -39,12 +47,46 @@ export default function NewGamePage() {
     setSeat(slotIndex, p.id);
   }
 
+  function setBidaSeat(i: number, id: string) {
+    setBidaSeats((prev) => prev.map((v, idx) => (idx === i ? id : v)));
+  }
+
+  function pickBidaPlayer(slotIndex: number, p: Player) {
+    if (bidaSeats.includes(p.id) && bidaSeats[slotIndex] !== p.id) {
+      const existingSlot = bidaSeats.indexOf(p.id);
+      setBidaSeats((prev) => {
+        const next = [...prev];
+        next[existingSlot] = next[slotIndex];
+        next[slotIndex] = p.id;
+        return next;
+      });
+      return;
+    }
+    setBidaSeat(slotIndex, p.id);
+  }
+
   function toggleManual(id: string) {
     setManualIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function toggleBall(ball: number) {
+    setBidaBalls((prev) => {
+      const exists = prev.find((b) => b.ball === ball);
+      if (exists) return prev.filter((b) => b.ball !== ball);
+      const points = BIDA_DEFAULT_POINTS[ball] ?? ball;
+      return [...prev, { ball, points }].sort((a, b) => a.ball - b.ball);
+    });
+  }
+
+  function setBallPoints(ball: number, points: number) {
+    setBidaBalls((prev) => prev.map((b) => (b.ball === ball ? { ...b, points } : b)));
+  }
+
   const tlAllSelected = tlSeats.every((s) => s !== '');
   const tlUnique = new Set(tlSeats.filter(Boolean)).size === tlSeats.filter(Boolean).length;
+  const bidaAllSelected = bidaSeats.every((s) => s !== '');
+  const bidaUnique = new Set(bidaSeats.filter(Boolean)).size === bidaSeats.filter(Boolean).length;
+  const bidaBallsValid = bidaBalls.length >= 1 && bidaBalls.every((b) => b.points > 0);
   const manualValid = manualIds.length >= 2;
 
   async function start() {
@@ -52,20 +94,16 @@ export default function NewGamePage() {
     try {
       let g;
       if (mode === 'tienlen') {
-        if (!tlAllSelected) {
-          toast.push('error', 'Phải chọn đủ 4 người chơi');
-          return;
-        }
-        if (!tlUnique) {
-          toast.push('error', 'Người chơi không được trùng nhau');
-          return;
-        }
+        if (!tlAllSelected) { toast.push('error', 'Phải chọn đủ 4 người chơi'); return; }
+        if (!tlUnique) { toast.push('error', 'Người chơi không được trùng nhau'); return; }
         g = await api.createGame(tlSeats as string[], GameType.TienLenMienNam);
+      } else if (mode === 'bida9') {
+        if (!bidaAllSelected) { toast.push('error', 'Phải chọn đủ 3 người chơi'); return; }
+        if (!bidaUnique) { toast.push('error', 'Người chơi không được trùng nhau'); return; }
+        if (!bidaBallsValid) { toast.push('error', 'Chọn ít nhất 1 bi và nhập điểm > 0'); return; }
+        g = await api.createGame(bidaSeats as string[], GameType.Bida9Ball, bidaBalls);
       } else {
-        if (!manualValid) {
-          toast.push('error', 'Cần ít nhất 2 người chơi');
-          return;
-        }
+        if (!manualValid) { toast.push('error', 'Cần ít nhất 2 người chơi'); return; }
         g = await api.createGame(manualIds, GameType.Manual);
       }
       nav(`/games/${g.id}`);
@@ -77,6 +115,7 @@ export default function NewGamePage() {
   }
 
   const hasEnoughForTienLen = players.length >= 4;
+  const hasEnoughForBida = players.length >= 3;
   const hasEnoughForManual = players.length >= 2;
 
   if (!hasEnoughForManual) {
@@ -121,15 +160,28 @@ export default function NewGamePage() {
           </button>
           <button
             type="button"
+            className={mode === 'bida9' ? '' : 'secondary'}
+            disabled={!hasEnoughForBida}
+            onClick={() => setMode('bida9')}
+          >
+            <Icon name="cards" size={14} /> Bida 9 Bi (3 người)
+          </button>
+          <button
+            type="button"
             className={mode === 'manual' ? '' : 'secondary'}
             onClick={() => setMode('manual')}
           >
-            <Icon name="plus" size={14} /> Tự do — chấm điểm thủ công (≥2 người)
+            <Icon name="plus" size={14} /> Tự do (điểm thủ công)
           </button>
         </div>
         {!hasEnoughForTienLen && (
           <div className="muted tiny mt-1">
             <Icon name="info" size={11} /> Tiến Lên cần đủ 4 người (hiện có {players.length}).
+          </div>
+        )}
+        {!hasEnoughForBida && (
+          <div className="muted tiny mt-1">
+            <Icon name="info" size={11} /> Bida 9 Bi cần đủ 3 người (hiện có {players.length}).
           </div>
         )}
         {mode === 'manual' && (
@@ -139,15 +191,32 @@ export default function NewGamePage() {
         )}
       </div>
 
-      {mode === 'tienlen' ? (
-        <TienLenSeats
+      {mode === 'tienlen' && (
+        <SeatPicker
           players={players}
           seats={tlSeats}
           onSet={setSeat}
           onPick={pickPlayer}
           toast={toast}
+          slotCount={4}
         />
-      ) : (
+      )}
+
+      {mode === 'bida9' && (
+        <>
+          <SeatPicker
+            players={players}
+            seats={bidaSeats}
+            onSet={setBidaSeat}
+            onPick={pickBidaPlayer}
+            toast={toast}
+            slotCount={3}
+          />
+          <BidaBallConfig balls={bidaBalls} onToggle={toggleBall} onSetPoints={setBallPoints} />
+        </>
+      )}
+
+      {mode === 'manual' && (
         <ManualPlayers
           players={players}
           selected={manualIds}
@@ -168,7 +237,9 @@ export default function NewGamePage() {
         onClick={start}
         disabled={
           submitting ||
-          (mode === 'tienlen' ? !tlAllSelected || !tlUnique : !manualValid)
+          (mode === 'tienlen' ? !tlAllSelected || !tlUnique :
+           mode === 'bida9' ? !bidaAllSelected || !bidaUnique || !bidaBallsValid :
+           !manualValid)
         }
         className="block-mobile"
       >
@@ -177,24 +248,28 @@ export default function NewGamePage() {
           ? 'Đang tạo…'
           : mode === 'tienlen'
           ? 'Bắt đầu ván'
+          : mode === 'bida9'
+          ? 'Bắt đầu ván Bida'
           : `Bắt đầu ván (${manualIds.length} người)`}
       </button>
     </div>
   );
 }
 
-function TienLenSeats({
+function SeatPicker({
   players,
   seats,
   onSet,
   onPick,
-  toast
+  toast,
+  slotCount
 }: {
   players: Player[];
   seats: Array<string | ''>;
   onSet: (i: number, id: string) => void;
   onPick: (slotIndex: number, p: Player) => void;
   toast: { push: (kind: 'info' | 'success' | 'error', msg: string) => void };
+  slotCount: number;
 }) {
   const remaining = useMemo(() => players.filter((p) => !seats.includes(p.id)), [players, seats]);
   return (
@@ -206,7 +281,7 @@ function TienLenSeats({
             const player = players.find((p) => p.id === seat);
             return (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.75rem', background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: `1px solid ${player ? 'var(--accent)' : 'var(--border)'}` }}>
-                <div className={`rank-badge r${i + 1}`}>{i + 1}</div>
+                <div className={`rank-badge r${(i % 4) + 1}`}>{i + 1}</div>
                 {player ? (
                   <>
                     <Avatar playerId={player.id} name={player.name} hasAvatar={player.hasAvatar} size="sm" />
@@ -229,7 +304,7 @@ function TienLenSeats({
         <div className="section-title">Chọn từ danh sách</div>
         <div className="muted small mb-1">Chạm vào người chơi để gán vào vị trí trống tiếp theo</div>
         {remaining.length === 0 ? (
-          <div className="muted small mt-1">Đã chọn đủ 4 người. Bỏ chọn ở vị trí trên để đổi.</div>
+          <div className="muted small mt-1">Đã chọn đủ {slotCount} người. Bỏ chọn ở vị trí trên để đổi.</div>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
             {remaining.map((p) => (
@@ -240,7 +315,7 @@ function TienLenSeats({
                 onClick={() => {
                   const empty = seats.indexOf('');
                   if (empty < 0) {
-                    toast.push('info', 'Đã đủ 4 người, bỏ chọn để thay');
+                    toast.push('info', `Đã đủ ${slotCount} người, bỏ chọn để thay`);
                     return;
                   }
                   onPick(empty, p);
@@ -259,6 +334,93 @@ function TienLenSeats({
         )}
       </div>
     </>
+  );
+}
+
+function BidaBallConfig({
+  balls,
+  onToggle,
+  onSetPoints
+}: {
+  balls: BallConfig[];
+  onToggle: (ball: number) => void;
+  onSetPoints: (ball: number, points: number) => void;
+}) {
+  const selected = new Set(balls.map((b) => b.ball));
+  const totalPoints = balls.reduce((s, b) => s + b.points, 0);
+  return (
+    <div className="card">
+      <div className="section-title">Bi tính điểm</div>
+      <div className="muted tiny mb-1">
+        <Icon name="info" size={11} /> Chọn các bi từ 1..9 và nhập điểm cho mỗi bi. Mặc định 3=1đ, 6=2đ, 9=3đ.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.4rem' }}>
+        {Array.from({ length: 9 }, (_, i) => i + 1).map((ball) => {
+          const isSelected = selected.has(ball);
+          return (
+            <button
+              key={ball}
+              type="button"
+              className={isSelected ? 'active' : 'secondary'}
+              onClick={() => onToggle(ball)}
+              style={{
+                width: 44,
+                height: 44,
+                padding: 0,
+                borderRadius: '50%',
+                fontWeight: 700,
+                fontSize: '1rem'
+              }}
+            >
+              {ball}
+            </button>
+          );
+        })}
+      </div>
+
+      {balls.length > 0 && (
+        <>
+          <div className="section-title mt-2">Điểm mỗi bi</div>
+          <div className="col mt-1">
+            {balls.map((b) => (
+              <div
+                key={b.ball}
+                className="leader-row"
+                style={{ background: 'var(--bg-2)', alignItems: 'center' }}
+              >
+                <div className="rank-badge r1" style={{ width: 36, height: 36 }}>{b.ball}</div>
+                <div className="name">Bi {b.ball}</div>
+                <div className="row gap-sm" style={{ alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={b.points}
+                    onChange={(e) => onSetPoints(b.ball, Math.max(1, Number(e.target.value || 0)))}
+                    style={{ width: 80 }}
+                  />
+                  <span className="small dim">điểm</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            className="mt-2"
+            style={{
+              padding: '0.6rem 0.85rem',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-1)',
+              color: 'var(--text-muted)',
+              fontSize: '0.88rem'
+            }}
+          >
+            <Icon name="info" size={14} /> Tổng điểm các bi = <strong>{totalPoints}</strong>.
+            Phá-chấm: người phá +{totalPoints * 2}, mỗi người còn lại −{totalPoints}.
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
