@@ -757,6 +757,7 @@ function NormalPlayerCard({
           <SimpleToggle
             label="Về nhất 3 bích (+3, mỗi người khác −1)"
             checked={input.wonByThreeOfSpades}
+            disabled={!input.wonByThreeOfSpades && allInputs.some((i) => i.lostByThreeOfSpades)}
             onChange={(v) => onUpdate({ wonByThreeOfSpades: v })}
           />
         )}
@@ -764,6 +765,7 @@ function NormalPlayerCard({
           <SimpleToggle
             label="Về chót 3 bích (−3, mỗi người khác +1)"
             checked={input.lostByThreeOfSpades}
+            disabled={!input.lostByThreeOfSpades && allInputs.some((i) => i.wonByThreeOfSpades)}
             onChange={(v) => onUpdate({ lostByThreeOfSpades: v })}
           />
         )}
@@ -1172,11 +1174,13 @@ function JudgePanel({
 function SimpleToggle({
   label,
   checked,
-  onChange
+  onChange,
+  disabled
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label
@@ -1188,11 +1192,13 @@ function SimpleToggle({
         borderRadius: 'var(--radius-sm)',
         width: '100%',
         justifyContent: 'space-between',
-        transition: 'all var(--transition)'
+        transition: 'all var(--transition)',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer'
       }}
     >
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
         <span className="small">{label}</span>
       </span>
     </label>
