@@ -50,6 +50,7 @@ export default function GamePlayPage() {
   const [breakerId, setBreakerId] = useState<string | null>(null);
   const [specialPlayerId, setSpecialPlayerId] = useState<string | null>(null);
   const [inputs, setInputs] = useState<PlayerInputState[]>([]);
+  const [manualScoreText, setManualScoreText] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 
@@ -66,6 +67,7 @@ export default function GamePlayPage() {
 
   function resetInputs(g: Game) {
     setInputs(g.players.map((p) => emptyInput(p.playerId)));
+    setManualScoreText({});
     setManualScoring(false);
     setMode('normal');
     setBidaMode('normal');
@@ -442,14 +444,27 @@ export default function GamePlayPage() {
                       <label htmlFor={`m-${p.playerId}`}>Điểm</label>
                       <input
                         id={`m-${p.playerId}`}
-                        type="number"
-                        inputMode="numeric"
-                        value={input.manualScore ?? ''}
-                        onChange={(e) =>
-                          updateInput(p.playerId, {
-                            manualScore: e.target.value === '' ? null : Number(e.target.value)
-                          })
-                        }
+                        type="text"
+                        inputMode="text"
+                        pattern="-?[0-9]*"
+                        value={manualScoreText[p.playerId] ?? (input.manualScore?.toString() ?? '')}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          if (!/^-?\d*$/.test(raw)) return;
+                          setManualScoreText((prev) => ({ ...prev, [p.playerId]: raw }));
+                          if (raw === '' || raw === '-') {
+                            updateInput(p.playerId, { manualScore: null });
+                          } else {
+                            updateInput(p.playerId, { manualScore: Number(raw) });
+                          }
+                        }}
+                        onBlur={() => {
+                          setManualScoreText((prev) => {
+                            const next = { ...prev };
+                            delete next[p.playerId];
+                            return next;
+                          });
+                        }}
                       />
                     </div>
                   </div>
