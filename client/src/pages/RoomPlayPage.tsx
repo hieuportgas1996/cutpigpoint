@@ -37,6 +37,18 @@ export default function RoomPlayPage() {
     setSelected(new Set());
   }, [matchState?.currentTurnSeatIndex]);
 
+  // Derive everything BEFORE early returns (hooks must be called in same order every render)
+  const myUserId = state.status === 'authenticated' ? state.userId : '';
+  const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
+  const isMyTurn = matchState?.players[matchState.currentTurnSeatIndex]?.userId === myUserId;
+  const myHand: Card[] = (privateHand?.hand ?? []).map(cardFromDto).sort(compareCard);
+  const trick: Card[] = (matchState?.currentTrick ?? []).map(cardFromDto);
+  const trickCombo = trick.length > 0 ? detectCombo(trick) : null;
+
+  const selectedCards = myHand.filter(c => selected.has(c.id));
+  const selectedKey = selectedCards.map(c => c.id).join(',');
+  const myCombo = useMemo(() => detectCombo(selectedCards), [selectedKey]);
+
   if (state.status !== 'authenticated') return null;
 
   if (error) {
@@ -56,15 +68,6 @@ export default function RoomPlayPage() {
     );
   }
 
-  const myUserId = state.userId;
-  const me = matchState.players.find(p => p.userId === myUserId);
-  const isMyTurn = matchState.players[matchState.currentTurnSeatIndex]?.userId === myUserId;
-  const myHand: Card[] = (privateHand?.hand ?? []).map(cardFromDto).sort(compareCard);
-  const trick: Card[] = (matchState.currentTrick ?? []).map(cardFromDto);
-  const trickCombo = trick.length > 0 ? detectCombo(trick) : null;
-
-  const selectedCards = myHand.filter(c => selected.has(c.id));
-  const myCombo = useMemo(() => detectCombo(selectedCards), [selectedCards.map(c => c.id).join(',')]);
   const canPlay = isMyTurn && myCombo !== null && (
     trickCombo === null || comboBeats(trickCombo, myCombo)
   );
@@ -72,7 +75,6 @@ export default function RoomPlayPage() {
 
   const turnLeftSec = Math.max(0, Math.ceil((new Date(matchState.turnDeadline).getTime() - now) / 1000));
 
-  // Compute seat positions: rotate so my seat is at bottom
   const myIdx = me ? me.seatIndex : 0;
   const seatLayout = matchState.players.map(p => ({
     player: p,
