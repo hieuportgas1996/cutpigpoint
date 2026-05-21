@@ -14,6 +14,7 @@ type IconName =
   | 'pig'
   | 'star'
   | 'clock'
+  | 'globe'
   | 'chevron-right';
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -61,5 +62,7 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
       return <svg {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
     case 'clock':
       return <svg {...props}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
+    case 'globe':
+      return <svg {...props}><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" /></svg>;
   }
 }

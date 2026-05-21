@@ -67,7 +67,7 @@ function AppShell() {
             </NavLink>
             <NavLink to="/rooms">
               <span className="hide-mobile">Phòng online</span>
-              <span className="show-mobile"><Icon name="cards" size={16} /></span>
+              <span className="show-mobile"><Icon name="globe" size={16} /></span>
             </NavLink>
             {state.isAdmin && (
               <NavLink to="/admin/users">
