@@ -34,9 +34,9 @@ public class MatchTimerService : BackgroundService
                     {
                         var result = _matches.Pass(match.RoomId, current.UserId, isAutoPass: true);
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(result.Match), stoppingToken);
-                        if (result.MatchEnded)
+                        if (result.RoundEnded)
                         {
-                            await FinalizeAsync(match);
+                            await EmitRoundEndAsync(result.Match, stoppingToken);
                         }
                     }
                     catch (Exception ex)
@@ -54,33 +54,30 @@ public class MatchTimerService : BackgroundService
         }
     }
 
-    private async Task FinalizeAsync(Match match)
+    private async Task EmitRoundEndAsync(Match match, CancellationToken ct)
     {
-        var scores = ComputeBasicRankScores(match.Players.Count, match);
-        var results = match.Players
-            .OrderBy(p => p.FinalRank ?? int.MaxValue)
-            .Select(p => new MatchEndResultDto(p.UserId, p.DisplayName, p.FinalRank ?? 0, scores[p.UserId]))
-            .ToList();
-        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchEnd", new MatchEndDto(match.Id, results));
-        _matches.Remove(match.RoomId);
-    }
+        var roundScores = _matches.ComputeRoundScores(match);
+        bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
+        for (int i = 0; i < match.Players.Count; i++)
+            match.Players[i].TotalScore += roundScores[i];
 
-    private static Dictionary<Guid, int> ComputeBasicRankScores(int playerCount, Match match)
-    {
-        int[] table = playerCount switch
-        {
-            4 => new[] { 2, 1, -1, -2 },
-            3 => new[] { 2, 0, -2 },
-            2 => new[] { 1, -1 },
-            _ => Enumerable.Range(0, playerCount).Select(_ => 0).ToArray()
-        };
-        var dict = new Dictionary<Guid, int>();
-        foreach (var p in match.Players)
-        {
-            var rank = (p.FinalRank ?? playerCount) - 1;
-            dict[p.UserId] = table[Math.Clamp(rank, 0, table.Length - 1)];
-        }
-        return dict;
+        var entries = match.Players
+            .OrderBy(p => p.FinalRank ?? int.MaxValue)
+            .Select(p =>
+            {
+                int idx = match.Players.IndexOf(p);
+                return new RoundResultEntryDto(
+                    p.UserId, p.DisplayName,
+                    p.FinalRank ?? 0,
+                    roundScores[idx],
+                    p.TotalScore,
+                    p.WhiteWinReason);
+            })
+            .ToList();
+
+        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("RoundEnd",
+            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, entries), ct);
+        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), ct);
     }
 
     private static MatchPublicStateDto BuildPublic(Match m)
@@ -89,15 +86,20 @@ public class MatchTimerService : BackgroundService
             m.Id,
             m.RoomId,
             (int)m.Status,
+            m.RoundNumber,
             m.CurrentTurnSeatIndex,
             m.CurrentTrickOwnerId,
             m.CurrentTrick?.Cards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
             m.TurnDeadline,
+            m.HostUserId,
             m.Players.Select(p => new MatchPlayerDto(
                 p.UserId,
                 p.DisplayName,
                 p.SeatIndex,
                 p.Hand.Count,
-                p.FinalRank)).ToList());
+                p.FinalRank,
+                p.PassedThisTrick,
+                p.TotalScore,
+                p.WhiteWinReason)).ToList());
     }
 }

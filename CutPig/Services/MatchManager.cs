@@ -18,14 +18,14 @@ public class MatchManager
         return m;
     }
 
-    public Match Create(Guid roomId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex)> players)
+    public Match Create(Guid roomId, Guid hostUserId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex)> players)
     {
         lock (LockFor(roomId))
         {
-            if (_matchesByRoom.TryGetValue(roomId, out var existing) && existing.Status == MatchStatus.InProgress)
+            if (_matchesByRoom.TryGetValue(roomId, out var existing) && existing.Status != MatchStatus.Finished)
                 return existing;
 
-            var match = new Match { RoomId = roomId };
+            var match = new Match { RoomId = roomId, HostUserId = hostUserId };
             foreach (var p in players.OrderBy(p => p.SeatIndex))
             {
                 match.Players.Add(new MatchPlayer
@@ -35,26 +35,107 @@ public class MatchManager
                     SeatIndex = p.SeatIndex,
                 });
             }
-
-            // Deal
-            var deck = Deck.Shuffle(Deck.Build(), Random.Shared);
-            for (int i = 0; i < deck.Count; i++)
-            {
-                match.Players[i % match.Players.Count].Hand.Add(deck[i]);
-            }
-            foreach (var p in match.Players)
-                p.Hand = p.Hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).ToList();
-
-            // First turn: player holding 3 of Spades
-            var firstSeat = match.Players.FindIndex(p => p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades));
-            if (firstSeat < 0) firstSeat = 0;
-            match.CurrentTurnSeatIndex = firstSeat;
-            match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
-            match.Log.Add(new MatchLogEntry(MatchLogKind.Deal, Guid.Empty, null, DateTime.UtcNow));
-
+            DealRound(match, isFirstRound: true);
             _matchesByRoom[roomId] = match;
             return match;
         }
+    }
+
+    /// <summary>Deal a new round inside an existing match.</summary>
+    public Match StartNextRound(Guid roomId, Guid hostUserId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.HostUserId != hostUserId)
+                throw new InvalidOperationException("Chỉ chủ phòng được mở ván mới.");
+            if (match.Status != MatchStatus.WaitingNextRound)
+                throw new InvalidOperationException("Ván trước chưa kết thúc.");
+
+            DealRound(match, isFirstRound: false);
+            return match;
+        }
+    }
+
+    private static void DealRound(Match match, bool isFirstRound)
+    {
+        match.RoundNumber = isFirstRound ? 1 : match.RoundNumber + 1;
+        match.Status = MatchStatus.InProgress;
+        match.CurrentTrick = null;
+        match.CurrentTrickOwnerId = null;
+        match.FinishedCount = 0;
+        match.FinishOrder.Clear();
+        foreach (var p in match.Players)
+        {
+            p.Hand.Clear();
+            p.FinalRank = null;
+            p.PassedThisTrick = false;
+            p.WhiteWinReason = null;
+        }
+
+        // Deal exactly 13 cards each; remaining cards are buried.
+        var deck = Deck.Shuffle(Deck.Build(), Random.Shared);
+        int idx = 0;
+        foreach (var p in match.Players)
+        {
+            for (int i = 0; i < 13 && idx < deck.Count; i++, idx++)
+                p.Hand.Add(deck[idx]);
+            p.Hand = p.Hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).ToList();
+        }
+
+        // Detect white-win for each player
+        bool anyWhiteWin = false;
+        foreach (var p in match.Players)
+        {
+            var reason = TienLenComboEngine.DetectWhiteWin(p.Hand);
+            if (reason != null)
+            {
+                p.WhiteWinReason = reason;
+                anyWhiteWin = true;
+            }
+        }
+
+        if (anyWhiteWin)
+        {
+            // Immediately end round
+            // FinalRank: white-winners get rank 1 (tie if multiple), others share following ranks
+            int rank = 1;
+            foreach (var p in match.Players.Where(p => p.WhiteWinReason != null))
+            {
+                p.FinalRank = rank;
+                match.FinishOrder.Add(p.UserId);
+                match.FinishedCount++;
+            }
+            rank = match.FinishedCount + 1;
+            foreach (var p in match.Players.Where(p => p.WhiteWinReason == null))
+            {
+                p.FinalRank = rank++;
+                match.FinishOrder.Add(p.UserId);
+                match.FinishedCount++;
+            }
+            match.Status = MatchStatus.WaitingNextRound;
+            return;
+        }
+
+        // Determine first turn
+        int firstSeat;
+        if (isFirstRound)
+        {
+            // Player holding 3 of Spades
+            firstSeat = match.Players.FindIndex(p => p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades));
+            if (firstSeat < 0) firstSeat = 0;
+        }
+        else
+        {
+            // Winner of previous round
+            firstSeat = match.PreviousRoundWinnerId.HasValue
+                ? match.Players.FindIndex(p => p.UserId == match.PreviousRoundWinnerId.Value)
+                : 0;
+            if (firstSeat < 0) firstSeat = 0;
+        }
+        match.CurrentTurnSeatIndex = firstSeat;
+        match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
     }
 
     public void Remove(Guid roomId)
@@ -86,8 +167,10 @@ public class MatchManager
             var combo = TienLenComboEngine.Detect(cards)
                 ?? throw new InvalidOperationException("Bộ bài không hợp lệ.");
 
-            // First move of match must include 3 of Spades
-            bool isMatchOpener = match.Log.Count(e => e.Kind == MatchLogKind.Play) == 0;
+            bool isMatchOpener = match.RoundNumber == 1
+                && match.CurrentTrick == null
+                && match.Players.All(p => p.Hand.Count >= 12); // nobody has played yet
+
             if (isMatchOpener && !cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
                 throw new InvalidOperationException("Nước đầu tiên phải có 3 bích.");
 
@@ -101,7 +184,11 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
-            match.Log.Add(new MatchLogEntry(MatchLogKind.Play, userId, combo.Cards, DateTime.UtcNow));
+            // If player was previously passed in this trick but used 4-pair-run, clear pass flag (they're back in)
+            if (TienLenComboEngine.IsFourPairRun(combo) && player.PassedThisTrick)
+            {
+                player.PassedThisTrick = false;
+            }
 
             bool justFinished = false;
             if (player.Hand.Count == 0)
@@ -109,11 +196,11 @@ public class MatchManager
                 match.FinishedCount++;
                 player.FinalRank = match.FinishedCount;
                 match.FinishOrder.Add(userId);
-                match.Log.Add(new MatchLogEntry(MatchLogKind.PlayerFinished, userId, null, DateTime.UtcNow));
                 justFinished = true;
+                if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
             }
 
-            // Check match end (only one or zero active player remaining)
+            // Check round end (only one or zero active player remaining)
             var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
             if (remaining.Count <= 1)
             {
@@ -123,13 +210,11 @@ public class MatchManager
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
                 }
-                match.Status = MatchStatus.Finished;
-                match.Log.Add(new MatchLogEntry(MatchLogKind.MatchEnd, Guid.Empty, null, DateTime.UtcNow));
+                match.Status = MatchStatus.WaitingNextRound;
                 return new PlayResult(combo, justFinished, true, match);
             }
 
-            // Advance turn (skip already-finished)
-            AdvanceTurn(match, skipCurrent: true);
+            AdvanceTurnSkippingPassed(match);
             match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PlayResult(combo, justFinished, false, match);
         }
@@ -146,29 +231,23 @@ public class MatchManager
             if (current.UserId != userId)
                 throw new InvalidOperationException("Chưa đến lượt bạn.");
 
-            // Cannot pass when there is no trick to beat (opener or new trick after all-pass)
             if (match.CurrentTrick == null)
             {
                 if (isAutoPass)
                 {
-                    // Auto-pass on a free turn: forfeit current trick (play the smallest single)
-                    // To keep simple: force play smallest card
+                    // Auto-pass on free turn: play smallest single
                     var smallest = current.Hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).First();
-                    // delegate to Play to avoid duplicating logic — but Play locks too.
-                    // We're already inside lock, so re-enter via internal impl by releasing pattern is risky.
-                    // Simpler: throw — caller decides. But for auto-pass we just kick to next anyway.
-                    // For now: auto-pass on free turn = play smallest single inline.
                     var combo = TienLenComboEngine.Detect(new[] { smallest })!;
                     current.Hand.Remove(smallest);
                     match.CurrentTrick = combo;
                     match.CurrentTrickOwnerId = userId;
-                    match.Log.Add(new MatchLogEntry(MatchLogKind.AutoPass, userId, combo.Cards, DateTime.UtcNow));
 
                     if (current.Hand.Count == 0)
                     {
                         match.FinishedCount++;
                         current.FinalRank = match.FinishedCount;
                         match.FinishOrder.Add(userId);
+                        if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
                     }
                     var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
                     if (remaining.Count <= 1)
@@ -179,30 +258,47 @@ public class MatchManager
                             p.FinalRank = match.FinishedCount;
                             match.FinishOrder.Add(p.UserId);
                         }
-                        match.Status = MatchStatus.Finished;
+                        match.Status = MatchStatus.WaitingNextRound;
                         return new PassResult(false, true, match);
                     }
-                    AdvanceTurn(match, skipCurrent: true);
+                    AdvanceTurnSkippingPassed(match);
                     match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
                     return new PassResult(false, false, match);
                 }
                 throw new InvalidOperationException("Không thể bỏ qua khi đang mở nước.");
             }
 
-            match.Log.Add(new MatchLogEntry(isAutoPass ? MatchLogKind.AutoPass : MatchLogKind.Pass, userId, null, DateTime.UtcNow));
+            current.PassedThisTrick = true;
 
-            // Mark seat passed for this trick. We track via simple convention: if turn comes back to trick owner, start new trick.
-            AdvanceTurn(match, skipCurrent: true);
+            // If all other active players passed → trick won by owner → reset
+            bool allOthersPassed = match.Players.All(p =>
+                p.FinalRank.HasValue
+                || p.UserId == match.CurrentTrickOwnerId
+                || p.PassedThisTrick);
 
-            // If the next seat IS the trick owner, that means everyone else passed → new trick
             bool newTrick = false;
-            if (match.CurrentTrickOwnerId.HasValue
-                && match.Players[match.CurrentTurnSeatIndex].UserId == match.CurrentTrickOwnerId.Value)
+            if (allOthersPassed && match.CurrentTrickOwnerId.HasValue)
             {
+                var ownerId = match.CurrentTrickOwnerId.Value;
                 match.CurrentTrick = null;
                 match.CurrentTrickOwnerId = null;
-                match.Log.Add(new MatchLogEntry(MatchLogKind.NewTrick, Guid.Empty, null, DateTime.UtcNow));
+                foreach (var p in match.Players) p.PassedThisTrick = false;
+                // Turn goes to trick owner (who must still be active)
+                var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+                if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
+                {
+                    match.CurrentTurnSeatIndex = ownerSeat;
+                }
+                else
+                {
+                    // Owner already finished — advance from current seat
+                    AdvanceTurnSkippingPassed(match);
+                }
                 newTrick = true;
+            }
+            else
+            {
+                AdvanceTurnSkippingPassed(match);
             }
 
             match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
@@ -210,20 +306,59 @@ public class MatchManager
         }
     }
 
-    private static void AdvanceTurn(Match match, bool skipCurrent)
+    /// <summary>Advance to next seat that is still active (not finished, not passed this trick).</summary>
+    private static void AdvanceTurnSkippingPassed(Match match)
     {
         int n = match.Players.Count;
         int next = match.CurrentTurnSeatIndex;
         for (int i = 0; i < n; i++)
         {
             next = (next + 1) % n;
-            if (!match.Players[next].FinalRank.HasValue) break;
+            var p = match.Players[next];
+            if (p.FinalRank.HasValue) continue;
+            if (p.PassedThisTrick) continue;
+            match.CurrentTurnSeatIndex = next;
+            return;
         }
-        match.CurrentTurnSeatIndex = next;
+        // No valid next → keep current (will be handled by caller)
     }
 
     public IEnumerable<Match> AllActive() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.InProgress);
+
+    public int[] ComputeRoundScores(Match match)
+    {
+        // Returns score for each player in seat order
+        var n = match.Players.Count;
+        var scores = new int[n];
+
+        // White-win path
+        var winners = match.Players.Where(p => p.WhiteWinReason != null).ToList();
+        if (winners.Any())
+        {
+            for (int i = 0; i < n; i++)
+            {
+                if (match.Players[i].WhiteWinReason != null) scores[i] = 6;
+                else scores[i] = -2;
+            }
+            return scores;
+        }
+
+        // Normal path
+        int[] table = n switch
+        {
+            4 => new[] { 2, 1, -1, -2 },
+            3 => new[] { 2, 0, -2 },
+            2 => new[] { 1, -1 },
+            _ => Enumerable.Range(0, n).Select(_ => 0).ToArray()
+        };
+        for (int i = 0; i < n; i++)
+        {
+            var rank = (match.Players[i].FinalRank ?? n) - 1;
+            scores[i] = table[Math.Clamp(rank, 0, table.Length - 1)];
+        }
+        return scores;
+    }
 }
 
-public record PlayResult(Combo Played, bool PlayerFinished, bool MatchEnded, Match Match);
-public record PassResult(bool NewTrick, bool MatchEnded, Match Match);
+public record PlayResult(Combo Played, bool PlayerFinished, bool RoundEnded, Match Match);
+public record PassResult(bool NewTrick, bool RoundEnded, Match Match);

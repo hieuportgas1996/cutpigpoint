@@ -30,24 +30,30 @@ public record MatchPlayerDto(
     string DisplayName,
     int SeatIndex,
     int CardsLeft,
-    int? FinalRank);
+    int? FinalRank,
+    bool PassedThisTrick,
+    int TotalScore,
+    string? WhiteWinReason);
 
 public record MatchPublicStateDto(
     Guid MatchId,
     Guid RoomId,
     int Status,
+    int RoundNumber,
     int CurrentTurnSeatIndex,
     Guid? CurrentTrickOwnerId,
     List<CardDto>? CurrentTrick,
     DateTime TurnDeadline,
+    Guid HostUserId,
     List<MatchPlayerDto> Players);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
 public record PlayMoveRequest(List<CardDto> Cards);
 
-public record MatchEndResultDto(Guid UserId, string DisplayName, int FinalRank, int Score);
-public record MatchEndDto(Guid MatchId, List<MatchEndResultDto> Results);
+public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason);
+public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, List<RoundResultEntryDto> Results);
+public record MatchEndDto(Guid MatchId, List<RoundResultEntryDto> FinalScores);
 
 public record CreatePlayerRequest(string Name, string? Nickname);
 

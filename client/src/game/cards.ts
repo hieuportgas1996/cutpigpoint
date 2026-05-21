@@ -130,7 +130,27 @@ function isRunOfPairs(sorted: Card[]): boolean {
 }
 
 export function comboBeats(current: ComboInfo, next: ComboInfo): boolean {
+  // 4-pair-run beats everything
+  if (next.kind === 'runOfPairs' && next.cards.length === 8) return true;
+
+  // Tứ quý beats: 1 con 2, đôi 2, 3 đôi thông
+  if (next.kind === 'four') {
+    if (current.kind === 'single' && current.cards[0].rank === 15) return true;
+    if (current.kind === 'pair' && current.cards[0].rank === 15) return true;
+    if (current.kind === 'runOfPairs' && current.cards.length === 6) return true;
+  }
+
+  // 3 đôi thông beats: 1 con 2
+  if (next.kind === 'runOfPairs' && next.cards.length === 6) {
+    if (current.kind === 'single' && current.cards[0].rank === 15) return true;
+  }
+
+  // Same kind + length + higher top value
   return next.kind === current.kind && next.cards.length === current.cards.length && next.topValue > current.topValue;
+}
+
+export function isFourPairRun(combo: ComboInfo): boolean {
+  return combo.kind === 'runOfPairs' && combo.cards.length === 8;
 }
 
 export function cardFromDto(d: { rank: number; suit: number }): Card {

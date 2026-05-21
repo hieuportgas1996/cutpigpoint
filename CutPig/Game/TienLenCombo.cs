@@ -76,13 +76,88 @@ public static class TienLenComboEngine
 
     /// <summary>
     /// Returns true if "next" beats "current" according to TLMN rules.
-    /// Basic rules only — no chặt heo / cut 2 yet (Phase 4).
     /// </summary>
     public static bool Beats(Combo current, Combo next)
     {
-        // Same kind, same length, higher TopValue
+        // 4-pair-run beats everything (including 2s) — no restriction.
+        if (next.Kind == ComboKind.RunOfPairs && next.Cards.Count == 8)
+            return true;
+
+        // Tứ quý beats: con 2, đôi 2, 3 đôi thông
+        if (next.Kind == ComboKind.Four)
+        {
+            if (current.Kind == ComboKind.Single && current.Cards[0].Rank == 15) return true;
+            if (current.Kind == ComboKind.Pair && current.Cards[0].Rank == 15) return true;
+            if (current.Kind == ComboKind.RunOfPairs && current.Cards.Count == 6) return true;
+        }
+
+        // 3 đôi thông beats: 1 con 2
+        if (next.Kind == ComboKind.RunOfPairs && next.Cards.Count == 6)
+        {
+            if (current.Kind == ComboKind.Single && current.Cards[0].Rank == 15) return true;
+        }
+
+        // Same kind + same length + higher top value
         if (next.Kind == current.Kind && next.Length == current.Length && next.TopValue > current.TopValue)
             return true;
+
+        return false;
+    }
+
+    /// <summary>True if this combo is a "4-pair-run" (4 đôi thông) — exempt from pass-tracking.</summary>
+    public static bool IsFourPairRun(Combo c) => c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8;
+
+    /// <summary>
+    /// Detect ve-trang (white-win) hands. Returns reason string or null if not white-win.
+    /// </summary>
+    public static string? DetectWhiteWin(IReadOnlyList<Card> hand)
+    {
+        if (hand.Count < 10) return null;
+        var sorted = hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).ToList();
+
+        // 1. Sảnh 3..A (12 lá, mỗi rank 3..14 xuất hiện đúng 1 lần)
+        if (sorted.Count >= 12)
+        {
+            var rank3toA = sorted.GroupBy(c => c.Rank).Where(g => g.Key >= 3 && g.Key <= 14).ToList();
+            if (rank3toA.Count == 12 && rank3toA.All(g => g.Any()))
+                return "Sảnh 3 đến A";
+        }
+
+        // 2. Tứ quý 2
+        var twos = sorted.Where(c => c.Rank == 15).ToList();
+        if (twos.Count == 4)
+            return "Tứ quý 2";
+
+        // 3. 6 đôi (12 lá, 6 ranks mỗi rank 2 lá)
+        var groups = sorted.GroupBy(c => c.Rank).ToList();
+        var pairCount = groups.Count(g => g.Count() >= 2);
+        if (pairCount >= 6)
+            return "6 đôi";
+
+        // 4. 5 đôi thông (10 lá liên tiếp rank, mỗi rank 2 lá, không chứa 2)
+        if (HasFivePairRun(groups))
+            return "5 đôi thông";
+
+        return null;
+    }
+
+    private static bool HasFivePairRun(List<IGrouping<int, Card>> groups)
+    {
+        var pairs = groups
+            .Where(g => g.Count() >= 2 && g.Key != 15)
+            .Select(g => g.Key)
+            .OrderBy(r => r)
+            .ToList();
+        if (pairs.Count < 5) return false;
+        for (int i = 0; i <= pairs.Count - 5; i++)
+        {
+            bool ok = true;
+            for (int j = 1; j < 5; j++)
+            {
+                if (pairs[i + j] != pairs[i + j - 1] + 1) { ok = false; break; }
+            }
+            if (ok) return true;
+        }
         return false;
     }
 }

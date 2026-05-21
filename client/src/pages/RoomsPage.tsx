@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, RoomSummary } from '../api';
+import { api, RoomStatus, RoomSummary } from '../api';
+import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../ui/Toast';
 import { Icon } from '../ui/Icon';
+
+const STATUS_LABEL: Record<number, string> = {
+  0: 'Đang chờ',
+  1: 'Đang chơi',
+  2: 'Đã kết thúc',
+};
 
 export default function RoomsPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { state } = useAuth();
+  const isAdmin = state.status === 'authenticated' && state.isAdmin;
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState('');
@@ -43,6 +52,20 @@ export default function RoomsPage() {
     const code = joinCode.trim().toUpperCase();
     if (!code) return;
     navigate(`/rooms/${code}`);
+  }
+
+  async function handleDelete(r: RoomSummary) {
+    const note = r.status === RoomStatus.Playing
+      ? ' (đang chơi — sẽ ngắt ván)'
+      : '';
+    if (!confirm(`Xoá phòng ${r.code}${note}?`)) return;
+    try {
+      await api.deleteRoom(r.id);
+      toast.push('success', `Đã xoá phòng ${r.code}`);
+      await refresh();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    }
   }
 
   return (
@@ -86,7 +109,9 @@ export default function RoomsPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Phòng đang chờ</h3>
+        <h3 style={{ marginTop: 0 }}>
+          {isAdmin ? 'Tất cả phòng (admin)' : 'Phòng đang chờ'}
+        </h3>
         {loading ? (
           <div className="muted">Đang tải…</div>
         ) : rooms.length === 0 ? (
@@ -98,9 +123,16 @@ export default function RoomsPage() {
                 <code style={{ fontSize: 18, fontWeight: 700, letterSpacing: 2 }}>{r.code}</code>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600 }}>Chủ phòng: {r.hostDisplayName}</div>
-                  <div className="muted small">{r.occupiedSeats}/{r.maxSeats} người</div>
+                  <div className="muted small">
+                    {r.occupiedSeats}/{r.maxSeats} người · {STATUS_LABEL[r.status] ?? '?'}
+                  </div>
                 </div>
-                <button className="sm" onClick={() => navigate(`/rooms/${r.code}`)}>Vào</button>
+                {r.status === RoomStatus.Waiting && (
+                  <button className="sm" onClick={() => navigate(`/rooms/${r.code}`)}>Vào</button>
+                )}
+                {isAdmin && (
+                  <button className="sm danger" onClick={() => handleDelete(r)}>Xoá</button>
+                )}
               </div>
             ))}
           </div>

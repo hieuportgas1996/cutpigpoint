@@ -22,8 +22,11 @@ public class RoomsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<RoomSummaryDto>>> List()
     {
-        var rooms = await _db.Rooms
-            .Where(r => r.Status == RoomStatus.Waiting)
+        var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
+        var query = _db.Rooms.AsQueryable();
+        if (!isAdmin) query = query.Where(r => r.Status == RoomStatus.Waiting);
+
+        var rooms = await query
             .Include(r => r.HostUser)
             .Include(r => r.Seats)
             .OrderByDescending(r => r.CreatedAt)
@@ -113,10 +116,17 @@ public class RoomsController : ControllerBase
     {
         var userId = CallerId();
         if (userId == null) return Unauthorized();
+        var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
+
         var room = await _db.Rooms.FindAsync(id);
         if (room == null) return NotFound();
-        if (room.HostUserId != userId) return StatusCode(403, "Chỉ chủ phòng được xoá.");
-        if (room.Status == RoomStatus.Playing) return BadRequest("Không thể xoá phòng đang chơi.");
+
+        if (!isAdmin)
+        {
+            if (room.HostUserId != userId) return StatusCode(403, "Chỉ chủ phòng được xoá.");
+            if (room.Status == RoomStatus.Playing) return BadRequest("Không thể xoá phòng đang chơi.");
+        }
+        // Admin: can delete any room, any status
 
         _db.Rooms.Remove(room);
         await _db.SaveChangesAsync();

@@ -253,7 +253,7 @@ export interface CardDto {
   suit: number;
 }
 
-export const MatchStatus = { InProgress: 0, Finished: 1 } as const;
+export const MatchStatus = { InProgress: 0, Finished: 1, WaitingNextRound: 2 } as const;
 
 export interface MatchPlayerPublic {
   userId: string;
@@ -261,16 +261,21 @@ export interface MatchPlayerPublic {
   seatIndex: number;
   cardsLeft: number;
   finalRank: number | null;
+  passedThisTrick: boolean;
+  totalScore: number;
+  whiteWinReason: string | null;
 }
 
 export interface MatchPublicState {
   matchId: string;
   roomId: string;
   status: number;
+  roundNumber: number;
   currentTurnSeatIndex: number;
   currentTrickOwnerId: string | null;
   currentTrick: CardDto[] | null;
   turnDeadline: string;
+  hostUserId: string;
   players: MatchPlayerPublic[];
 }
 
@@ -279,14 +284,23 @@ export interface PrivateHand {
   hand: CardDto[];
 }
 
-export interface MatchEndResult {
+export interface RoundResultEntry {
   userId: string;
   displayName: string;
   finalRank: number;
-  score: number;
+  roundScore: number;
+  totalScore: number;
+  whiteWinReason: string | null;
+}
+
+export interface RoundEnd {
+  matchId: string;
+  roundNumber: number;
+  wasWhiteWin: boolean;
+  results: RoundResultEntry[];
 }
 
 export interface MatchEnd {
   matchId: string;
-  results: MatchEndResult[];
+  finalScores: RoundResultEntry[];
 }

@@ -6,7 +6,8 @@ import { useToast } from '../ui/Toast';
 import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
-import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats } from '../game/cards';
+import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun } from '../game/cards';
+import { MatchStatus } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
@@ -20,8 +21,8 @@ export default function RoomPlayPage() {
   const toast = useToast();
   const { state } = useAuth();
   const {
-    status, state: room, matchState, privateHand, matchEnd, error,
-    playCards, passTurn,
+    status, state: room, matchState, privateHand, roundEnd, matchEnd, error,
+    playCards, passTurn, startNextRound, endMatch, clearRoundEnd,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -32,15 +33,15 @@ export default function RoomPlayPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Reset selection on turn change
   useEffect(() => {
     setSelected(new Set());
-  }, [matchState?.currentTurnSeatIndex]);
+  }, [matchState?.currentTurnSeatIndex, matchState?.roundNumber]);
 
-  // Derive everything BEFORE early returns (hooks must be called in same order every render)
   const myUserId = state.status === 'authenticated' ? state.userId : '';
   const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
-  const isMyTurn = matchState?.players[matchState.currentTurnSeatIndex]?.userId === myUserId;
+  const isHost = matchState?.hostUserId === myUserId;
+  const isMyTurn = matchState?.players[matchState.currentTurnSeatIndex]?.userId === myUserId
+    && matchState?.status === MatchStatus.InProgress;
   const myHand: Card[] = (privateHand?.hand ?? []).map(cardFromDto).sort(compareCard);
   const trick: Card[] = (matchState?.currentTrick ?? []).map(cardFromDto);
   const trickCombo = trick.length > 0 ? detectCombo(trick) : null;
@@ -48,6 +49,22 @@ export default function RoomPlayPage() {
   const selectedCards = myHand.filter(c => selected.has(c.id));
   const selectedKey = selectedCards.map(c => c.id).join(',');
   const myCombo = useMemo(() => detectCombo(selectedCards), [selectedKey]);
+
+  const myPassedThisTrick = me?.passedThisTrick ?? false;
+  const myComboIsFourPair = myCombo !== null && isFourPairRun(myCombo);
+
+  // canPlay logic:
+  // - Must be my turn AND match in progress
+  // - Combo must be valid
+  // - If passed this trick: only 4-pair-run allowed (exception)
+  // - If trick exists: must beat it (or 4-pair-run beats everything)
+  const canPlay =
+    isMyTurn &&
+    myCombo !== null &&
+    (!myPassedThisTrick || myComboIsFourPair) &&
+    (trickCombo === null || comboBeats(trickCombo, myCombo));
+
+  const canPass = isMyTurn && trickCombo !== null;
 
   if (state.status !== 'authenticated') return null;
 
@@ -67,11 +84,6 @@ export default function RoomPlayPage() {
       </div>
     );
   }
-
-  const canPlay = isMyTurn && myCombo !== null && (
-    trickCombo === null || comboBeats(trickCombo, myCombo)
-  );
-  const canPass = isMyTurn && trickCombo !== null;
 
   const turnLeftSec = Math.max(0, Math.ceil((new Date(matchState.turnDeadline).getTime() - now) / 1000));
 
@@ -107,13 +119,40 @@ export default function RoomPlayPage() {
     }
   }
 
+  async function handleNextRound() {
+    try {
+      await startNextRound();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    }
+  }
+
+  async function handleEndMatch() {
+    if (!confirm('Kết thúc trận? Phòng sẽ đóng.')) return;
+    try {
+      await endMatch();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    }
+  }
+
+  const tooltipMsg = !isMyTurn
+    ? 'Chưa đến lượt bạn'
+    : myCombo === null
+    ? 'Chọn bộ bài hợp lệ'
+    : myPassedThisTrick && !myComboIsFourPair
+    ? 'Đã bỏ lượt trick này (chỉ 4 đôi thông được đánh)'
+    : !canPlay
+    ? 'Bộ này không chặn được nước trước'
+    : '';
+
   return (
     <div className="tlmn-root room-play">
       <div className="tlmn-stage">
         <div className="play-header">
           <button className="tlmn-btn ghost" onClick={() => navigate('/rooms')}>← Thoát</button>
           <div className="lobby-code">
-            <span className="muted small">Mã phòng</span>
+            <span className="muted small">Ván {matchState.roundNumber} · Mã</span>
             <code>{code}</code>
           </div>
           <div className={`turn-timer ${turnLeftSec <= 5 ? 'low' : ''}`}>
@@ -128,31 +167,37 @@ export default function RoomPlayPage() {
           <MaiBranch corner="br" />
 
           {seatLayout.map(({ player, position }) => {
-            const isTurn = matchState.players[matchState.currentTurnSeatIndex]?.userId === player.userId;
+            const isTurn = matchState.players[matchState.currentTurnSeatIndex]?.userId === player.userId
+              && matchState.status === MatchStatus.InProgress;
             const isMe = player.userId === myUserId;
             return (
               <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''}`}>
                 <div className="tlmn-avatar">{player.displayName.charAt(0).toUpperCase()}</div>
                 <div className="tlmn-seat-info">
-                  <div className="tlmn-seat-name">{isMe ? 'Bạn' : player.displayName}</div>
+                  <div className="tlmn-seat-name">
+                    {isMe ? 'Bạn' : player.displayName}
+                    {player.userId === matchState.hostUserId && <span className="host-badge">CHỦ</span>}
+                  </div>
                   <div className="tlmn-seat-meta">
                     <span>🂠 {player.cardsLeft}</span>
+                    <span className={`score-pill ${player.totalScore > 0 ? 'pos' : player.totalScore < 0 ? 'neg' : ''}`}>
+                      {player.totalScore > 0 ? `+${player.totalScore}` : player.totalScore}
+                    </span>
                     {player.finalRank && (
-                      <span className="score-pill pos">{RANK_LABEL[player.finalRank] || `#${player.finalRank}`}</span>
+                      <span className="rank-tag-mini">{RANK_LABEL[player.finalRank] || `#${player.finalRank}`}</span>
                     )}
                   </div>
                 </div>
+                {player.passedThisTrick && !player.finalRank && (
+                  <div className="tlmn-seat-pass">BỎ LƯỢT</div>
+                )}
               </div>
             );
           })}
 
           <div className="play-area-cards">
             {trick.length === 0 ? (
-              <div className="play-empty muted">
-                {trickCombo === null && matchState.currentTrickOwnerId === null
-                  ? 'Mở nước mới'
-                  : 'Chưa có bài'}
-              </div>
+              <div className="play-empty muted">Mở nước mới</div>
             ) : (
               trick.map((c, i) => (
                 <div key={c.id} className="play-card-slot" style={{ marginLeft: i === 0 ? 0 : -22 }}>
@@ -195,7 +240,7 @@ export default function RoomPlayPage() {
             className="tlmn-btn primary"
             disabled={!canPlay}
             onClick={handlePlay}
-            title={!isMyTurn ? 'Chưa đến lượt bạn' : myCombo === null ? 'Chọn bộ bài hợp lệ' : !canPlay ? 'Bộ này không chặn được nước trước' : ''}
+            title={tooltipMsg}
           >
             ▶ Đánh ({selectedCards.length})
           </button>
@@ -203,7 +248,7 @@ export default function RoomPlayPage() {
             className="tlmn-btn ghost"
             disabled={!canPass}
             onClick={handlePass}
-            title={!isMyTurn ? 'Chưa đến lượt bạn' : trickCombo === null ? 'Không thể bỏ qua khi đang mở nước' : ''}
+            title={!isMyTurn ? 'Chưa đến lượt' : trickCombo === null ? 'Không thể bỏ qua khi đang mở nước' : ''}
           >
             ↷ Bỏ qua
           </button>
@@ -212,18 +257,57 @@ export default function RoomPlayPage() {
           )}
         </div>
 
+        {roundEnd && !matchEnd && (
+          <div className="match-end-overlay">
+            {roundEnd.wasWhiteWin && <Confetti active={true} />}
+            <div className="match-end-card">
+              <h2>
+                {roundEnd.wasWhiteWin ? '🌟 Có người về trắng!' : `🎉 Kết quả ván ${roundEnd.roundNumber}`}
+              </h2>
+              <div className="match-end-list">
+                {roundEnd.results.map(r => (
+                  <div key={r.userId} className="match-end-row">
+                    <span className="rank-tag">
+                      {r.whiteWinReason ? '★' : RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}
+                    </span>
+                    <div className="match-end-name">
+                      <div>{r.displayName}</div>
+                      {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
+                    </div>
+                    <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+                      {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+                    </span>
+                    <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="match-end-actions">
+                {isHost ? (
+                  <>
+                    <button className="tlmn-btn primary" onClick={handleNextRound}>🎴 Ván tiếp</button>
+                    <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
+                  </>
+                ) : (
+                  <div className="muted">Đang chờ chủ phòng…</div>
+                )}
+                <button className="tlmn-btn ghost" onClick={clearRoundEnd}>Đóng bảng</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {matchEnd && (
           <div className="match-end-overlay">
             <Confetti active={true} />
             <div className="match-end-card">
-              <h2>🎉 Kết quả ván</h2>
+              <h2>🏆 Kết thúc trận</h2>
               <div className="match-end-list">
-                {matchEnd.results.map(r => (
+                {matchEnd.finalScores.map((r, idx) => (
                   <div key={r.userId} className="match-end-row">
-                    <span className="rank-tag">{RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}</span>
+                    <span className="rank-tag">#{idx + 1}</span>
                     <span className="match-end-name">{r.displayName}</span>
-                    <span className={`score-pill ${r.score > 0 ? 'pos' : r.score < 0 ? 'neg' : ''}`}>
-                      {r.score > 0 ? `+${r.score}` : r.score}
+                    <span className={`score-pill ${r.totalScore > 0 ? 'pos' : r.totalScore < 0 ? 'neg' : ''}`}>
+                      {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}
                     </span>
                   </div>
                 ))}

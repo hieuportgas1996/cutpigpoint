@@ -166,11 +166,58 @@ public class RoomHub : Hub
                 DisplayName: string.IsNullOrWhiteSpace(s.User?.DisplayName) ? (s.User?.Username ?? "") : s.User!.DisplayName,
                 s.SeatIndex))
             .ToList();
-        var match = _matches.Create(room.Id, matchPlayers);
+        var match = _matches.Create(room.Id, fresh.HostUserId, matchPlayers);
 
         await Clients.Group(GroupName(room.Id)).SendAsync("GameStarted", room.Id);
         await Clients.Group(GroupName(room.Id)).SendAsync("MatchState", BuildMatchPublic(match));
         await SendPrivateHandsAsync(match);
+
+        // If white-win was detected immediately, emit RoundEnd
+        if (match.Status == MatchStatus.WaitingNextRound)
+        {
+            await EmitRoundEndAsync(match);
+        }
+    }
+
+    public async Task StartNextRound()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.StartNextRound(roomId.Value, auth.Value.UserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        await SendPrivateHandsAsync(match);
+
+        // If white-win immediately again, emit round-end
+        if (match.Status == MatchStatus.WaitingNextRound)
+        {
+            await EmitRoundEndAsync(match);
+        }
+    }
+
+    public async Task EndMatch()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        var match = _matches.GetByRoom(roomId.Value);
+        if (match == null) throw new HubException("Trận không tồn tại.");
+        if (match.HostUserId != auth.Value.UserId) throw new HubException("Chỉ chủ phòng được kết thúc trận.");
+
+        await FinalizeMatchAsync(match);
     }
 
     public async Task<MatchPublicStateDto?> RequestMatchState()
@@ -216,9 +263,9 @@ public class RoomHub : Hub
         var player = result.Match.Players.First(p => p.UserId == auth.Value.UserId);
         await SendPrivateHandToUserAsync(roomId.Value, player);
 
-        if (result.MatchEnded)
+        if (result.RoundEnded)
         {
-            await FinalizeMatchAsync(result.Match);
+            await EmitRoundEndAsync(result.Match);
         }
     }
 
@@ -240,10 +287,37 @@ public class RoomHub : Hub
         }
 
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
-        if (result.MatchEnded)
+        if (result.RoundEnded)
         {
-            await FinalizeMatchAsync(result.Match);
+            await EmitRoundEndAsync(result.Match);
         }
+    }
+
+    private async Task EmitRoundEndAsync(Match match)
+    {
+        var roundScores = _matches.ComputeRoundScores(match);
+        bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
+        // Apply to total
+        for (int i = 0; i < match.Players.Count; i++)
+            match.Players[i].TotalScore += roundScores[i];
+
+        var entries = match.Players
+            .OrderBy(p => p.FinalRank ?? int.MaxValue)
+            .Select((p, _) =>
+            {
+                int idx = match.Players.IndexOf(p);
+                return new RoundResultEntryDto(
+                    p.UserId, p.DisplayName,
+                    p.FinalRank ?? 0,
+                    roundScores[idx],
+                    p.TotalScore,
+                    p.WhiteWinReason);
+            })
+            .ToList();
+
+        await Clients.Group(GroupName(match.RoomId)).SendAsync("RoundEnd",
+            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, entries));
+        await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
     private async Task SendPrivateHandsAsync(Match match)
@@ -266,17 +340,12 @@ public class RoomHub : Hub
 
     private async Task FinalizeMatchAsync(Match match)
     {
-        // Compute scores using basic rank-only mode of TienLenScoringService.
-        // Rank points: #1=+2, #2=+1, #3=-1, #4=-2 for 4 players.
-        // For 2-3 players we use a proportional simple table.
-        var scores = ComputeBasicRankScores(match.Players.Count, match);
-        var results = match.Players
-            .OrderBy(p => p.FinalRank ?? int.MaxValue)
-            .Select(p => new MatchEndResultDto(p.UserId, p.DisplayName, p.FinalRank ?? 0, scores[p.UserId]))
+        var finalScores = match.Players
+            .OrderByDescending(p => p.TotalScore)
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null))
             .ToList();
-        await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, results));
+        await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 
-        // Mark room finished
         var room = await _db.Rooms.FirstOrDefaultAsync(r => r.Id == match.RoomId);
         if (room != null)
         {
@@ -287,43 +356,27 @@ public class RoomHub : Hub
         _matches.Remove(match.RoomId);
     }
 
-    private static Dictionary<Guid, int> ComputeBasicRankScores(int playerCount, Match match)
-    {
-        // 4-player: +2/+1/-1/-2
-        // 3-player: +2/0/-2
-        // 2-player: +1/-1
-        int[] table = playerCount switch
-        {
-            4 => new[] { 2, 1, -1, -2 },
-            3 => new[] { 2, 0, -2 },
-            2 => new[] { 1, -1 },
-            _ => Enumerable.Range(0, playerCount).Select(_ => 0).ToArray()
-        };
-        var dict = new Dictionary<Guid, int>();
-        foreach (var p in match.Players)
-        {
-            var rank = (p.FinalRank ?? playerCount) - 1;
-            dict[p.UserId] = table[Math.Clamp(rank, 0, table.Length - 1)];
-        }
-        return dict;
-    }
-
     private static MatchPublicStateDto BuildMatchPublic(Match m)
     {
         return new MatchPublicStateDto(
             m.Id,
             m.RoomId,
             (int)m.Status,
+            m.RoundNumber,
             m.CurrentTurnSeatIndex,
             m.CurrentTrickOwnerId,
             m.CurrentTrick?.Cards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
             m.TurnDeadline,
+            m.HostUserId,
             m.Players.Select(p => new MatchPlayerDto(
                 p.UserId,
                 p.DisplayName,
                 p.SeatIndex,
                 p.Hand.Count,
-                p.FinalRank)).ToList());
+                p.FinalRank,
+                p.PassedThisTrick,
+                p.TotalScore,
+                p.WhiteWinReason)).ToList());
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
