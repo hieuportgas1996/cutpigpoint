@@ -90,7 +90,8 @@ Theo rank kết thúc trong ván:
   - Chia bài lại.
   - Người **Nhất ván trước** đi đầu (mở trick đầu).
 - Ván đầu tiên (round 1):
-  - Người có **3 bích** (`3♠`) đi đầu, và **nước đầu phải chứa `3♠`**.
+  - Nếu **3♠ được chia trong tay người chơi**: người giữ `3♠` đi đầu và **nước đầu phải chứa `3♠`**.
+  - Nếu **3♠ nằm trong bài úp** (2-3 người chơi, 13 lá dư bị bỏ): seat 0 (host) đi đầu, **không bắt buộc** nước đầu chứa lá nào.
 
 ## Quy tắc khác
 

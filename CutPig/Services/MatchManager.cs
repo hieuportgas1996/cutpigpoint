@@ -171,7 +171,9 @@ public class MatchManager
                 && match.CurrentTrick == null
                 && match.Players.All(p => p.Hand.Count >= 12); // nobody has played yet
 
-            if (isMatchOpener && !cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+            // Only enforce 3-of-spades opening if 3♠ was actually dealt (vs being in the buried remainder for 2-3 players)
+            bool threeOfSpadesInPlay = match.Players.Any(p => p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades));
+            if (isMatchOpener && threeOfSpadesInPlay && !cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
                 throw new InvalidOperationException("Nước đầu tiên phải có 3 bích.");
 
             if (match.CurrentTrick != null)
