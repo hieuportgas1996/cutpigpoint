@@ -84,10 +84,12 @@ Theo rank kết thúc trong ván:
 
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.
 - Sau mỗi ván:
-  - Bảng điểm cộng dồn hiển thị cho mọi người.
-  - Host quyết định **"Ván tiếp"** hoặc **"Kết thúc trận"**.
+  - Bảng kết quả ván hiển thị (rank, điểm ván, **tổng điểm cộng dồn** trong trận).
+  - **Đếm ngược 5 giây** rồi tự động sang ván tiếp.
+  - Host có nút **"Kết thúc trận"** trong 5s đó nếu muốn dừng hẳn (đóng phòng, broadcast `MatchEnd`).
 - Ván tiếp:
-  - Chia bài lại.
+  - Chia bài lại (13 lá/người, bài dư úp).
+  - Detect về trắng lại; nếu lại có về trắng → ván tiếp đó kết thúc ngay, đếm tiếp 5s.
   - Người **Nhất ván trước** đi đầu (mở trick đầu).
 - Ván đầu tiên (round 1):
   - Nếu **3♠ được chia trong tay người chơi**: người giữ `3♠` đi đầu và **nước đầu phải chứa `3♠`**.
@@ -95,7 +97,7 @@ Theo rank kết thúc trong ván:
 
 ## Quy tắc khác
 
-- **Disconnect**: timer 30 giây/lượt. Hết giờ không action → auto-pass. Auto-pass khi đang mở nước (không có trick để chặn) → tự động đánh lá nhỏ nhất.
-- **Reconnect**: tay bài được gửi lại sau khi connect lại; state ván vẫn còn (in-memory hiện tại, sẽ chuyển DB ở phase sau).
-- **Host xoá phòng**: chỉ khi phòng đang chờ (Waiting). Phòng đang chơi không xoá được.
-- **Admin**: có thể xoá bất kỳ phòng nào, kể cả đang chơi hoặc đã kết thúc.
+- **Disconnect**: timer **30 giây/lượt**. Hết giờ không action → auto-pass. Auto-pass khi đang mở nước (không có trick để chặn) → tự động đánh lá nhỏ nhất trong tay.
+- **Reconnect**: tay bài (`PrivateHand`) được gửi lại tự động sau khi connect lại; state ván vẫn còn (in-memory hiện tại — Railway restart giữa trận = mất ván).
+- **Host xoá phòng**: chỉ khi phòng đang chờ (`Waiting`). Phòng đang chơi không xoá được.
+- **Admin**: có thể xoá **bất kỳ phòng nào**, kể cả đang chơi hoặc đã kết thúc; cũng thấy được tất cả phòng (không chỉ phòng đang chờ).

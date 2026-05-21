@@ -1,154 +1,236 @@
 # CutPigPoint — Architecture
 
-App tính điểm Tiến Lên Miền Nam (4 người) cho một nhóm bạn. Stack: .NET 6 Web API + React (Vite) + PostgreSQL. Deploy: Railway (API + Postgres) + Vercel (frontend).
+App tính điểm + chơi online Tiến Lên Miền Nam (2-4 người) cho một nhóm bạn. Có 2 chế độ song song:
+- **Chấm điểm thủ công** (offline, người chơi ngồi cùng bàn vật lý): màn `Ván chơi`/`Ván mới`/`Người chơi`.
+- **Chơi online realtime** (Phase 2-4): màn `Phòng online` — lobby SignalR + gameplay TLMN có engine luật server-side.
+
+Stack: .NET 6 Web API + SignalR + React (Vite) + PostgreSQL. Deploy: Railway (API + Postgres) + Vercel (frontend).
+
+Luật chơi chi tiết: xem [RULE.md](RULE.md).
 
 ## Layout
 
 ```
 /                       repo root
 ├── CutPig/             ASP.NET Core 6 Web API (server)
-│   ├── Program.cs
-│   ├── Controllers/    PlayersController, GamesController
-│   ├── Services/       TienLenScoringService  ← logic tính điểm
-│   ├── Domain/         Player, Game, GamePlayer, GameRound, RoundResult, GameType
-│   ├── Data/           AppDbContext (EF Core + Npgsql)
-│   └── Dtos/           Dtos.cs (records)
-├── client/             React + Vite + TypeScript (frontend)
+│   ├── Program.cs                bootstrap + DI + DB init + map hub
+│   ├── Controllers/              PlayersController, GamesController,
+│   │                             AuthController, AdminUsersController,
+│   │                             RoomsController
+│   ├── Hubs/RoomHub.cs           SignalR hub cho phòng online + gameplay
+│   ├── Middleware/AuthMiddleware.cs  Bearer auth cho /api/* (trừ login + /hubs/*)
+│   ├── Services/                 TienLenScoringService (legacy manual),
+│   │                             Bida9BallScoringService (legacy),
+│   │                             PasswordHasher,
+│   │                             MatchManager (in-memory active matches),
+│   │                             MatchTimerService (HostedService auto-pass + auto-next-round),
+│   │                             RoomPresenceTracker (connId↔user↔room)
+│   ├── Game/                     Card engine TLMN
+│   │   ├── Card.cs               Rank/Suit, Deck shuffle
+│   │   ├── TienLenCombo.cs       Detect combo + Beats + DetectWhiteWin
+│   │   └── Match.cs              Match/MatchPlayer state types (in-memory only)
+│   ├── Domain/                   EF entities: Player, Game, GamePlayer, GameRound,
+│   │                             RoundResult, AppUser, AuthToken, Room, RoomSeat
+│   ├── Data/AppDbContext.cs      EF Core + Npgsql
+│   └── Dtos/Dtos.cs              C# records cho API + hub events
+├── client/             React + Vite + TypeScript
 │   └── src/
-│       ├── App.tsx     router, 4 routes
-│       ├── api.ts      fetch wrapper + types (mirror DTOs server)
-│       ├── pages/      GamesPage, NewGamePage, GamePlayPage, PlayersPage
-│       └── ui/         Avatar, Icon, Toast, helpers, image
+│       ├── App.tsx               router + auth gate + nav (admin link conditional)
+│       ├── api.ts                fetch wrapper + types + room/match types
+│       ├── auth/AuthContext.tsx  token + userId + isAdmin + displayName
+│       ├── hooks/
+│       │   └── useRoomConnection.ts  SignalR connect, room+match state, hand
+│       ├── pages/
+│       │   ├── GamesPage, NewGamePage, GamePlayPage, PlayersPage  (legacy manual scoring)
+│       │   ├── LoginPage, ProfilePage, AdminUsersPage              (auth/account)
+│       │   ├── RoomsPage, RoomLobbyPage, RoomPlayPage              (online play)
+│       │   └── DemoPage                                            (static visual prototype)
+│       ├── game/                 Tết-themed UI primitives
+│       │   ├── cards.ts          types + detectCombo + comboBeats (mirror server)
+│       │   ├── CardSvg.tsx       lá bài SVG (face + back hoa mai)
+│       │   ├── Hand.tsx, Seat.tsx, Table.tsx, PlayArea.tsx
+│       │   ├── effects/          MaiBranch, Confetti
+│       │   └── demo.css          design tokens (palette Tết, wood, gold)
+│       └── ui/                   Avatar, Icon, Toast, helpers, image
 ├── Dockerfile          multi-stage build cho server
-├── railway.toml        config Railway (Dockerfile builder, healthcheck `/`)
-└── README.md
+├── railway.toml        Railway config
+├── README.md
+├── ARCHITECTURE.md     (this file)
+└── RULE.md             chi tiết luật TLMN
 ```
 
 ## Server (CutPig/)
 
-- **Framework**: ASP.NET Core 6, EF Core 6, Npgsql.
+- **Framework**: ASP.NET Core 6, EF Core 6, Npgsql, SignalR (đi kèm Sdk.Web, không cần NuGet riêng).
 - **DI**:
   - `AppDbContext` (Scoped, Npgsql)
-  - `TienLenScoringService` (Scoped) — pure, không phụ thuộc DB.
+  - `TienLenScoringService`, `Bida9BallScoringService` (Scoped, legacy manual scoring)
+  - `RoomPresenceTracker` (Singleton) — in-memory map connectionId ↔ (userId, roomId), userId ↔ connectionIds (cho private send).
+  - `MatchManager` (Singleton) — in-memory active matches; lock per-room cho deal/play/pass.
+  - `MatchTimerService` (HostedService) — loop 1s: auto-pass khi `TurnDeadline` qua + auto-start next round khi `NextRoundAt` qua.
 - **Startup** ([Program.cs](CutPig/Program.cs)):
   - Bind `0.0.0.0:$PORT` (default 8080) — bắt buộc cho Railway.
-  - `ResolveConnectionString` đọc `DATABASE_URL` (kiểu Heroku/Railway URL) hoặc `ConnectionStrings:DefaultConnection`. Parse URL → Npgsql connstring với `SSL Mode=Require;Trust Server Certificate=true` (override qua `PGSSLMODE`).
-  - Nếu thiếu connstring → vẫn start (dùng placeholder), DB calls sẽ fail. `/health` báo degraded.
-  - CORS policy `AllowFrontend`: origin từ env `FRONTEND_ORIGIN` (CSV) + `Cors:AllowedOrigins` config + `localhost:5173/3000` mặc định.
-  - DB init dùng `EnsureCreated()` + một loạt `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` để migrate idempotent (không dùng EF Migrations). Mọi cột mới phải thêm cả vào model `RoundResult`/`Player` **và** một dòng ALTER tương ứng trong Program.cs.
+  - `ResolveConnectionString` đọc `DATABASE_URL` (Heroku/Railway URL) hoặc `ConnectionStrings:DefaultConnection`.
+  - CORS policy `AllowFrontend`: origin từ env `FRONTEND_ORIGIN` + config + `localhost:5173/3000` mặc định. **`.AllowCredentials()`** bắt buộc cho SignalR.
+  - DB init dùng `EnsureCreated()` + chuỗi `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` để migrate idempotent (không dùng EF Migrations). Tạo `AppUsers`, `AuthTokens`, `Rooms`, `RoomSeats` qua `CREATE TABLE IF NOT EXISTS` (vì `EnsureCreated` skip nếu DB đã có table).
+  - **Bootstrap admin**: nếu `AppUsers` trống → tạo user từ env `INITIAL_USERNAME`/`INITIAL_PASSWORD` (default `admin`/`admin`) với `IsAdmin=true`. Nếu có user nhưng không ai admin → promote user cũ nhất (migration safety).
   - Endpoints health: `GET /` trả "running"; `GET /health` check DB connect.
+  - Map hub: `app.MapHub<RoomHub>("/hubs/room")`.
 - **Routes**:
-  - `api/auth` — `POST /login`, `POST /logout`, `GET /me`. Chỉ `/login` public; còn lại bị `AuthMiddleware` chặn nếu thiếu Bearer token hợp lệ. Đổi username/password làm trực tiếp trong DB (không có endpoint update — chủ ý không expose CRUD account ra UI).
-  - `api/players` — CRUD; `GET/PUT/DELETE /{id}/avatar`.
-  - `api/games` — list, get, create, `POST /{id}/finish`, `POST /{id}/rounds`, `DELETE /{id}/rounds/{roundId}`, `DELETE /{id}` (chỉ cho game đã finished).
-- **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)): mọi `/api/*` (trừ `/api/auth/login`) yêu cầu header `Authorization: Bearer <token>`. Token sinh khi login (random 32 byte base64url), lưu trong bảng `AuthTokens` cùng `ExpiresAt = now + 8 hours`. Hash mật khẩu PBKDF2-SHA256 100k iter trong [Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs). Bootstrap user đầu tiên từ `INITIAL_USERNAME`/`INITIAL_PASSWORD` env (default `admin`/`admin`) — chỉ chạy khi bảng trống.
+  - `api/auth` — `POST /login`, `POST /logout`, `GET /me`, `POST /change-password`. Login public; còn lại cần Bearer.
+  - `api/admin/users` — list/create/update/delete user (admin only). Tạo user xong admin đưa username/password cho người chơi.
+  - `api/players` — CRUD player + avatar (legacy manual scoring; chưa hợp nhất với AppUser).
+  - `api/games` — list/get/create/finish/add-round/delete-round/delete-game (legacy manual scoring).
+  - `api/rooms` — list (waiting; admin thấy all), create (host auto-seat 0), get by code, delete (host khi Waiting, admin bất kỳ status).
+  - `/hubs/room` — SignalR endpoint (chi tiết bên dưới).
+- **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)):
+  - Mọi `/api/*` (trừ `/api/auth/login` và `/hubs/*`) yêu cầu `Authorization: Bearer <token>`.
+  - Token random 32 byte base64url, lifetime 8h, lưu `AuthTokens`. Hash PBKDF2-SHA256 100k iter ([Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs)).
+  - Middleware set `HttpContext.Items["UserId" | "Username" | "DisplayName" | "IsAdmin"]` để controllers đọc.
+  - SignalR auth: token gửi qua query string `?access_token=...` (vì WebSocket browser không tiện gắn header). `RoomHub.AuthenticateAsync()` đọc từ `Context.GetHttpContext()?.Request.Query`.
 
 ## Domain model
 
+### Legacy (manual scoring)
 ```
 Player (Id, Name, Nickname?, AvatarData? string base64-data-url, CreatedAt)
 Game (Id, Type=TienLenMienNam, StartedAt, FinishedAt?, Players: GamePlayer[], Rounds: GameRound[])
 GamePlayer (Id, GameId, PlayerId, Seat 1..4)  -- unique (GameId, Seat)
 GameRound (Id, GameId, RoundNumber, ManualScoring bool, Results: RoundResult[]) -- unique (GameId, RoundNumber)
 RoundResult (Id, GameRoundId, PlayerId, Rank?, ...inputs..., Score)
-GameType enum: TienLenMienNam=1, Bida9Ball=2, BidaDen=3 (chỉ TLMN được implement)
+GameType enum: TienLenMienNam=1, Bida9Ball=2, BidaDen=3
 ```
 
-`RoundResult` lưu cả input (để render lại UI) **và** Score đã tính. Tổng điểm 1 player của ván = sum(Score) qua tất cả round; backend tính trong `GamesController.BuildDto`.
+### Auth / Account
+```
+AppUser (Id, Username unique, PasswordHash, DisplayName, AvatarData?, IsAdmin, CreatedAt, UpdatedAt)
+AuthToken (Id, Token unique, UserId FK→AppUser cascade, CreatedAt, ExpiresAt)
+```
 
-Cascade: xoá Game → xoá GamePlayers + GameRounds; xoá Round → xoá Results. Player FK Restrict (không xoá Player nếu đã ở trong game).
+### Phòng online
+```
+Room (Id, Code 6char unique, HostUserId FK→AppUser restrict, GameType=1, MaxSeats 2..4,
+      Status: Waiting=0/Playing=1/Finished=2, CreatedAt, StartedAt?, FinishedAt?,
+      Seats: RoomSeat[])
+RoomSeat (Id, RoomId FK→Room cascade, SeatIndex 0..MaxSeats-1, UserId FK→AppUser restrict, JoinedAt)
+  -- unique (RoomId, SeatIndex) và unique (RoomId, UserId)
+```
+
+Phòng persist trong DB nhưng **match state in-memory** (trong `MatchManager`) — restart server giữa ván = mất ván.
+
+## SignalR — `/hubs/room`
+
+Auth: `?access_token=<bearer>`. Sau khi connect, client gọi `JoinRoom(code)` để vào group `room:{id}` và bắt đầu nhận events.
+
+### Hub methods (client → server)
+| Method | Mô tả |
+|---|---|
+| `JoinRoom(code)` | Vào group + trả `RoomStateDto`; nếu match đang chạy: gửi private hand + `MatchState` cho caller. |
+| `TakeSeat(seatIndex)` | Ngồi vào ghế (chỉ khi `Waiting`); broadcast `RoomState`. |
+| `LeaveSeat()` | Rời ghế (chỉ khi `Waiting`). |
+| `StartGame()` | Host start: đổi Room.Status=Playing, tạo Match, deal 13 lá/người, detect về trắng → broadcast `MatchState` + `PrivateHand`; nếu về trắng → emit `RoundEnd` ngay. |
+| `PlayCards(List<CardDto>)` | Đánh bài: validate combo + chặn được + đúng lượt + chưa pass (trừ 4 đôi thông). Broadcast `MatchState`, resend `PrivateHand` cho người đánh; nếu round end → `RoundEnd`. |
+| `PassTurn()` | Bỏ lượt trick hiện tại (không bỏ được khi mở nước). Khi tất cả người khác pass → reset trick → turn về owner. |
+| `StartNextRound()` | Host (hoặc system auto) deal ván tiếp. |
+| `EndMatch()` | Host kết thúc trận → emit `MatchEnd` với bảng tổng điểm. |
+| `RequestMatchState()` | Reconnect/refresh: gửi lại state + private hand. |
+
+### Server → client events
+| Event | Payload | Khi nào |
+|---|---|---|
+| `RoomState` | `RoomStateDto` | Mỗi khi seat/online thay đổi. |
+| `GameStarted` | `Guid roomId` | Host bấm Start → client redirect `/play/:code`. |
+| `MatchState` | `MatchPublicStateDto` | Mỗi play/pass/round start. Chứa `roundNumber`, `currentTurnSeatIndex`, `currentTrick`, `turnDeadline`, `nextRoundAt`, `hostUserId`, players info (cards left, finalRank, passedThisTrick, totalScore, whiteWinReason). |
+| `PrivateHand` | `PrivateHandDto` (matchId, hand) | Send chỉ tới connections của user đó qua `Clients.Clients(connIds)`. |
+| `RoundEnd` | `RoundEndDto` (roundNumber, wasWhiteWin, results[]) | Hết ván (có cả tổng điểm dồn). |
+| `MatchEnd` | `MatchEndDto` (finalScores[]) | Host kết thúc trận → đóng phòng. |
+
+### Auto behaviors (`MatchTimerService`)
+- Mỗi 1 giây, scan:
+  - **Active matches có `TurnDeadline < now`** → gọi `Pass(... isAutoPass: true)`. Nếu mở nước (không trick) → auto đánh lá nhỏ nhất.
+  - **Matches `WaitingNextRound` có `NextRoundAt < now`** → gọi `StartNextRound(... null)` (system trigger) → deal lại + broadcast `MatchState` + `PrivateHand`.
+- `NextRoundAt` set = `now + 5s` mỗi khi round chuyển sang `WaitingNextRound`.
+
+## Card engine TLMN (`CutPig/Game/`)
+
+- **`Card`** = `(int Rank 3..15, Suit Spades<Clubs<Diamonds<Hearts)`. Rank 15 = "2".
+- **`Deck.Build()`** + **`Shuffle(rng)`** — 52 lá.
+- **`TienLenComboEngine`**:
+  - `Detect(cards)` → `Combo(Kind, Cards, TopValue)`. Kind: Single, Pair, Triple, Four, Run (≥3 liên tiếp, không 2), RunOfPairs (≥6, không 2).
+  - `Beats(current, next)`: cùng kind + length + topValue cao hơn. **Cộng thêm** chặt heo:
+    - 4 đôi thông (RunOfPairs len=8) chặt mọi thứ.
+    - Tứ quý chặt 1 con 2, đôi 2, 3 đôi thông.
+    - 3 đôi thông (RunOfPairs len=6) chặt 1 con 2.
+  - `IsFourPairRun(combo)` — exempt từ pass-tracking.
+  - `DetectWhiteWin(hand)` → string reason hoặc null. Check: sảnh 3-A (12 lá), tứ quý 2, 6 đôi, 5 đôi thông.
+
+## MatchManager flow
+
+`Match` (in-memory) chứa: Players (gồm Hand, FinalRank, TotalScore cộng dồn, PassedThisTrick, WhiteWinReason), CurrentTurnSeatIndex, CurrentTrick + CurrentTrickOwnerId, Status (InProgress/WaitingNextRound/Finished), RoundNumber, PreviousRoundWinnerId, TurnDeadline, NextRoundAt.
+
+- **`Create(roomId, hostUserId, players)`**: deal lần 1 (13 lá/người, dư úp), detect về trắng; nếu có → status WaitingNextRound + NextRoundAt = now + 5s. Nếu không: chọn người đi đầu (giữ 3♠, fallback seat 0).
+- **`StartNextRound(roomId, hostUserId?)`**: tham số host nullable để cho phép timer service (system) trigger. Reset hand + flag, deal lại; người đi đầu = winner ván trước (PreviousRoundWinnerId).
+- **`Play(roomId, userId, cards)`**: validate (có trong tay, combo hợp lệ, chặn được, mở nước ván 1 chứa 3♠ **nếu 3♠ trong tay ai đó**), apply, clear PassedThisTrick nếu đánh 4 đôi thông, check round end (≤1 người còn bài) → set WaitingNextRound + NextRoundAt.
+- **`Pass(roomId, userId, isAutoPass=false)`**: set PassedThisTrick. Khi tất cả người khác đều pass → reset trick, turn về owner. Auto-pass khi mở nước = đánh lá nhỏ nhất.
+- **`ComputeRoundScores(match)`**: nếu có white-win → +6 cho người về trắng, -2 cho người khác. Còn lại theo table: 4 người ±2/±1, 3 người +2/0/-2, 2 người +1/-1.
 
 ## Avatar
 
-- Lưu trực tiếp **base64 data URL** trong cột `Players.AvatarData` (string). Limit 200 KB sau base64-decode.
-- Whitelist content-type: `image/jpeg`, `image/png`, `image/webp`.
+- Lưu base64 data URL trong cột `Players.AvatarData` (string). Limit 200 KB sau decode. Whitelist content-type `image/jpeg|png|webp`.
 - Frontend ([client/src/ui/image.ts](client/src/ui/image.ts)) resize về 256×256 JPEG trước khi upload.
-- `GET /api/players/{id}/avatar` decode data URL → trả binary với `Cache-Control: public, max-age=31536000, immutable`. Cache-bust ở client bằng query `?v=<timestamp>` trong [Avatar.tsx](client/src/ui/Avatar.tsx).
-
-## Tien Len scoring ([CutPig/Services/TienLenScoringService.cs](CutPig/Services/TienLenScoringService.cs))
-
-Một round = 1 trong 3 chế độ + manual fallback. Entrypoint: `Compute(inputs, manualScoring)` → gọi `ComputeCore` rồi luôn chạy `ValidateZeroSum`.
-
-**Hằng số điểm**:
-- Rank: #1=+2, #2=+1, #3=−1, #4=−2.
-- Heo: đen 1, đỏ 2.
-- Bonus: 3 đôi thông 3, tứ quý 4, 4 đôi thông 5.
-- Về nhất 3 bích (chỉ #1, normal mode): #1 +3, mỗi player còn lại −1.
-- Về chót 3 bích (chỉ #4, normal mode): #4 −3, mỗi player còn lại +1.
-- Về trắng: tự +6, mỗi người khác −2.
-- Phán xét self points theo số victim: 3 victim=+12, 2 victim=+9, 1 victim=+4. Loss mỗi victim −4 + held. Pardon penalty case 2 = −1.
-
-**Chế độ**:
-1. **Manual** (`manualScoring=true`): mỗi player nhập `manualScore` thẳng. Không validate khác ngoài winner/loser.
-2. **White win** (`whiteWin=true` cho 1 player): winner +6, 3 người còn lại −2. Bỏ qua mọi input khác.
-3. **Judge** (`judge=true` cho 1 player, kèm 1–3 `judgedVictim=true`):
-   - Judge cộng điểm self theo bảng + sum của held từ các victim (heo + bonus on hand).
-   - Mỗi victim −(4 + held).
-   - **Case 1** (3 victim): không xử lý gì thêm.
-   - **Case 2** (2 victim, 1 pardoned): pardoned −1.
-   - **Case 3** (1 victim, 2 pardoned): 2 pardoned phải có rank đúng {2,3} và chơi sub-round bình thường giữa nhau (rank points + heo + bonus 1-vs-1, victim phải nằm trong scope pardoned).
-4. **Normal**: 4 players, rank phải là permutation của {1,2,3,4}. Cộng rank points + heo (cut +N, lost −N) + bonus 1-vs-1 (winner +N, victim đã chọn −N).
-
-**Validation chung** (mọi mode): round phải zero-sum — tổng `Score` = 0, và phải có ít nhất 1 player score > 0 + 1 player score < 0 (`ValidateZeroSum`). Các mode tự động (normal/whiteWin/judge) luôn zero-sum theo công thức; manual mode thì user phải tự cân đối.
-
-`InvalidOperationException` từ scoring → controller trả `400 BadRequest` với message gốc.
-
-## Bida 9 Ball scoring ([CutPig/Services/Bida9BallScoringService.cs](CutPig/Services/Bida9BallScoringService.cs))
-
-Game type `Bida9Ball` cho **3 player**. 1 round = 1 ván hoàn chỉnh, kết quả lưu vào `RoundResult` cho từng player; tổng điểm game = sum theo round. Không dùng `Rank` mà dùng cấu hình bi + log các "ăn bi".
-
-**Cấu hình ván** (lưu trong `Game.BallConfigJson`, cố định khi tạo game):
-- Số bi linh hoạt: **1..9 bi** tuỳ chọn từ tập `{1..9}` (mặc định 3,6,9).
-- Mỗi bi có điểm user tự gán (mặc định 3=1, 6=2, 9=3, các bi khác = số bi).
-
-**Chế độ tính điểm round**:
-1. **Phá-chấm** (`breakAndCleared=true` cho 1 player): điểm tính theo tổng cấu hình bi.
-   - `S = sum(points các bi đã chọn)`.
-   - Người phá `+ 2S`; mỗi (N-1) người còn lại `− 2S/(N-1)`. Với N=3: winner +2S, mỗi loser −S.
-   - Server reject nếu `2S` không chia hết cho `N-1`. Frontend cảnh báo và disable submit.
-   - Bỏ qua mọi input khác (không có ball hit).
-2. **Bình thường**: mỗi player có list `BallHit { ball, points, victimPlayerId }` — mỗi entry = 1 lần ăn 1 bi tính điểm, kèm victim bị trừ.
-   - Người ăn `+points(ball)`; victim `−points(ball)`.
-   - Multi-victim hoặc single-victim cho cả tổ hợp đều support: mỗi entry chọn victim riêng.
-   - `points` trong hit phải khớp cấu hình của bi.
-
-**Validation**:
-- `BallHit.ball` phải thuộc cấu hình của game; `BallHit.points` khớp cấu hình.
-- `victimPlayerId` ≠ người ăn, phải thuộc bàn chơi.
-- Mode phá-chấm: đúng 1 player có `breakAndCleared=true`, không player nào có ball hit.
-- Zero-sum: tổng `Score` = 0 và có cả score > 0 lẫn < 0 (giống TLMN).
-
-**Bida đền (`BidaDen`) và Bida bài**: chỉ chừa enum, sẽ implement sau — không thêm service ở phase này.
+- `GET /api/players/{id}/avatar` decode → trả binary với `Cache-Control: public, max-age=31536000, immutable`. Cache-bust ở client bằng query `?v=<timestamp>`.
+- **AppUser** đã có cột `AvatarData` nhưng chưa wire endpoint upload — Phase tiếp.
 
 ## Frontend (client/)
 
-- **Stack**: React 18, react-router-dom v6, Vite, TypeScript.
-- **API base**: `import.meta.env.VITE_API_BASE` + `/api` (set ở Vercel cho prod, default empty cho dev qua proxy).
-- **Routes** ([App.tsx](client/src/App.tsx)): ngoài `LoginPage` được render khi chưa auth, các route sau chỉ accessible sau khi đăng nhập.
-  - `/` → GamesPage (list)
-  - `/players` → PlayersPage (CRUD + avatar)
-  - `/new` → NewGamePage (chọn loại ván + người chơi)
-  - `/games/:id` → GamePlayPage (gameplay + history)
-- **Auth client** ([client/src/auth/AuthContext.tsx](client/src/auth/AuthContext.tsx)): token lưu `localStorage[cutpig.auth.token]`. Mỗi request tự gắn `Authorization: Bearer`. Response 401 → clear token + state về `unauthenticated` → render `LoginPage`. Bootstrap: nếu có token cũ, gọi `/api/auth/me` để verify.
-- **Pages**:
-  - **GamePlayPage** ([client/src/pages/GamePlayPage.tsx](client/src/pages/GamePlayPage.tsx)) là phức tạp nhất:
-    - State: `inputs: PlayerInputState[]` (1 entry/player), `mode: 'normal' | 'whiteWin' | 'judge'`, `manualScoring`, `specialPlayerId`.
-    - `setRank` chỉ set/clear cho 1 player; UI disable nút hạng đã bị player khác chọn (cả NormalPlayerCard và Case 3 pardoned cards).
-    - `setSpecial` reset `inputs` khi đổi mode; Judge mode mặc định toàn bộ non-judge là victim (case 1).
-    - `buildSubmitInputs` strip field không liên quan trước khi gửi (whiteWin → chỉ flag, judge → giữ rank/pigs/bonus cho pardoned, held cho victim).
-    - Manual validate ở client: phải có cả input dương và âm (mirror server).
-- **UI**: dark theme tùy biến (CSS vars trong [client/src/index.css]), `.player-grid`, `.player-card`, `.rank-badge.r1..r4`, `.score-pill.pos/neg`, `.pill-group`, `.stepper`, `.leader-row`, `.status.live/done`. Toast ở [client/src/ui/Toast.tsx](client/src/ui/Toast.tsx).
+- **Stack**: React 18, react-router-dom v6, Vite, TypeScript, framer-motion, clsx, @microsoft/signalr.
+- **API base**: `import.meta.env.VITE_API_BASE` + `/api`. SignalR hub = `${VITE_API_BASE}/hubs/room?access_token=...`.
+- **Auth**: token `localStorage[cutpig.auth.token]`. AuthContext giữ `userId`, `username`, `displayName`, `isAdmin`. Mỗi request fetch tự gắn Bearer; 401 → clear + về LoginPage.
+- **Routes** ([App.tsx](client/src/App.tsx)):
+  - Public: `/demo` (prototype visual, bypass auth).
+  - Auth gate trước các route sau:
+    - `/` GamesPage (legacy), `/players`, `/new`, `/games/:id` (legacy manual scoring).
+    - `/rooms` RoomsPage, `/rooms/:code` RoomLobbyPage, `/play/:id` (= code) RoomPlayPage.
+    - `/profile` ProfilePage.
+    - `/admin/users` AdminUsersPage (chỉ render khi `state.isAdmin`).
+  - Nav: admin-only link "Quản lý user"; "Phòng online" icon `globe` (phân biệt với "Ván chơi" icon `cards`).
+- **`useRoomConnection(code)`** ([client/src/hooks/useRoomConnection.ts](client/src/hooks/useRoomConnection.ts)):
+  - Quản lý `HubConnection`, auto-reconnect ([0, 2000, 5000, 10000] ms).
+  - State: `status`, `state` (RoomState), `matchState`, `privateHand`, `roundEnd`, `matchEnd`, `error`.
+  - Methods: `takeSeat`, `leaveSeat`, `startGame`, `startNextRound`, `endMatch`, `playCards`, `passTurn`, `requestMatchState`, `clearRoundEnd`.
+  - Listen events: `RoomState`, `PrivateHand`, `MatchState`, `RoundEnd`, `MatchEnd`, `GameStarted`.
+- **RoomPlayPage**:
+  - Bàn Tết với 2-4 seat. Seat **của mình ở dưới** (rotate `SEAT_POSITIONS` theo `me.seatIndex`).
+  - Hand fan **responsive**: đo `handAreaRef.offsetWidth`, tính spread = `(available - cardWidth) / (count-1)` clamp giữa min/max. Card size `sm` (44×64) khi viewport < 720px, ngược lại `md` (64×92).
+  - Click chọn lá → button "Đánh (N)" enabled nếu `detectCombo` ra hợp lệ + chặn được trick (hoặc 4 đôi thông + đã pass).
+  - Visual: seat hiện cờ "BỎ LƯỢT", badge "CHỦ", rank-tag-mini khi finish, total score cộng dồn.
+  - Modal `roundEnd`: hiện rank + điểm ván + tổng dồn + countdown "Ván tiếp sau Xs". Host thấy thêm nút "Kết thúc trận".
+  - Modal `matchEnd`: bảng final xếp theo total score giảm dần.
+- **Mobile (< 720px)**:
+  - Bàn aspect-ratio 1:1, seat compact (avatar 28px, font 11px), left/right seat `top: 60px` (không đè giữa).
+  - Hand fan thấp hơn (80px), spread 14-24px, card sm.
 
 ## Deploy
 
-- **Server (Railway)**: Dockerfile multi-stage (sdk:6.0 build → aspnet:6.0 runtime). Railway tiêm `PORT`, `DATABASE_URL`. Đặt `FRONTEND_ORIGIN=https://<vercel-domain>` để CORS pass. Healthcheck `/` (vì `/health` 503 khi DB chưa lên). Optionally set `INITIAL_USERNAME`/`INITIAL_PASSWORD` cho lần bootstrap đầu — sau đó nên đổi password qua UI.
-- **Frontend (Vercel)**: `client/` là root project. `VITE_API_BASE=https://<railway-domain>` (no trailing slash). Build = `npm run build`, output `dist/`.
+- **Server (Railway)**: Dockerfile multi-stage (sdk:6.0 build → aspnet:6.0 runtime). Railway tiêm `PORT`, `DATABASE_URL`. Đặt `FRONTEND_ORIGIN=https://<vercel-domain>` để CORS pass. Healthcheck `/`. Optional: `INITIAL_USERNAME`/`INITIAL_PASSWORD` cho lần bootstrap đầu. Gói Hobby $5/tháng vừa đủ cho nhóm bạn (≤ vài chục user, vài trăm ván/tháng).
+- **Frontend (Vercel)**: root `client/`. `VITE_API_BASE=https://<railway-domain>` (no trailing slash). Build = `npm run build`, output `dist/`. Hobby plan đủ.
 
 ## Quy ước
 
-- Game type: Tien Len Mien Nam (đã có), Bida 9 Ball (đang/sẽ thêm — spec ở section trên). Bida đền và Bida bài chừa enum, implement sau.
-- Game Bida 9 Ball có **3 player** (khác TLMN 4 player) — `GamePlayer.Seat` 1..3; FE `NewGamePage` cần branch theo `GameType`.
-- Cấu hình bi (3 bi + điểm) là thuộc tính của Game (Bida9Ball), không phải của round → cần thêm field vào `Game` (vd `BallConfigJson`) kèm ALTER TABLE tương ứng.
-- Khi thêm field vào `RoundResult`, `Player`, hoặc `Game`: nhớ thêm dòng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ở Program.cs (DB cũ trên Railway sẽ không tự migrate qua `EnsureCreated`).
-- DTO dạng C# `record`, frontend type mirror trong `client/src/api.ts` — phải sync tay.
-- Tiếng Việt cho mọi text user-facing (toast, label, error message từ scoring).
+- **Tiếng Việt** cho mọi text user-facing (toast, label, error message, UI strings).
+- **DB schema**: thêm field mới vào entity → phải thêm `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `Program.cs` (DB cũ trên Railway không tự migrate qua `EnsureCreated`). Bảng mới → `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`.
+- **DTO sync**: C# record trong `CutPig/Dtos/Dtos.cs` ↔ TS interface trong `client/src/api.ts` — sync tay (DTO mới phải copy 2 chỗ).
+- **Card combo logic** ở 2 nơi: server [TienLenCombo.cs](CutPig/Game/TienLenCombo.cs) (source of truth, validate); client [cards.ts](client/src/game/cards.ts) (mirror, UX validate trước khi gửi). **Đổi rule chặn = phải sửa cả 2.**
+- **Match state in-memory**: hiện chỉ `MatchManager` (Singleton). Không persist DB → restart Railway giữa ván = mất ván. Phase tiếp có thể move sang DB hoặc Redis.
+- **SignalR auth**: query string `?access_token=...` (không header). `AuthMiddleware` skip `/hubs/*`; Hub tự validate qua `AuthenticateAsync`.
+- **Game type Bida9Ball / BidaDen**: chừa enum, có scoring service, nhưng phòng online (`/rooms`) chỉ hỗ trợ TLMN — Phase tiếp mở rộng.
+
+## Lộ trình tương lai
+
+- Persist match state vào DB hoặc Redis để survive restart.
+- Chat trong phòng.
+- Spectator mode (xem không ngồi).
+- Replay ván cũ.
+- Leaderboard tổng (tổng điểm dồn qua nhiều trận).
+- Mở rộng `/rooms` cho Bida 9 Ball / Bida đền online.
+- Wire avatar cho `AppUser` (hiện chỉ schema, chưa endpoint).
