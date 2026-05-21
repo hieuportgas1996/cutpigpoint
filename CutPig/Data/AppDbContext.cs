@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<RoundResult> RoundResults => Set<RoundResult>();
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<AuthToken> AuthTokens => Set<AuthToken>();
+    public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<RoomSeat> RoomSeats => Set<RoomSeat>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +63,22 @@ public class AppDbContext : DbContext
             b.HasKey(x => x.Id);
             b.HasIndex(x => x.Token).IsUnique();
             b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Room>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.Code).IsUnique();
+            b.HasOne(x => x.HostUser).WithMany().HasForeignKey(x => x.HostUserId).OnDelete(DeleteBehavior.Restrict);
+            b.HasMany(x => x.Seats).WithOne(x => x.Room!).HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RoomSeat>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.RoomId, x.SeatIndex }).IsUnique();
+            b.HasIndex(x => new { x.RoomId, x.UserId }).IsUnique();
+            b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

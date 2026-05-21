@@ -9,6 +9,20 @@ public record AdminCreateUserRequest(string Username, string Password, string? D
 public record AdminUpdateUserRequest(string? DisplayName, string? Password, bool? IsAdmin);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+public record CreateRoomRequest(int GameType, int MaxSeats);
+public record RoomSummaryDto(Guid Id, string Code, int GameType, int MaxSeats, int Status, int OccupiedSeats, string HostDisplayName, DateTime CreatedAt);
+public record RoomSeatDto(int SeatIndex, Guid UserId, string Username, string DisplayName, bool IsHost, bool IsOnline);
+public record RoomStateDto(
+    Guid Id,
+    string Code,
+    int GameType,
+    int MaxSeats,
+    int Status,
+    Guid HostUserId,
+    DateTime CreatedAt,
+    DateTime? StartedAt,
+    List<RoomSeatDto> Seats);
+
 public record CreatePlayerRequest(string Name, string? Nickname);
 
 public record UpdatePlayerRequest(string Name, string? Nickname);

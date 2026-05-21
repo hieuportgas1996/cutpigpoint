@@ -1,5 +1,6 @@
 using CutPig.Data;
 using CutPig.Domain;
+using CutPig.Hubs;
 using CutPig.Middleware;
 using CutPig.Services;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,8 @@ builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionStrin
 
 builder.Services.AddScoped<TienLenScoringService>();
 builder.Services.AddScoped<Bida9BallScoringService>();
+builder.Services.AddSingleton<RoomPresenceTracker>();
+builder.Services.AddSignalR();
 
 var allowedOrigins = ResolveAllowedOrigins(builder.Configuration);
 
@@ -29,7 +32,8 @@ builder.Services.AddCors(opt =>
     opt.AddPolicy("AllowFrontend", p => p
         .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
-        .AllowAnyMethod());
+        .AllowAnyMethod()
+        .AllowCredentials());
 });
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
@@ -94,6 +98,34 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AuthTokens_Token"" ON ""AuthTokens"" (""Token"")");
         db.Database.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_AuthTokens_UserId"" ON ""AuthTokens"" (""UserId"")");
 
+        // Rooms + RoomSeats
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ""Rooms"" (
+                ""Id"" uuid NOT NULL PRIMARY KEY,
+                ""Code"" text NOT NULL,
+                ""HostUserId"" uuid NOT NULL,
+                ""GameType"" integer NOT NULL DEFAULT 1,
+                ""MaxSeats"" integer NOT NULL DEFAULT 4,
+                ""Status"" integer NOT NULL DEFAULT 0,
+                ""CreatedAt"" timestamp with time zone NOT NULL,
+                ""StartedAt"" timestamp with time zone,
+                ""FinishedAt"" timestamp with time zone,
+                CONSTRAINT ""FK_Rooms_AppUsers_HostUserId"" FOREIGN KEY (""HostUserId"") REFERENCES ""AppUsers"" (""Id"") ON DELETE RESTRICT
+            )");
+        db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Rooms_Code"" ON ""Rooms"" (""Code"")");
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ""RoomSeats"" (
+                ""Id"" uuid NOT NULL PRIMARY KEY,
+                ""RoomId"" uuid NOT NULL,
+                ""SeatIndex"" integer NOT NULL,
+                ""UserId"" uuid NOT NULL,
+                ""JoinedAt"" timestamp with time zone NOT NULL,
+                CONSTRAINT ""FK_RoomSeats_Rooms_RoomId"" FOREIGN KEY (""RoomId"") REFERENCES ""Rooms"" (""Id"") ON DELETE CASCADE,
+                CONSTRAINT ""FK_RoomSeats_AppUsers_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""AppUsers"" (""Id"") ON DELETE RESTRICT
+            )");
+        db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_RoomSeats_RoomId_SeatIndex"" ON ""RoomSeats"" (""RoomId"", ""SeatIndex"")");
+        db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_RoomSeats_RoomId_UserId"" ON ""RoomSeats"" (""RoomId"", ""UserId"")");
+
         // Bootstrap admin user if none exists
         if (!db.AppUsers.Any())
         {
@@ -129,6 +161,7 @@ using (var scope = app.Services.CreateScope())
 app.UseCors("AllowFrontend");
 app.UseMiddleware<AuthMiddleware>();
 app.MapControllers();
+app.MapHub<RoomHub>("/hubs/room");
 app.MapGet("/", () => "CutPigPoint API is running.");
 app.MapGet("/health", (AppDbContext db) =>
 {

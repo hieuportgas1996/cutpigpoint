@@ -1,0 +1,122 @@
+.room-lobby .lobby-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.room-lobby .lobby-code {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: linear-gradient(145deg, #3B2114, #5A3320);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.room-lobby .lobby-code code {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--gold-soft);
+  font-family: 'Be Vietnam Pro', monospace;
+}
+
+.room-lobby .lobby-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+  max-width: 280px;
+}
+
+.room-lobby .lobby-center-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold-soft);
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--red-deep);
+}
+
+.room-lobby .lobby-center-sub {
+  margin-top: 6px;
+  color: var(--cream);
+}
+
+.room-lobby .seat-empty {
+  cursor: pointer;
+  background: linear-gradient(145deg, rgba(212,164,69,0.15), rgba(59,33,20,0.6));
+  border: 2px dashed var(--gold);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 110px;
+  padding: 14px 18px;
+  color: var(--gold-soft);
+  font-family: inherit;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.room-lobby .seat-empty:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: linear-gradient(145deg, rgba(212,164,69,0.3), rgba(90,51,32,0.7));
+}
+
+.room-lobby .seat-empty:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.room-lobby .seat-empty-icon {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.room-lobby .seat-empty-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.room-lobby .seat-offline {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+
+.room-lobby .host-badge {
+  display: inline-block;
+  margin-left: 6px;
+  background: var(--red-tet);
+  color: var(--cream);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+}
+
+.room-lobby .leave-mini {
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--gold-soft);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.room-lobby .leave-mini:hover {
+  background: rgba(212,164,69,0.2);
+}

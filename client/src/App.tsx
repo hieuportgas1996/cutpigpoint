@@ -7,6 +7,9 @@ import LoginPage from './pages/LoginPage';
 import DemoPage from './pages/DemoPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import ProfilePage from './pages/ProfilePage';
+import RoomsPage from './pages/RoomsPage';
+import RoomLobbyPage from './pages/RoomLobbyPage';
+import RoomPlayPage from './pages/RoomPlayPage';
 import { ToastProvider } from './ui/Toast';
 import { Icon } from './ui/Icon';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -62,6 +65,10 @@ function AppShell() {
               <span className="hide-mobile">Ván mới</span>
               <span className="show-mobile"><Icon name="plus" size={16} /></span>
             </NavLink>
+            <NavLink to="/rooms">
+              <span className="hide-mobile">Phòng online</span>
+              <span className="show-mobile"><Icon name="cards" size={16} /></span>
+            </NavLink>
             {state.isAdmin && (
               <NavLink to="/admin/users">
                 <span className="hide-mobile">Quản lý user</span>
@@ -90,6 +97,9 @@ function AppShell() {
           <Route path="/players" element={<PlayersPage />} />
           <Route path="/new" element={<NewGamePage />} />
           <Route path="/games/:id" element={<GamePlayPage />} />
+          <Route path="/rooms" element={<RoomsPage />} />
+          <Route path="/rooms/:code" element={<RoomLobbyPage />} />
+          <Route path="/play/:id" element={<RoomPlayPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           {state.isAdmin && <Route path="/admin/users" element={<AdminUsersPage />} />}
           <Route path="*" element={<Navigate to="/" replace />} />

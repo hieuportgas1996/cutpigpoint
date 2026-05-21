@@ -194,7 +194,13 @@ export const api = {
     request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(req) }),
   updateAdminUser: (id: string, req: { displayName?: string; password?: string; isAdmin?: boolean }) =>
     request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(req) }),
-  deleteAdminUser: (id: string) => request<void>(`/admin/users/${id}`, { method: 'DELETE' })
+  deleteAdminUser: (id: string) => request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+
+  listRooms: () => request<RoomSummary[]>('/rooms'),
+  createRoom: (gameType: number, maxSeats: number) =>
+    request<RoomSummary>('/rooms', { method: 'POST', body: JSON.stringify({ gameType, maxSeats }) }),
+  getRoom: (code: string) => request<RoomState>(`/rooms/${code.toUpperCase()}`),
+  deleteRoom: (id: string) => request<void>(`/rooms/${id}`, { method: 'DELETE' })
 };
 
 export interface AdminUser {
@@ -204,3 +210,40 @@ export interface AdminUser {
   isAdmin: boolean;
   createdAt: string;
 }
+
+export const RoomStatus = { Waiting: 0, Playing: 1, Finished: 2 } as const;
+export type RoomStatusValue = typeof RoomStatus[keyof typeof RoomStatus];
+
+export interface RoomSummary {
+  id: string;
+  code: string;
+  gameType: number;
+  maxSeats: number;
+  status: RoomStatusValue;
+  occupiedSeats: number;
+  hostDisplayName: string;
+  createdAt: string;
+}
+
+export interface RoomSeat {
+  seatIndex: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  isHost: boolean;
+  isOnline: boolean;
+}
+
+export interface RoomState {
+  id: string;
+  code: string;
+  gameType: number;
+  maxSeats: number;
+  status: RoomStatusValue;
+  hostUserId: string;
+  createdAt: string;
+  startedAt: string | null;
+  seats: RoomSeat[];
+}
+
+export const HUB_BASE = RAW_BASE;
