@@ -78,6 +78,10 @@ using (var scope = app.Services.CreateScope())
                 ""UpdatedAt"" timestamp with time zone NOT NULL
             )");
         db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppUsers_Username"" ON ""AppUsers"" (""Username"")");
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""AppUsers"" ADD COLUMN IF NOT EXISTS ""DisplayName"" text NOT NULL DEFAULT ''");
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""AppUsers"" ADD COLUMN IF NOT EXISTS ""AvatarData"" text");
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""AppUsers"" ADD COLUMN IF NOT EXISTS ""IsAdmin"" boolean NOT NULL DEFAULT false");
+        db.Database.ExecuteSqlRaw(@"UPDATE ""AppUsers"" SET ""DisplayName"" = ""Username"" WHERE ""DisplayName"" = ''");
         db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS ""AuthTokens"" (
                 ""Id"" uuid NOT NULL PRIMARY KEY,
@@ -98,10 +102,20 @@ using (var scope = app.Services.CreateScope())
             db.AppUsers.Add(new AppUser
             {
                 Username = initialUsername,
-                PasswordHash = PasswordHasher.Hash(initialPassword)
+                PasswordHash = PasswordHasher.Hash(initialPassword),
+                DisplayName = initialUsername,
+                IsAdmin = true
             });
             db.SaveChanges();
             logger.LogWarning("Created initial admin user '{Username}'. Change the password immediately.", initialUsername);
+        }
+        else if (!db.AppUsers.Any(u => u.IsAdmin))
+        {
+            // Promote oldest existing user to admin (migration from pre-admin schema)
+            var oldest = db.AppUsers.OrderBy(u => u.CreatedAt).First();
+            oldest.IsAdmin = true;
+            db.SaveChanges();
+            logger.LogWarning("Promoted user '{Username}' to admin (no admin existed).", oldest.Username);
         }
 
         logger.LogInformation("Database ready.");

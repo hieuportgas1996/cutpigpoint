@@ -1,8 +1,13 @@
 namespace CutPig.Dtos;
 
 public record LoginRequest(string Username, string Password);
-public record LoginResponse(string Token, DateTime ExpiresAt, string Username);
-public record MeResponse(string Username);
+public record LoginResponse(string Token, DateTime ExpiresAt, Guid UserId, string Username, string DisplayName, bool IsAdmin);
+public record MeResponse(Guid UserId, string Username, string DisplayName, bool IsAdmin);
+
+public record AdminUserDto(Guid Id, string Username, string DisplayName, bool IsAdmin, DateTime CreatedAt);
+public record AdminCreateUserRequest(string Username, string Password, string? DisplayName, bool IsAdmin);
+public record AdminUpdateUserRequest(string? DisplayName, string? Password, bool? IsAdmin);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record CreatePlayerRequest(string Name, string? Nickname);
 

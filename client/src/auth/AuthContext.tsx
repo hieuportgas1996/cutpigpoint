@@ -4,7 +4,7 @@ import { api, auth } from '../api';
 type AuthState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
-  | { status: 'authenticated'; username: string };
+  | { status: 'authenticated'; userId: string; username: string; displayName: string; isAdmin: boolean };
 
 interface AuthContextValue {
   state: AuthState;
@@ -33,7 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     api.me()
-      .then((res) => setState({ status: 'authenticated', username: res.username }))
+      .then((res) => setState({
+        status: 'authenticated',
+        userId: res.userId,
+        username: res.username,
+        displayName: res.displayName,
+        isAdmin: res.isAdmin
+      }))
       .catch(() => {
         auth.setToken(null);
         setState({ status: 'unauthenticated' });
@@ -43,7 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const res = await api.login(username, password);
     auth.setToken(res.token);
-    setState({ status: 'authenticated', username: res.username });
+    setState({
+      status: 'authenticated',
+      userId: res.userId,
+      username: res.username,
+      displayName: res.displayName,
+      isAdmin: res.isAdmin
+    });
   }, []);
 
   const logout = useCallback(async () => {

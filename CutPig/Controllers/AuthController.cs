@@ -45,7 +45,32 @@ public class AuthController : ControllerBase
         _db.AuthTokens.Add(token);
         await _db.SaveChangesAsync();
 
-        return new LoginResponse(token.Token, token.ExpiresAt, user.Username);
+        var displayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName;
+        return new LoginResponse(token.Token, token.ExpiresAt, user.Id, user.Username, displayName, user.IsAdmin);
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
+    {
+        var userId = (Guid?)HttpContext.Items["UserId"];
+        if (userId == null) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 4)
+            return BadRequest("Mật khẩu mới phải có ít nhất 4 ký tự.");
+
+        var user = await _db.AppUsers.FindAsync(userId.Value);
+        if (user == null) return Unauthorized();
+        if (!PasswordHasher.Verify(req.CurrentPassword, user.PasswordHash))
+            return BadRequest("Mật khẩu hiện tại không đúng.");
+
+        user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Invalidate all other tokens for this user (force re-login on other devices)
+        var existingToken = ExtractToken();
+        var others = await _db.AuthTokens.Where(t => t.UserId == user.Id && t.Token != existingToken).ToListAsync();
+        if (others.Count > 0) _db.AuthTokens.RemoveRange(others);
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpPost("logout")]
@@ -71,7 +96,8 @@ public class AuthController : ControllerBase
         if (userId == null) return Unauthorized();
         var user = await _db.AppUsers.FindAsync(userId.Value);
         if (user == null) return Unauthorized();
-        return new MeResponse(user.Username);
+        var displayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName;
+        return new MeResponse(user.Id, user.Username, displayName, user.IsAdmin);
     }
 
     private string? ExtractToken()

@@ -42,6 +42,8 @@ public class AuthMiddleware
 
         context.Items["UserId"] = record.UserId;
         context.Items["Username"] = record.User?.Username ?? string.Empty;
+        context.Items["IsAdmin"] = record.User?.IsAdmin ?? false;
+        context.Items["DisplayName"] = record.User?.DisplayName ?? record.User?.Username ?? string.Empty;
         await _next(context);
     }
 }

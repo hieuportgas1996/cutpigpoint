@@ -177,10 +177,30 @@ export const api = {
   deleteGame: (id: string) => request<void>(`/games/${id}`, { method: 'DELETE' }),
 
   login: (username: string, password: string) =>
-    request<{ token: string; expiresAt: string; username: string }>('/auth/login', {
+    request<{ token: string; expiresAt: string; userId: string; username: string; displayName: string; isAdmin: boolean }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password })
     }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
-  me: () => request<{ username: string }>('/auth/me')
+  me: () => request<{ userId: string; username: string; displayName: string; isAdmin: boolean }>('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword })
+    }),
+
+  listAdminUsers: () => request<AdminUser[]>('/admin/users'),
+  createAdminUser: (req: { username: string; password: string; displayName?: string; isAdmin: boolean }) =>
+    request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(req) }),
+  updateAdminUser: (id: string, req: { displayName?: string; password?: string; isAdmin?: boolean }) =>
+    request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(req) }),
+  deleteAdminUser: (id: string) => request<void>(`/admin/users/${id}`, { method: 'DELETE' })
 };
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  createdAt: string;
+}
