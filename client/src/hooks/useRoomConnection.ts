@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { auth, HUB_BASE, RoomState } from '../api';
+import { auth, CardDto, HUB_BASE, MatchEnd, MatchPublicState, PrivateHand, RoomState } from '../api';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 interface UseRoomConnectionResult {
   status: Status;
   state: RoomState | null;
+  matchState: MatchPublicState | null;
+  privateHand: PrivateHand | null;
+  matchEnd: MatchEnd | null;
   error: string | null;
   takeSeat: (seatIndex: number) => Promise<void>;
   leaveSeat: () => Promise<void>;
   startGame: () => Promise<void>;
+  playCards: (cards: CardDto[]) => Promise<void>;
+  passTurn: () => Promise<void>;
+  requestMatchState: () => Promise<void>;
   onGameStarted: (handler: (roomId: string) => void) => () => void;
 }
 
 export function useRoomConnection(code: string | undefined): UseRoomConnectionResult {
   const [status, setStatus] = useState<Status>('idle');
   const [state, setState] = useState<RoomState | null>(null);
+  const [matchState, setMatchState] = useState<MatchPublicState | null>(null);
+  const [privateHand, setPrivateHand] = useState<PrivateHand | null>(null);
+  const [matchEnd, setMatchEnd] = useState<MatchEnd | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
   const gameStartedHandlersRef = useRef<Set<(roomId: string) => void>>(new Set());
@@ -45,6 +54,18 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
 
     conn.on('GameStarted', (roomId: string) => {
       gameStartedHandlersRef.current.forEach(h => h(roomId));
+    });
+
+    conn.on('MatchState', (m: MatchPublicState) => {
+      setMatchState(m);
+    });
+
+    conn.on('PrivateHand', (h: PrivateHand) => {
+      setPrivateHand(h);
+    });
+
+    conn.on('MatchEnd', (e: MatchEnd) => {
+      setMatchEnd(e);
     });
 
     conn.onreconnecting(() => setStatus('reconnecting'));
@@ -104,10 +125,31 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('StartGame');
   }, []);
 
+  const playCards = useCallback(async (cards: CardDto[]) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('PlayCards', cards);
+  }, []);
+
+  const passTurn = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('PassTurn');
+  }, []);
+
+  const requestMatchState = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('RequestMatchState');
+  }, []);
+
   const onGameStarted = useCallback((handler: (roomId: string) => void) => {
     gameStartedHandlersRef.current.add(handler);
     return () => { gameStartedHandlersRef.current.delete(handler); };
   }, []);
 
-  return { status, state, error, takeSeat, leaveSeat, startGame, onGameStarted };
+  return {
+    status, state, matchState, privateHand, matchEnd, error,
+    takeSeat, leaveSeat, startGame, playCards, passTurn, requestMatchState, onGameStarted
+  };
 }

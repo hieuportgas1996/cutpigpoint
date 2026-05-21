@@ -23,6 +23,32 @@ public record RoomStateDto(
     DateTime? StartedAt,
     List<RoomSeatDto> Seats);
 
+public record CardDto(int Rank, int Suit);
+
+public record MatchPlayerDto(
+    Guid UserId,
+    string DisplayName,
+    int SeatIndex,
+    int CardsLeft,
+    int? FinalRank);
+
+public record MatchPublicStateDto(
+    Guid MatchId,
+    Guid RoomId,
+    int Status,
+    int CurrentTurnSeatIndex,
+    Guid? CurrentTrickOwnerId,
+    List<CardDto>? CurrentTrick,
+    DateTime TurnDeadline,
+    List<MatchPlayerDto> Players);
+
+public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
+
+public record PlayMoveRequest(List<CardDto> Cards);
+
+public record MatchEndResultDto(Guid UserId, string DisplayName, int FinalRank, int Score);
+public record MatchEndDto(Guid MatchId, List<MatchEndResultDto> Results);
+
 public record CreatePlayerRequest(string Name, string? Nickname);
 
 public record UpdatePlayerRequest(string Name, string? Nickname);

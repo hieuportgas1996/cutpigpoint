@@ -19,17 +19,17 @@ export default function RoomLobbyPage() {
     useRoomConnection(code);
 
   useEffect(() => {
-    const unsub = onGameStarted((roomId) => {
-      navigate(`/play/${roomId}`);
+    const unsub = onGameStarted(() => {
+      navigate(`/play/${code}`);
     });
     return () => unsub();
   }, [onGameStarted, navigate]);
 
   useEffect(() => {
-    if (room?.status === RoomStatus.Playing) {
-      navigate(`/play/${room.id}`);
+    if (room?.status === RoomStatus.Playing && code) {
+      navigate(`/play/${code}`);
     }
-  }, [room?.status, room?.id, navigate]);
+  }, [room?.status, code, navigate]);
 
   if (state.status !== 'authenticated') return null;
 

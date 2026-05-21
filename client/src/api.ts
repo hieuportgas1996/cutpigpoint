@@ -247,3 +247,46 @@ export interface RoomState {
 }
 
 export const HUB_BASE = RAW_BASE;
+
+export interface CardDto {
+  rank: number;
+  suit: number;
+}
+
+export const MatchStatus = { InProgress: 0, Finished: 1 } as const;
+
+export interface MatchPlayerPublic {
+  userId: string;
+  displayName: string;
+  seatIndex: number;
+  cardsLeft: number;
+  finalRank: number | null;
+}
+
+export interface MatchPublicState {
+  matchId: string;
+  roomId: string;
+  status: number;
+  currentTurnSeatIndex: number;
+  currentTrickOwnerId: string | null;
+  currentTrick: CardDto[] | null;
+  turnDeadline: string;
+  players: MatchPlayerPublic[];
+}
+
+export interface PrivateHand {
+  matchId: string;
+  hand: CardDto[];
+}
+
+export interface MatchEndResult {
+  userId: string;
+  displayName: string;
+  finalRank: number;
+  score: number;
+}
+
+export interface MatchEnd {
+  matchId: string;
+  results: MatchEndResult[];
+}

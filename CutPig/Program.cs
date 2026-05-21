@@ -23,6 +23,8 @@ builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionStrin
 builder.Services.AddScoped<TienLenScoringService>();
 builder.Services.AddScoped<Bida9BallScoringService>();
 builder.Services.AddSingleton<RoomPresenceTracker>();
+builder.Services.AddSingleton<MatchManager>();
+builder.Services.AddHostedService<MatchTimerService>();
 builder.Services.AddSignalR();
 
 var allowedOrigins = ResolveAllowedOrigins(builder.Configuration);

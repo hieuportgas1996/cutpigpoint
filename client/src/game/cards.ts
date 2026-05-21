@@ -67,3 +67,77 @@ export function dealFour(seed = Date.now()): Card[][] {
   for (let i = 0; i < 52; i++) hands[i % 4].push(deck[i]);
   return hands.map(h => h.sort(compareCard));
 }
+
+export type ComboKind = 'single' | 'pair' | 'triple' | 'four' | 'run' | 'runOfPairs';
+
+export interface ComboInfo {
+  kind: ComboKind;
+  cards: Card[];
+  topValue: number;
+}
+
+const SUIT_INDEX: Record<Suit, number> = { spades: 0, clubs: 1, diamonds: 2, hearts: 3 };
+
+export function cardValue(c: Card): number {
+  return c.rank * 4 + SUIT_INDEX[c.suit];
+}
+
+export function detectCombo(cards: Card[]): ComboInfo | null {
+  if (cards.length === 0) return null;
+  const sorted = [...cards].sort(compareCard);
+
+  if (sorted.length === 1)
+    return { kind: 'single', cards: sorted, topValue: cardValue(sorted[0]) };
+
+  const allSame = sorted.every(c => c.rank === sorted[0].rank);
+  if (allSame) {
+    if (sorted.length === 2) return { kind: 'pair', cards: sorted, topValue: cardValue(sorted[sorted.length - 1]) };
+    if (sorted.length === 3) return { kind: 'triple', cards: sorted, topValue: cardValue(sorted[sorted.length - 1]) };
+    if (sorted.length === 4) return { kind: 'four', cards: sorted, topValue: cardValue(sorted[sorted.length - 1]) };
+    return null;
+  }
+
+  if (isRun(sorted)) return { kind: 'run', cards: sorted, topValue: cardValue(sorted[sorted.length - 1]) };
+  if (isRunOfPairs(sorted)) return { kind: 'runOfPairs', cards: sorted, topValue: cardValue(sorted[sorted.length - 1]) };
+  return null;
+}
+
+function isRun(sorted: Card[]): boolean {
+  if (sorted.length < 3) return false;
+  if (sorted.some(c => c.rank === 15)) return false;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].rank !== sorted[i - 1].rank + 1) return false;
+  }
+  return true;
+}
+
+function isRunOfPairs(sorted: Card[]): boolean {
+  if (sorted.length < 6 || sorted.length % 2 !== 0) return false;
+  if (sorted.some(c => c.rank === 15)) return false;
+  const groups = new Map<number, Card[]>();
+  for (const c of sorted) {
+    const arr = groups.get(c.rank) ?? [];
+    arr.push(c);
+    groups.set(c.rank, arr);
+  }
+  if (groups.size * 2 !== sorted.length) return false;
+  const ranks = [...groups.keys()].sort((a, b) => a - b);
+  for (let i = 0; i < ranks.length; i++) {
+    if (groups.get(ranks[i])!.length !== 2) return false;
+    if (i > 0 && ranks[i] !== ranks[i - 1] + 1) return false;
+  }
+  return true;
+}
+
+export function comboBeats(current: ComboInfo, next: ComboInfo): boolean {
+  return next.kind === current.kind && next.cards.length === current.cards.length && next.topValue > current.topValue;
+}
+
+export function cardFromDto(d: { rank: number; suit: number }): Card {
+  const suits: Suit[] = ['spades', 'clubs', 'diamonds', 'hearts'];
+  return { id: `${d.rank}-${suits[d.suit]}`, rank: d.rank as Rank, suit: suits[d.suit] };
+}
+
+export function cardToDto(c: Card): { rank: number; suit: number } {
+  return { rank: c.rank, suit: SUIT_INDEX[c.suit] };
+}
