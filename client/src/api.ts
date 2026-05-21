@@ -275,6 +275,7 @@ export interface MatchPublicState {
   currentTrickOwnerId: string | null;
   currentTrick: CardDto[] | null;
   turnDeadline: string;
+  nextRoundAt: string | null;
   hostUserId: string;
   players: MatchPlayerPublic[];
 }

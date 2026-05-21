@@ -22,7 +22,7 @@ export default function RoomPlayPage() {
   const { state } = useAuth();
   const {
     status, state: room, matchState, privateHand, roundEnd, matchEnd, error,
-    playCards, passTurn, startNextRound, endMatch, clearRoundEnd,
+    playCards, passTurn, endMatch, clearRoundEnd,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -36,6 +36,13 @@ export default function RoomPlayPage() {
   useEffect(() => {
     setSelected(new Set());
   }, [matchState?.currentTurnSeatIndex, matchState?.roundNumber]);
+
+  // Auto-clear roundEnd when next round begins (server auto-advances)
+  useEffect(() => {
+    if (matchState?.status === MatchStatus.InProgress && roundEnd) {
+      clearRoundEnd();
+    }
+  }, [matchState?.status, roundEnd, clearRoundEnd]);
 
   const myUserId = state.status === 'authenticated' ? state.userId : '';
   const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
@@ -86,6 +93,9 @@ export default function RoomPlayPage() {
   }
 
   const turnLeftSec = Math.max(0, Math.ceil((new Date(matchState.turnDeadline).getTime() - now) / 1000));
+  const nextRoundLeftSec = matchState.nextRoundAt
+    ? Math.max(0, Math.ceil((new Date(matchState.nextRoundAt).getTime() - now) / 1000))
+    : 5;
 
   const myIdx = me ? me.seatIndex : 0;
   const seatLayout = matchState.players.map(p => ({
@@ -114,14 +124,6 @@ export default function RoomPlayPage() {
   async function handlePass() {
     try {
       await passTurn();
-    } catch (e) {
-      toast.push('error', (e as Error).message);
-    }
-  }
-
-  async function handleNextRound() {
-    try {
-      await startNextRound();
     } catch (e) {
       toast.push('error', (e as Error).message);
     }
@@ -199,8 +201,8 @@ export default function RoomPlayPage() {
             {trick.length === 0 ? (
               <div className="play-empty muted">Mở nước mới</div>
             ) : (
-              trick.map((c, i) => (
-                <div key={c.id} className="play-card-slot" style={{ marginLeft: i === 0 ? 0 : -22 }}>
+              trick.map(c => (
+                <div key={c.id} className="play-card-slot">
                   <CardSvg card={c} size="md" />
                 </div>
               ))
@@ -282,15 +284,12 @@ export default function RoomPlayPage() {
                 ))}
               </div>
               <div className="match-end-actions">
-                {isHost ? (
-                  <>
-                    <button className="tlmn-btn primary" onClick={handleNextRound}>🎴 Ván tiếp</button>
-                    <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
-                  </>
-                ) : (
-                  <div className="muted">Đang chờ chủ phòng…</div>
+                <div className="next-round-countdown">
+                  🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
+                </div>
+                {isHost && (
+                  <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
                 )}
-                <button className="tlmn-btn ghost" onClick={clearRoundEnd}>Đóng bảng</button>
               </div>
             </div>
           </div>

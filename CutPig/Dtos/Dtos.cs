@@ -44,6 +44,7 @@ public record MatchPublicStateDto(
     Guid? CurrentTrickOwnerId,
     List<CardDto>? CurrentTrick,
     DateTime TurnDeadline,
+    DateTime? NextRoundAt,
     Guid HostUserId,
     List<MatchPlayerDto> Players);
 

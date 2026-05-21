@@ -367,6 +367,7 @@ public class RoomHub : Hub
             m.CurrentTrickOwnerId,
             m.CurrentTrick?.Cards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
             m.TurnDeadline,
+            m.NextRoundAt,
             m.HostUserId,
             m.Players.Select(p => new MatchPlayerDto(
                 p.UserId,

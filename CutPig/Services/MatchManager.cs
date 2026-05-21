@@ -41,14 +41,14 @@ public class MatchManager
         }
     }
 
-    /// <summary>Deal a new round inside an existing match.</summary>
-    public Match StartNextRound(Guid roomId, Guid hostUserId)
+    /// <summary>Deal a new round inside an existing match (host-triggered or system auto-trigger).</summary>
+    public Match StartNextRound(Guid roomId, Guid? hostUserId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match))
                 throw new InvalidOperationException("Trận không tồn tại.");
-            if (match.HostUserId != hostUserId)
+            if (hostUserId.HasValue && match.HostUserId != hostUserId.Value)
                 throw new InvalidOperationException("Chỉ chủ phòng được mở ván mới.");
             if (match.Status != MatchStatus.WaitingNextRound)
                 throw new InvalidOperationException("Ván trước chưa kết thúc.");
@@ -211,6 +211,7 @@ public class MatchManager
                     match.FinishOrder.Add(p.UserId);
                 }
                 match.Status = MatchStatus.WaitingNextRound;
+                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                 return new PlayResult(combo, justFinished, true, match);
             }
 
@@ -259,6 +260,7 @@ public class MatchManager
                             match.FinishOrder.Add(p.UserId);
                         }
                         match.Status = MatchStatus.WaitingNextRound;
+                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                         return new PassResult(false, true, match);
                     }
                     AdvanceTurnSkippingPassed(match);
@@ -324,6 +326,8 @@ public class MatchManager
     }
 
     public IEnumerable<Match> AllActive() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.InProgress);
+
+    public IEnumerable<Match> AllWaitingNextRound() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.WaitingNextRound);
 
     public int[] ComputeRoundScores(Match match)
     {

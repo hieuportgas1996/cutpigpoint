@@ -9,13 +9,28 @@ public class MatchTimerService : BackgroundService
 {
     private readonly MatchManager _matches;
     private readonly IHubContext<RoomHub> _hub;
+    private readonly RoomPresenceTracker _presence;
     private readonly ILogger<MatchTimerService> _logger;
 
-    public MatchTimerService(MatchManager matches, IHubContext<RoomHub> hub, ILogger<MatchTimerService> logger)
+    public MatchTimerService(MatchManager matches, IHubContext<RoomHub> hub, RoomPresenceTracker presence, ILogger<MatchTimerService> logger)
     {
         _matches = matches;
         _hub = hub;
+        _presence = presence;
         _logger = logger;
+    }
+
+    private async Task SendPrivateHandsAsync(Match match, CancellationToken ct)
+    {
+        foreach (var player in match.Players)
+        {
+            var conns = _presence.ConnectionsFor(match.RoomId, player.UserId);
+            if (conns.Count == 0) continue;
+            var dto = new PrivateHandDto(
+                match.RoomId,
+                player.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList());
+            await _hub.Clients.Clients(conns).SendAsync("PrivateHand", dto, ct);
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,6 +57,27 @@ public class MatchTimerService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Auto-pass failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
+                // Auto-start next round after 5s when match is WaitingNextRound
+                foreach (var match in _matches.AllWaitingNextRound())
+                {
+                    if (!match.NextRoundAt.HasValue || match.NextRoundAt.Value > now) continue;
+                    try
+                    {
+                        var nextMatch = _matches.StartNextRound(match.RoomId, null); // system-triggered
+                        await _hub.Clients.Group($"room:{nextMatch.RoomId}").SendAsync("MatchState", BuildPublic(nextMatch), stoppingToken);
+                        await SendPrivateHandsAsync(nextMatch, stoppingToken);
+                        if (nextMatch.Status == MatchStatus.WaitingNextRound)
+                        {
+                            // White-win on the new deal — emit round-end again
+                            await EmitRoundEndAsync(nextMatch, stoppingToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Auto-next-round failed for room {RoomId}", match.RoomId);
                     }
                 }
             }
@@ -91,6 +127,7 @@ public class MatchTimerService : BackgroundService
             m.CurrentTrickOwnerId,
             m.CurrentTrick?.Cards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
             m.TurnDeadline,
+            m.NextRoundAt,
             m.HostUserId,
             m.Players.Select(p => new MatchPlayerDto(
                 p.UserId,

@@ -37,6 +37,7 @@
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
+  gap: 6px;
   min-height: 100px;
   z-index: 3;
   pointer-events: none;
@@ -168,7 +169,24 @@
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   margin-top: 12px;
+}
+
+.room-play .next-round-countdown {
+  background: linear-gradient(145deg, #3B2114, #5A3320);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 8px 16px;
+  color: var(--gold-soft);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.room-play .next-round-countdown b {
+  color: var(--cream);
+  font-weight: 800;
+  font-size: 18px;
 }
 
 @media (max-width: 720px) {

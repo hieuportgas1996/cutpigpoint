@@ -35,6 +35,7 @@ public class Match
     public List<Guid> FinishOrder { get; init; } = new();
     public int RoundNumber { get; set; } = 1;
     public Guid? PreviousRoundWinnerId { get; set; }
+    public DateTime? NextRoundAt { get; set; }
 }
 
 // (round history persistence reserved for future phase)
