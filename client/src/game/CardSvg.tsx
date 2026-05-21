@@ -48,8 +48,10 @@ function CardFace({ card, w, h }: { card: Card; w: number; h: number }) {
       <text x={6} y={16} fontFamily="'Be Vietnam Pro', serif" fontWeight={800} fontSize={14} fill={fill}>{label}</text>
       <text x={6} y={28} fontSize={12} fill={fill}>{glyph}</text>
       <text x={w / 2} y={h / 2 + 8} textAnchor="middle" fontSize={Math.min(w, h) * 0.45} fill={fill} opacity={0.92}>{glyph}</text>
-      <text x={w - 6} y={h - 8} textAnchor="end" fontFamily="'Be Vietnam Pro', serif" fontWeight={800} fontSize={14} fill={fill} transform={`rotate(180 ${w - 6} ${h - 8})`}>{label}</text>
-      <text x={w - 6} y={h - 20} textAnchor="end" fontSize={12} fill={fill} transform={`rotate(180 ${w - 6} ${h - 20})`}>{glyph}</text>
+      <g transform={`rotate(180 ${w / 2} ${h / 2})`}>
+        <text x={6} y={16} fontFamily="'Be Vietnam Pro', serif" fontWeight={800} fontSize={14} fill={fill}>{label}</text>
+        <text x={6} y={28} fontSize={12} fill={fill}>{glyph}</text>
+      </g>
     </svg>
   );
 }
