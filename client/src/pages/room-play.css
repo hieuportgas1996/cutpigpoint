@@ -73,7 +73,6 @@
 .room-play .my-hand-slot {
   position: absolute;
   left: 50%;
-  margin-left: -32px;
   transition: transform 0.2s ease;
 }
 
@@ -190,7 +189,48 @@
 }
 
 @media (max-width: 720px) {
-  .room-play .my-hand-area { min-height: 100px; }
-  .room-play .my-hand-fan { height: 100px; }
-  .room-play .my-hand-slot { margin-left: -22px; }
+  .room-play .tlmn-table { aspect-ratio: 1 / 1; }
+  .room-play .my-hand-area { min-height: 80px; padding: 8px 0; }
+  .room-play .my-hand-fan { height: 80px; }
+  .room-play .play-header { padding: 6px 10px; gap: 6px; }
+  .room-play .turn-timer { padding: 4px 10px; font-size: 14px; }
+  .room-play .lobby-code code { font-size: 16px; letter-spacing: 2px; }
+
+  /* Compact seats on mobile */
+  .room-play .tlmn-seat {
+    min-width: 0;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+  .room-play .tlmn-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  .room-play .tlmn-seat-name { font-size: 11px; max-width: 56px; }
+  .room-play .tlmn-seat-meta { font-size: 10px; gap: 4px; }
+  .room-play .tlmn-score-pill { font-size: 10px; padding: 1px 5px; }
+  .room-play .host-badge { font-size: 8px; padding: 1px 4px; }
+
+  /* Push seats to the corners to leave center for cards */
+  .room-play .tlmn-seat-top { top: 8px; }
+  .room-play .tlmn-seat-bottom { bottom: 8px; }
+  /* On portrait, move left/right seats to upper part to leave room for play area + hand */
+  .room-play .tlmn-seat-left {
+    left: 6px;
+    top: 60px;
+    transform: none;
+  }
+  .room-play .tlmn-seat-right {
+    right: 6px;
+    top: 60px;
+    transform: none;
+  }
+
+  /* Play area centered with safe space */
+  .room-play .play-area-cards { gap: 4px; }
+  .room-play .tlmn-mai-corner { width: 60px; height: 60px; }
+
+  .room-play .tlmn-controls { padding: 10px; gap: 6px; }
+  .room-play .tlmn-btn { padding: 8px 12px; font-size: 12px; }
 }

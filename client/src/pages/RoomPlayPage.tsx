@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useRoomConnection } from '../hooks/useRoomConnection';
@@ -27,11 +27,32 @@ export default function RoomPlayPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [now, setNow] = useState(Date.now());
+  const [viewportW, setViewportW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const handAreaRef = useRef<HTMLDivElement | null>(null);
+  const [handWidth, setHandWidth] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportW(window.innerWidth);
+      if (handAreaRef.current) setHandWidth(handAreaRef.current.offsetWidth);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (handAreaRef.current) setHandWidth(handAreaRef.current.offsetWidth);
+  }, [handAreaRef.current]);
+
+  const isMobile = viewportW < 720;
+  const cardSize: 'sm' | 'md' = isMobile ? 'sm' : 'md';
+  const cardWidth = isMobile ? 44 : 64;
 
   useEffect(() => {
     setSelected(new Set());
@@ -203,36 +224,49 @@ export default function RoomPlayPage() {
             ) : (
               trick.map(c => (
                 <div key={c.id} className="play-card-slot">
-                  <CardSvg card={c} size="md" />
+                  <CardSvg card={c} size={cardSize} />
                 </div>
               ))
             )}
           </div>
         </div>
 
-        <div className="my-hand-area">
+        <div className="my-hand-area" ref={handAreaRef}>
           {myHand.length === 0 ? (
             <div className="muted">Bạn đã hết bài 🎉</div>
           ) : (
             <div className="my-hand-fan">
-              {myHand.map((c, idx) => {
-                const offset = (idx - (myHand.length - 1) / 2) * Math.min(38, 480 / Math.max(myHand.length, 1));
-                const isSelected = selected.has(c.id);
-                return (
-                  <div
-                    key={c.id}
-                    className="my-hand-slot"
-                    style={{ transform: `translateX(${offset}px) translateY(${isSelected ? -16 : 0}px)` }}
-                  >
-                    <CardSvg
-                      card={c}
-                      size="md"
-                      selected={isSelected}
-                      onClick={() => toggle(c.id)}
-                    />
-                  </div>
-                );
-              })}
+              {(() => {
+                const padding = 24;
+                const available = Math.max(handWidth - padding, cardWidth);
+                const maxSpread = isMobile ? 24 : 38;
+                const minSpread = isMobile ? 14 : 20;
+                const naturalSpread = myHand.length > 1
+                  ? (available - cardWidth) / (myHand.length - 1)
+                  : 0;
+                const spread = Math.max(minSpread, Math.min(maxSpread, naturalSpread));
+                return myHand.map((c, idx) => {
+                  const offset = (idx - (myHand.length - 1) / 2) * spread;
+                  const isSelected = selected.has(c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className="my-hand-slot"
+                      style={{
+                        transform: `translateX(${offset}px) translateY(${isSelected ? -16 : 0}px)`,
+                        marginLeft: -cardWidth / 2,
+                      }}
+                    >
+                      <CardSvg
+                        card={c}
+                        size={cardSize}
+                        selected={isSelected}
+                        onClick={() => toggle(c.id)}
+                      />
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
