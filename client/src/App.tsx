@@ -1,9 +1,10 @@
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import PlayersPage from './pages/PlayersPage';
 import GamesPage from './pages/GamesPage';
 import NewGamePage from './pages/NewGamePage';
 import GamePlayPage from './pages/GamePlayPage';
 import LoginPage from './pages/LoginPage';
+import DemoPage from './pages/DemoPage';
 import { ToastProvider } from './ui/Toast';
 import { Icon } from './ui/Icon';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -20,6 +21,11 @@ export default function App() {
 
 function AppShell() {
   const { state, logout } = useAuth();
+  const location = useLocation();
+
+  if (location.pathname === '/demo') {
+    return <DemoPage />;
+  }
 
   if (state.status === 'loading') {
     return (
