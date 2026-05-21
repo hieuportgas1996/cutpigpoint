@@ -57,6 +57,16 @@ public class RoomPresenceTracker
         return (info.UserId, info.RoomId);
     }
 
+    public Guid? CurrentRoom(string connectionId)
+    {
+        return _byConnection.TryGetValue(connectionId, out var info) ? info.RoomId : null;
+    }
+
+    public (Guid UserId, Guid RoomId)? CurrentInfo(string connectionId)
+    {
+        return _byConnection.TryGetValue(connectionId, out var info) ? (info.UserId, info.RoomId) : null;
+    }
+
     public IReadOnlyList<string> ConnectionsFor(Guid roomId, Guid userId)
     {
         lock (_gate)

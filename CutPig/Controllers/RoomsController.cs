@@ -75,8 +75,7 @@ public class RoomsController : ControllerBase
         {
             RoomId = room.Id,
             SeatIndex = 0,
-            UserId = user.Id,
-            User = user
+            UserId = user.Id
         });
 
         _db.Rooms.Add(room);

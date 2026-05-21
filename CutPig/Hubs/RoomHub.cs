@@ -13,12 +13,14 @@ public class RoomHub : Hub
     private readonly AppDbContext _db;
     private readonly RoomPresenceTracker _presence;
     private readonly MatchManager _matches;
+    private readonly ILogger<RoomHub> _logger;
 
-    public RoomHub(AppDbContext db, RoomPresenceTracker presence, MatchManager matches)
+    public RoomHub(AppDbContext db, RoomPresenceTracker presence, MatchManager matches, ILogger<RoomHub> logger)
     {
         _db = db;
         _presence = presence;
         _matches = matches;
+        _logger = logger;
     }
 
     private static string GroupName(Guid roomId) => $"room:{roomId}";
@@ -67,54 +69,60 @@ public class RoomHub : Hub
 
     public async Task TakeSeat(int seatIndex)
     {
-        var auth = await AuthenticateAsync();
-        if (auth == null) throw new HubException("Unauthorized");
-
-        var roomId = _presence.Remove(Context.ConnectionId)?.RoomId;
-        if (roomId.HasValue) _presence.Add(Context.ConnectionId, auth.Value.UserId, roomId.Value);
-        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
-
-        var room = await _db.Rooms
-            .Include(r => r.Seats).ThenInclude(s => s.User)
-            .FirstOrDefaultAsync(r => r.Id == roomId);
-        if (room == null) throw new HubException("Phòng không tồn tại.");
-        if (room.Status != RoomStatus.Waiting) throw new HubException("Phòng đã bắt đầu.");
-        if (seatIndex < 0 || seatIndex >= room.MaxSeats) throw new HubException("Vị trí ghế không hợp lệ.");
-
-        var existingForUser = room.Seats.FirstOrDefault(s => s.UserId == auth.Value.UserId);
-        var existingAtSeat = room.Seats.FirstOrDefault(s => s.SeatIndex == seatIndex);
-        if (existingAtSeat != null && existingAtSeat.UserId != auth.Value.UserId)
-            throw new HubException("Ghế đã có người ngồi.");
-
-        if (existingForUser != null)
+        try
         {
-            existingForUser.SeatIndex = seatIndex;
-        }
-        else
-        {
-            room.Seats.Add(new RoomSeat
+            var auth = await AuthenticateAsync();
+            if (auth == null) throw new HubException("Unauthorized");
+
+            var roomId = _presence.CurrentRoom(Context.ConnectionId);
+            if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+            var room = await _db.Rooms
+                .Include(r => r.Seats)
+                .FirstOrDefaultAsync(r => r.Id == roomId);
+            if (room == null) throw new HubException("Phòng không tồn tại.");
+            if (room.Status != RoomStatus.Waiting) throw new HubException("Phòng đã bắt đầu.");
+            if (seatIndex < 0 || seatIndex >= room.MaxSeats) throw new HubException("Vị trí ghế không hợp lệ.");
+
+            var existingForUser = room.Seats.FirstOrDefault(s => s.UserId == auth.Value.UserId);
+            var existingAtSeat = room.Seats.FirstOrDefault(s => s.SeatIndex == seatIndex);
+            if (existingAtSeat != null && existingAtSeat.UserId != auth.Value.UserId)
+                throw new HubException("Ghế đã có người ngồi.");
+
+            if (existingForUser != null)
             {
-                RoomId = room.Id,
-                SeatIndex = seatIndex,
-                UserId = auth.Value.UserId,
-                User = auth.Value.User
-            });
-        }
-        await _db.SaveChangesAsync();
+                existingForUser.SeatIndex = seatIndex;
+            }
+            else
+            {
+                _db.RoomSeats.Add(new RoomSeat
+                {
+                    RoomId = room.Id,
+                    SeatIndex = seatIndex,
+                    UserId = auth.Value.UserId
+                });
+            }
+            await _db.SaveChangesAsync();
 
-        var fresh = await _db.Rooms.Include(r => r.Seats).ThenInclude(s => s.User).FirstAsync(r => r.Id == room.Id);
-        await Clients.Group(GroupName(room.Id)).SendAsync("RoomState", BuildState(fresh));
+            var fresh = await _db.Rooms.Include(r => r.Seats).ThenInclude(s => s.User).FirstAsync(r => r.Id == room.Id);
+            await Clients.Group(GroupName(room.Id)).SendAsync("RoomState", BuildState(fresh));
+        }
+        catch (HubException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TakeSeat failed seatIndex={Seat}", seatIndex);
+            throw new HubException($"Lỗi khi ngồi vào ghế: {ex.Message}");
+        }
     }
 
     public async Task LeaveSeat()
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
-        var presence = _presence.Remove(Context.ConnectionId);
-        if (presence != null) _presence.Add(Context.ConnectionId, auth.Value.UserId, presence.Value.RoomId);
-        if (presence == null) return;
+        var roomIdNullable = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomIdNullable == null) return;
+        var roomId = roomIdNullable.Value;
 
-        var roomId = presence.Value.RoomId;
         var room = await _db.Rooms.Include(r => r.Seats).ThenInclude(s => s.User).FirstOrDefaultAsync(r => r.Id == roomId);
         if (room == null) return;
         if (room.Status != RoomStatus.Waiting) throw new HubException("Phòng đã bắt đầu.");
@@ -134,11 +142,10 @@ public class RoomHub : Hub
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
-        var presence = _presence.Remove(Context.ConnectionId);
-        if (presence != null) _presence.Add(Context.ConnectionId, auth.Value.UserId, presence.Value.RoomId);
-        if (presence == null) throw new HubException("Chưa vào phòng nào.");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
 
-        var room = await _db.Rooms.Include(r => r.Seats).FirstOrDefaultAsync(r => r.Id == presence.Value.RoomId);
+        var room = await _db.Rooms.Include(r => r.Seats).FirstOrDefaultAsync(r => r.Id == roomId);
         if (room == null) throw new HubException("Phòng không tồn tại.");
         if (room.HostUserId != auth.Value.UserId) throw new HubException("Chỉ chủ phòng được bắt đầu.");
         if (room.Status != RoomStatus.Waiting) throw new HubException("Phòng đã bắt đầu.");
@@ -170,11 +177,10 @@ public class RoomHub : Hub
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
-        var presence = _presence.Remove(Context.ConnectionId);
-        if (presence != null) _presence.Add(Context.ConnectionId, auth.Value.UserId, presence.Value.RoomId);
-        if (presence == null) return null;
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) return null;
 
-        var match = _matches.GetByRoom(presence.Value.RoomId);
+        var match = _matches.GetByRoom(roomId.Value);
         if (match == null) return null;
 
         // Resend private hand to the requesting connection too
@@ -192,25 +198,23 @@ public class RoomHub : Hub
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
-        var presence = _presence.Remove(Context.ConnectionId);
-        if (presence != null) _presence.Add(Context.ConnectionId, auth.Value.UserId, presence.Value.RoomId);
-        if (presence == null) throw new HubException("Chưa vào phòng nào.");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
 
         var parsed = cards.Select(c => new Card(c.Rank, (Suit)c.Suit)).ToList();
         PlayResult result;
         try
         {
-            result = _matches.Play(presence.Value.RoomId, auth.Value.UserId, parsed);
+            result = _matches.Play(roomId.Value, auth.Value.UserId, parsed);
         }
         catch (InvalidOperationException ex)
         {
             throw new HubException(ex.Message);
         }
 
-        await Clients.Group(GroupName(presence.Value.RoomId)).SendAsync("MatchState", BuildMatchPublic(result.Match));
-        // Resend private hand to the player who just played
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
         var player = result.Match.Players.First(p => p.UserId == auth.Value.UserId);
-        await SendPrivateHandToUserAsync(presence.Value.RoomId, player);
+        await SendPrivateHandToUserAsync(roomId.Value, player);
 
         if (result.MatchEnded)
         {
@@ -222,21 +226,20 @@ public class RoomHub : Hub
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
-        var presence = _presence.Remove(Context.ConnectionId);
-        if (presence != null) _presence.Add(Context.ConnectionId, auth.Value.UserId, presence.Value.RoomId);
-        if (presence == null) throw new HubException("Chưa vào phòng nào.");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
 
         PassResult result;
         try
         {
-            result = _matches.Pass(presence.Value.RoomId, auth.Value.UserId);
+            result = _matches.Pass(roomId.Value, auth.Value.UserId);
         }
         catch (InvalidOperationException ex)
         {
             throw new HubException(ex.Message);
         }
 
-        await Clients.Group(GroupName(presence.Value.RoomId)).SendAsync("MatchState", BuildMatchPublic(result.Match));
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
         if (result.MatchEnded)
         {
             await FinalizeMatchAsync(result.Match);
