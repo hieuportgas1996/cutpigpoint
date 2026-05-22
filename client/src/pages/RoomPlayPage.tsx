@@ -484,6 +484,12 @@ export default function RoomPlayPage() {
                           Chặt heo: {r.chopBonus > 0 ? `+${r.chopBonus}` : r.chopBonus}
                         </div>
                       )}
+                      {r.wonByThreeOfSpades && (
+                        <div className="white-win-reason">🏆 Thắng cuối bằng 3♠</div>
+                      )}
+                      {r.lostByThreeOfSpades && (
+                        <div className="white-win-reason">💀 Đui 3♠</div>
+                      )}
                     </div>
                     <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
                       {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}

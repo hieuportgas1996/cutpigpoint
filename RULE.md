@@ -127,6 +127,13 @@ Mỗi combo "có chop value" đánh ra trong 1 trick được tích lại. Khi t
 - Sám 2 và tứ quý 2 unbeatable theo luật chặt heo → không bao giờ kích hoạt chop chain, không ai bị trừ.
 - Tứ quý không chặt được sám 2 / tứ quý 2 (nhưng chặt 3-đôi-thông, đôi 2, lá 2).
 
+### Thưởng / phạt `3♠` cuối
+
+- **Thắng cuối bằng `3♠`** (về Nhất, lá cuối đánh ra chứa `3♠`): người Nhất **+(n-1)**, mỗi người khác **-1**. Zero-sum.
+- **Đui `3♠`** (về Chót, kết ván vẫn còn `3♠` trong tay): người Chót **-3**, mỗi người khác **+1**. **Không** zero-sum khi <4 người (3 người: -3/+1/+1 = -1; 2 người: -3/+1 = -2).
+- Không áp dụng khi về trắng.
+- Cả 2 cộng/trừ vào điểm ván (sau base rank và sau chop-pig).
+
 ## Trận đấu nhiều ván
 
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.

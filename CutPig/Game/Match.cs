@@ -21,6 +21,8 @@ public class MatchPlayer
     public bool PassedThisTrick { get; set; }
     public string? WhiteWinReason { get; set; }
     public bool? WhiteWinAccepted { get; set; } // null = chưa chọn, true = về trắng, false = từ chối
+    public bool FinishedWithThreeOfSpades { get; set; } // last play that emptied the hand contained 3♠
+    public bool StuckWithThreeOfSpades { get; set; }   // round ended while this player still held 3♠
 }
 
 public class Match

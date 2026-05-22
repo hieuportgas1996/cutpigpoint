@@ -310,6 +310,8 @@ export interface RoundResultEntry {
   totalScore: number;
   whiteWinReason: string | null;
   chopBonus: number;
+  wonByThreeOfSpades: boolean;
+  lostByThreeOfSpades: boolean;
 }
 
 export interface RoundEnd {

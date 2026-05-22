@@ -411,7 +411,9 @@ public class RoomHub : Hub
                     roundScores[idx],
                     p.TotalScore,
                     p.WhiteWinReason,
-                    chop);
+                    chop,
+                    p.FinishedWithThreeOfSpades,
+                    p.StuckWithThreeOfSpades);
             })
             .ToList();
 
@@ -442,7 +444,7 @@ public class RoomHub : Hub
     {
         var finalScores = match.Players
             .OrderByDescending(p => p.TotalScore)
-            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0))
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false))
             .ToList();
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 

@@ -82,6 +82,8 @@ public class MatchManager
             p.PassedThisTrick = false;
             p.WhiteWinReason = null;
             p.WhiteWinAccepted = null;
+            p.FinishedWithThreeOfSpades = false;
+            p.StuckWithThreeOfSpades = false;
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.
@@ -273,6 +275,8 @@ public class MatchManager
                 match.FinishOrder.Add(userId);
                 justFinished = true;
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
+                if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                    player.FinishedWithThreeOfSpades = true;
             }
 
             var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
@@ -283,6 +287,8 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
+                    if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                        p.StuckWithThreeOfSpades = true;
                 }
                 SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
@@ -411,6 +417,8 @@ public class MatchManager
                 match.FinishOrder.Add(userId);
                 justFinished = true;
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
+                if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                    player.FinishedWithThreeOfSpades = true;
             }
 
             // Check round end (only one or zero active player remaining)
@@ -422,6 +430,8 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
+                    if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                        p.StuckWithThreeOfSpades = true;
                 }
                 SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
@@ -464,6 +474,8 @@ public class MatchManager
                         current.FinalRank = match.FinishedCount;
                         match.FinishOrder.Add(userId);
                         if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
+                        if (smallest.Rank == 3 && smallest.Suit == Suit.Spades)
+                            current.FinishedWithThreeOfSpades = true;
                     }
                     var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
                     if (remaining.Count <= 1)
@@ -473,6 +485,8 @@ public class MatchManager
                             match.FinishedCount++;
                             p.FinalRank = match.FinishedCount;
                             match.FinishOrder.Add(p.UserId);
+                            if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                                p.StuckWithThreeOfSpades = true;
                         }
                         SettleTrickChopChain(match);
                         match.Status = MatchStatus.WaitingNextRound;
@@ -628,7 +642,7 @@ public class MatchManager
             return scores;
         }
 
-        // Normal path: base rank score + chop-pig settlements from this round.
+        // Normal path: base rank score + chop-pig settlements + 3♠ bonus/penalty.
         int[] table = n switch
         {
             4 => new[] { 2, 1, -1, -2 },
@@ -643,6 +657,30 @@ public class MatchManager
             if (match.RoundChopExtra.TryGetValue(match.Players[i].UserId, out var chop))
                 scores[i] += chop;
         }
+
+        // Thắng cuối bằng 3♠: người Nhất +(n-1), mỗi người khác -1.
+        var winner = match.Players.FirstOrDefault(p => p.FinalRank == 1 && p.FinishedWithThreeOfSpades);
+        if (winner != null)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                if (match.Players[i].UserId == winner.UserId) scores[i] += (n - 1);
+                else scores[i] -= 1;
+            }
+        }
+
+        // Đui 3♠: người về Chót (FinalRank == n) còn 3♠ trong tay → -3, mỗi người khác +1.
+        // (Không zero-sum với <4 người — theo rule user.)
+        var loser = match.Players.FirstOrDefault(p => p.FinalRank == n && p.StuckWithThreeOfSpades);
+        if (loser != null)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                if (match.Players[i].UserId == loser.UserId) scores[i] -= 3;
+                else scores[i] += 1;
+            }
+        }
+
         return scores;
     }
 

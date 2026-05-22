@@ -146,7 +146,9 @@ public class MatchTimerService : BackgroundService
                     roundScores[idx],
                     p.TotalScore,
                     p.WhiteWinReason,
-                    chop);
+                    chop,
+                    p.FinishedWithThreeOfSpades,
+                    p.StuckWithThreeOfSpades);
             })
             .ToList();
 
