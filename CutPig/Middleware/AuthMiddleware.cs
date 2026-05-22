@@ -17,7 +17,8 @@ public class AuthMiddleware
         var path = context.Request.Path.Value ?? string.Empty;
 
         if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("/api/auth/login", StringComparison.OrdinalIgnoreCase))
+            path.StartsWith("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
+            (path.StartsWith("/api/users/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/avatar", StringComparison.OrdinalIgnoreCase)))
         {
             await _next(context);
             return;

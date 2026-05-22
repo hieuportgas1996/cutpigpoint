@@ -4,12 +4,13 @@ import { api, auth } from '../api';
 type AuthState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
-  | { status: 'authenticated'; userId: string; username: string; displayName: string; isAdmin: boolean };
+  | { status: 'authenticated'; userId: string; username: string; displayName: string; isAdmin: boolean; hasAvatar: boolean; avatarVersion: number };
 
 interface AuthContextValue {
   state: AuthState;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshAvatar: (hasAvatar: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,7 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId: res.userId,
         username: res.username,
         displayName: res.displayName,
-        isAdmin: res.isAdmin
+        isAdmin: res.isAdmin,
+        hasAvatar: res.hasAvatar,
+        avatarVersion: Date.now()
       }))
       .catch(() => {
         auth.setToken(null);
@@ -54,8 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: res.userId,
       username: res.username,
       displayName: res.displayName,
-      isAdmin: res.isAdmin
+      isAdmin: res.isAdmin,
+      hasAvatar: res.hasAvatar,
+      avatarVersion: Date.now()
     });
+  }, []);
+
+  const refreshAvatar = useCallback((hasAvatar: boolean) => {
+    setState(prev => prev.status === 'authenticated'
+      ? { ...prev, hasAvatar, avatarVersion: Date.now() }
+      : prev);
   }, []);
 
   const logout = useCallback(async () => {
@@ -65,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ state, login, logout }}>
+    <AuthContext.Provider value={{ state, login, logout, refreshAvatar }}>
       {children}
     </AuthContext.Provider>
   );

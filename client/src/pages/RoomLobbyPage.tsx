@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useRoomConnection } from '../hooks/useRoomConnection';
 import { useToast } from '../ui/Toast';
-import { RoomState, RoomStatus } from '../api';
+import { api, RoomState, RoomStatus } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
 import { MaiBranch } from '../game/effects/MaiBranch';
@@ -156,7 +156,11 @@ function SeatSlot({ seatIndex, position, room, meId, onTake, onLeave }: SeatSlot
 
   return (
     <div className={`tlmn-seat tlmn-seat-${position} ${seat.isOnline ? '' : 'seat-offline'}`}>
-      <div className="tlmn-avatar">{seat.displayName.charAt(0).toUpperCase()}</div>
+      <div className="tlmn-avatar">
+        {seat.hasAvatar
+          ? <img src={api.userAvatarUrl(seat.userId)} alt={seat.displayName} />
+          : seat.displayName.charAt(0).toUpperCase()}
+      </div>
       <div className="tlmn-seat-info">
         <div className="tlmn-seat-name">
           {seat.displayName}

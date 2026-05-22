@@ -13,6 +13,7 @@ public class MatchPlayer
 {
     public Guid UserId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
+    public bool HasAvatar { get; init; }
     public int SeatIndex { get; init; }
     public List<Card> Hand { get; set; } = new();
     public int? FinalRank { get; set; } // 1..N when player finishes current round

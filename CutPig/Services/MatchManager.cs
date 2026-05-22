@@ -20,7 +20,7 @@ public class MatchManager
         return m;
     }
 
-    public Match Create(Guid roomId, Guid hostUserId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex)> players)
+    public Match Create(Guid roomId, Guid hostUserId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex, bool HasAvatar)> players)
     {
         lock (LockFor(roomId))
         {
@@ -34,6 +34,7 @@ public class MatchManager
                 {
                     UserId = p.UserId,
                     DisplayName = p.DisplayName,
+                    HasAvatar = p.HasAvatar,
                     SeatIndex = p.SeatIndex,
                 });
             }

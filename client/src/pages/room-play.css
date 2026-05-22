@@ -263,6 +263,51 @@
   .room-play .tlmn-seat-timer { font-size: 10px; padding: 2px 7px; }
 }
 
+/* Speech bubble that appears above a seat when its player sends chat */
+.room-play .seat-chat-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FAF3E0;
+  color: #2A1810;
+  border: 2px solid var(--gold);
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 200px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.5);
+  z-index: 5;
+  animation: bubble-pop 0.25s ease-out, bubble-fade 0.4s ease-in 4.6s forwards;
+  pointer-events: none;
+}
+
+.room-play .seat-chat-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--gold);
+}
+
+@keyframes bubble-pop {
+  from { transform: translateX(-50%) scale(0.6); opacity: 0; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+@keyframes bubble-fade {
+  to { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+}
+
+@media (max-width: 720px) {
+  .room-play .seat-chat-bubble { font-size: 11px; padding: 4px 8px; max-width: 140px; }
+}
+
 /* Floating chat button (visible regardless of header layout) */
 .room-play .chat-fab {
   position: fixed;

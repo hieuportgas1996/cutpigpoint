@@ -7,7 +7,7 @@ import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, findFourPairRun } from '../game/cards';
-import { MatchStatus } from '../api';
+import { api, MatchStatus } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
@@ -35,6 +35,8 @@ export default function RoomPlayPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatSeenCount, setChatSeenCount] = useState(0);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const [seatBubbles, setSeatBubbles] = useState<Record<string, { id: string; text: string }>>({});
+  const lastBubbledChatId = useRef<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -62,6 +64,23 @@ export default function RoomPlayPage() {
     }
     if (chatOpen) setChatSeenCount(chatMessages.length);
   }, [chatMessages.length, chatOpen]);
+
+  // Show seat bubble for newest chat message; auto-clear after 5s
+  useEffect(() => {
+    if (chatMessages.length === 0) return;
+    const latest = chatMessages[chatMessages.length - 1];
+    if (lastBubbledChatId.current === latest.id) return;
+    lastBubbledChatId.current = latest.id;
+    setSeatBubbles(prev => ({ ...prev, [latest.userId]: { id: latest.id, text: latest.text } }));
+    const t = setTimeout(() => {
+      setSeatBubbles(prev => {
+        if (prev[latest.userId]?.id !== latest.id) return prev;
+        const { [latest.userId]: _drop, ...rest } = prev;
+        return rest;
+      });
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [chatMessages]);
 
   const unreadChat = Math.max(0, chatMessages.length - chatSeenCount);
 
@@ -271,9 +290,15 @@ export default function RoomPlayPage() {
             const isTurn = matchState.players[matchState.currentTurnSeatIndex]?.userId === player.userId
               && matchState.status === MatchStatus.InProgress;
             const isMe = player.userId === myUserId;
+            const bubble = seatBubbles[player.userId];
             return (
               <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''}`}>
-                <div className="tlmn-avatar">{player.displayName.charAt(0).toUpperCase()}</div>
+                {bubble && <div className="seat-chat-bubble">{bubble.text}</div>}
+                <div className="tlmn-avatar">
+                  {player.hasAvatar
+                    ? <img src={api.userAvatarUrl(player.userId)} alt={player.displayName} />
+                    : player.displayName.charAt(0).toUpperCase()}
+                </div>
                 <div className="tlmn-seat-info">
                   <div className="tlmn-seat-name">
                     {isMe ? 'Bạn' : player.displayName}

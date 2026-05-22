@@ -104,7 +104,8 @@ public class RoomsController : ControllerBase
                 s.User?.Username ?? "",
                 string.IsNullOrWhiteSpace(s.User?.DisplayName) ? (s.User?.Username ?? "") : s.User!.DisplayName,
                 s.UserId == room.HostUserId,
-                false))
+                false,
+                !string.IsNullOrEmpty(s.User?.AvatarData)))
             .ToList();
 
         return new RoomStateDto(room.Id, room.Code, room.GameType, room.MaxSeats, (int)room.Status,

@@ -46,7 +46,7 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync();
 
         var displayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName;
-        return new LoginResponse(token.Token, token.ExpiresAt, user.Id, user.Username, displayName, user.IsAdmin);
+        return new LoginResponse(token.Token, token.ExpiresAt, user.Id, user.Username, displayName, user.IsAdmin, !string.IsNullOrEmpty(user.AvatarData));
     }
 
     [HttpPost("change-password")]
@@ -97,7 +97,40 @@ public class AuthController : ControllerBase
         var user = await _db.AppUsers.FindAsync(userId.Value);
         if (user == null) return Unauthorized();
         var displayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName;
-        return new MeResponse(user.Id, user.Username, displayName, user.IsAdmin);
+        return new MeResponse(user.Id, user.Username, displayName, user.IsAdmin, !string.IsNullOrEmpty(user.AvatarData));
+    }
+
+    [HttpPut("avatar")]
+    public async Task<IActionResult> SetAvatar([FromBody] UpdateAvatarRequest req)
+    {
+        var userId = (Guid?)HttpContext.Items["UserId"];
+        if (userId == null) return Unauthorized();
+        var user = await _db.AppUsers.FindAsync(userId.Value);
+        if (user == null) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(req?.DataUrl)) return BadRequest("Avatar không hợp lệ.");
+        if (!AvatarHelpers.TryParseDataUrl(req.DataUrl, out _, out var bytes))
+            return BadRequest("Định dạng ảnh không hỗ trợ (chỉ JPEG/PNG/WEBP).");
+        if (bytes.Length > AvatarHelpers.MaxAvatarBytes)
+            return BadRequest($"Avatar phải nhỏ hơn {AvatarHelpers.MaxAvatarBytes / 1024} KB.");
+
+        user.AvatarData = req.DataUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("avatar")]
+    public async Task<IActionResult> DeleteAvatar()
+    {
+        var userId = (Guid?)HttpContext.Items["UserId"];
+        if (userId == null) return Unauthorized();
+        var user = await _db.AppUsers.FindAsync(userId.Value);
+        if (user == null) return Unauthorized();
+        user.AvatarData = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 
     private string? ExtractToken()

@@ -177,17 +177,21 @@ export const api = {
   deleteGame: (id: string) => request<void>(`/games/${id}`, { method: 'DELETE' }),
 
   login: (username: string, password: string) =>
-    request<{ token: string; expiresAt: string; userId: string; username: string; displayName: string; isAdmin: boolean }>('/auth/login', {
+    request<{ token: string; expiresAt: string; userId: string; username: string; displayName: string; isAdmin: boolean; hasAvatar: boolean }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password })
     }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
-  me: () => request<{ userId: string; username: string; displayName: string; isAdmin: boolean }>('/auth/me'),
+  me: () => request<{ userId: string; username: string; displayName: string; isAdmin: boolean; hasAvatar: boolean }>('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword })
     }),
+  setMyAvatar: (dataUrl: string) =>
+    request<void>('/auth/avatar', { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
+  deleteMyAvatar: () => request<void>('/auth/avatar', { method: 'DELETE' }),
+  userAvatarUrl: (userId: string) => `${BASE}/users/${userId}/avatar`,
 
   listAdminUsers: () => request<AdminUser[]>('/admin/users'),
   createAdminUser: (req: { username: string; password: string; displayName?: string; isAdmin: boolean }) =>
@@ -232,6 +236,7 @@ export interface RoomSeat {
   displayName: string;
   isHost: boolean;
   isOnline: boolean;
+  hasAvatar: boolean;
 }
 
 export interface RoomState {
@@ -271,6 +276,7 @@ export interface MatchPlayerPublic {
   totalScore: number;
   whiteWinReason: string | null;
   whiteWinAccepted: boolean | null;
+  hasAvatar: boolean;
 }
 
 export interface MatchPublicState {

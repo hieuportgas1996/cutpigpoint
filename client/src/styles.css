@@ -779,3 +779,26 @@ tbody tr:last-child td { border-bottom: 0; }
   button:active, .btn:active { opacity: 0.85; }
   .leader-row:hover { transform: none; }
 }
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #E8C76A, #B8862E);
+  color: #2A1810;
+  font-weight: 800;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 3px solid #5A3320;
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

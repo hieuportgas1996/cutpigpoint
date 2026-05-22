@@ -172,7 +172,8 @@ public class RoomHub : Hub
             .Select(s => (
                 s.UserId,
                 DisplayName: string.IsNullOrWhiteSpace(s.User?.DisplayName) ? (s.User?.Username ?? "") : s.User!.DisplayName,
-                s.SeatIndex))
+                s.SeatIndex,
+                HasAvatar: !string.IsNullOrEmpty(s.User?.AvatarData)))
             .ToList();
         var match = _matches.Create(room.Id, fresh.HostUserId, matchPlayers);
 
@@ -475,7 +476,8 @@ public class RoomHub : Hub
                 p.PassedThisTrick,
                 p.TotalScore,
                 p.WhiteWinReason,
-                p.WhiteWinAccepted)).ToList(),
+                p.WhiteWinAccepted,
+                p.HasAvatar)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -506,7 +508,8 @@ public class RoomHub : Hub
                 s.User?.Username ?? "",
                 string.IsNullOrWhiteSpace(s.User?.DisplayName) ? (s.User?.Username ?? "") : s.User!.DisplayName,
                 s.UserId == room.HostUserId,
-                _presence.IsOnline(room.Id, s.UserId)))
+                _presence.IsOnline(room.Id, s.UserId),
+                !string.IsNullOrEmpty(s.User?.AvatarData)))
             .ToList();
 
         return new RoomStateDto(

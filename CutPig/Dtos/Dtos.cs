@@ -1,8 +1,8 @@
 namespace CutPig.Dtos;
 
 public record LoginRequest(string Username, string Password);
-public record LoginResponse(string Token, DateTime ExpiresAt, Guid UserId, string Username, string DisplayName, bool IsAdmin);
-public record MeResponse(Guid UserId, string Username, string DisplayName, bool IsAdmin);
+public record LoginResponse(string Token, DateTime ExpiresAt, Guid UserId, string Username, string DisplayName, bool IsAdmin, bool HasAvatar);
+public record MeResponse(Guid UserId, string Username, string DisplayName, bool IsAdmin, bool HasAvatar);
 
 public record AdminUserDto(Guid Id, string Username, string DisplayName, bool IsAdmin, DateTime CreatedAt);
 public record AdminCreateUserRequest(string Username, string Password, string? DisplayName, bool IsAdmin);
@@ -11,7 +11,7 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record CreateRoomRequest(int GameType, int MaxSeats);
 public record RoomSummaryDto(Guid Id, string Code, int GameType, int MaxSeats, int Status, int OccupiedSeats, string HostDisplayName, DateTime CreatedAt);
-public record RoomSeatDto(int SeatIndex, Guid UserId, string Username, string DisplayName, bool IsHost, bool IsOnline);
+public record RoomSeatDto(int SeatIndex, Guid UserId, string Username, string DisplayName, bool IsHost, bool IsOnline, bool HasAvatar);
 public record RoomStateDto(
     Guid Id,
     string Code,
@@ -34,7 +34,8 @@ public record MatchPlayerDto(
     bool PassedThisTrick,
     int TotalScore,
     string? WhiteWinReason,
-    bool? WhiteWinAccepted);
+    bool? WhiteWinAccepted,
+    bool HasAvatar);
 
 public record MatchPublicStateDto(
     Guid MatchId,
