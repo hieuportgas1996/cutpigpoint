@@ -293,7 +293,7 @@ export default function RoomPlayPage() {
             const bubble = seatBubbles[player.userId];
             return (
               <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''}`}>
-                {bubble && <div className="seat-chat-bubble">{bubble.text}</div>}
+                {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
                 <div className="tlmn-avatar">
                   {player.hasAvatar
                     ? <img src={api.userAvatarUrl(player.userId)} alt={player.displayName} />
