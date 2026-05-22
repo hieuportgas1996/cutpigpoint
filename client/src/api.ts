@@ -316,3 +316,15 @@ export interface MatchEnd {
   matchId: string;
   finalScores: RoundResultEntry[];
 }
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  displayName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface ChatHistory {
+  messages: ChatMessage[];
+}

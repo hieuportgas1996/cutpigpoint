@@ -21,9 +21,9 @@ export default function RoomPlayPage() {
   const toast = useToast();
   const { state } = useAuth();
   const {
-    status, state: room, matchState, privateHand, roundEnd, matchEnd, error,
+    status, state: room, matchState, privateHand, roundEnd, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
-    respondWhiteWin, cutNewTrick, declineTrickCut,
+    respondWhiteWin, cutNewTrick, declineTrickCut, sendChat,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -31,6 +31,10 @@ export default function RoomPlayPage() {
   const [viewportW, setViewportW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1024);
   const handAreaRef = useRef<HTMLDivElement | null>(null);
   const [handWidth, setHandWidth] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSeenCount, setChatSeenCount] = useState(0);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -50,6 +54,16 @@ export default function RoomPlayPage() {
   useEffect(() => {
     if (handAreaRef.current) setHandWidth(handAreaRef.current.offsetWidth);
   }, [handAreaRef.current]);
+
+  // Auto-scroll chat to bottom when new messages arrive and panel open
+  useEffect(() => {
+    if (chatOpen && chatListRef.current) {
+      chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+    }
+    if (chatOpen) setChatSeenCount(chatMessages.length);
+  }, [chatMessages.length, chatOpen]);
+
+  const unreadChat = Math.max(0, chatMessages.length - chatSeenCount);
 
   const isMobile = viewportW < 720;
   const cardSize: 'sm' | 'md' = isMobile ? 'sm' : 'md';
@@ -201,6 +215,14 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleSendChat() {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatInput('');
+    try { await sendChat(text); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   const tooltipMsg = !isMyTurn
     ? 'Chưa đến lượt bạn'
     : myCombo === null
@@ -227,6 +249,13 @@ export default function RoomPlayPage() {
           ) : (
             <div className="turn-timer" style={{ opacity: 0.4 }}>—</div>
           )}
+          <button
+            className="tlmn-btn ghost chat-toggle"
+            onClick={() => setChatOpen(o => !o)}
+            title="Chat trong phòng"
+          >
+            💬 {unreadChat > 0 && <span className="chat-unread">{unreadChat}</span>}
+          </button>
         </div>
 
         <div className="tlmn-table">
@@ -248,7 +277,7 @@ export default function RoomPlayPage() {
                     {player.userId === matchState.hostUserId && <span className="host-badge">CHỦ</span>}
                   </div>
                   <div className="tlmn-seat-meta">
-                    <span>🂠 {player.cardsLeft}</span>
+                    <span>🂠 {isMe ? player.cardsLeft : ''}</span>
                     <span className={`score-pill ${player.totalScore > 0 ? 'pos' : player.totalScore < 0 ? 'neg' : ''}`}>
                       {player.totalScore > 0 ? `+${player.totalScore}` : player.totalScore}
                     </span>
@@ -257,6 +286,11 @@ export default function RoomPlayPage() {
                     )}
                   </div>
                 </div>
+                {isTurn && (
+                  <div className={`tlmn-seat-timer ${turnLeftSec <= 10 ? 'low' : ''}`}>
+                    ⏱ {turnLeftSec}s
+                  </div>
+                )}
                 {player.passedThisTrick && !player.finalRank && (
                   <div className="tlmn-seat-pass">BỎ LƯỢT</div>
                 )}
@@ -455,6 +489,45 @@ export default function RoomPlayPage() {
               </div>
               <button className="tlmn-btn primary" onClick={() => navigate('/rooms')}>Về danh sách phòng</button>
             </div>
+          </div>
+        )}
+
+        {chatOpen && (
+          <div className="chat-panel">
+            <div className="chat-panel-header">
+              <span>💬 Chat phòng</span>
+              <button className="tlmn-btn ghost sm" onClick={() => setChatOpen(false)}>✕</button>
+            </div>
+            <div className="chat-panel-list" ref={chatListRef}>
+              {chatMessages.length === 0 ? (
+                <div className="muted small">Chưa có tin nhắn nào.</div>
+              ) : (
+                chatMessages.map(m => (
+                  <div key={m.id} className={`chat-msg ${m.userId === myUserId ? 'mine' : ''}`}>
+                    <div className="chat-msg-meta">
+                      <span className="chat-msg-name">{m.userId === myUserId ? 'Bạn' : m.displayName}</span>
+                      <span className="chat-msg-time muted small">
+                        {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="chat-msg-text">{m.text}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            <form
+              className="chat-panel-input"
+              onSubmit={e => { e.preventDefault(); handleSendChat(); }}
+            >
+              <input
+                type="text"
+                placeholder="Nhập tin nhắn…"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                maxLength={300}
+              />
+              <button type="submit" className="tlmn-btn primary sm" disabled={!chatInput.trim()}>Gửi</button>
+            </form>
           </div>
         )}
       </div>

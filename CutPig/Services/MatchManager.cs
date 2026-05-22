@@ -8,7 +8,7 @@ public class MatchManager
     private readonly ConcurrentDictionary<Guid, Match> _matchesByRoom = new();
     private readonly ConcurrentDictionary<Guid, object> _locks = new();
 
-    public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(30);
+    public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(45);
     public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(10);
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
 

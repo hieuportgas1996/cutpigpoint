@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { auth, CardDto, HUB_BASE, MatchEnd, MatchPublicState, PrivateHand, RoomState, RoundEnd } from '../api';
+import { auth, CardDto, ChatHistory, ChatMessage, HUB_BASE, MatchEnd, MatchPublicState, PrivateHand, RoomState, RoundEnd } from '../api';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
@@ -11,6 +11,7 @@ interface UseRoomConnectionResult {
   privateHand: PrivateHand | null;
   roundEnd: RoundEnd | null;
   matchEnd: MatchEnd | null;
+  chatMessages: ChatMessage[];
   error: string | null;
   takeSeat: (seatIndex: number) => Promise<void>;
   leaveSeat: () => Promise<void>;
@@ -22,6 +23,7 @@ interface UseRoomConnectionResult {
   respondWhiteWin: (accept: boolean) => Promise<void>;
   cutNewTrick: (cards: CardDto[]) => Promise<void>;
   declineTrickCut: () => Promise<void>;
+  sendChat: (text: string) => Promise<void>;
   requestMatchState: () => Promise<void>;
   clearRoundEnd: () => void;
   onGameStarted: (handler: (roomId: string) => void) => () => void;
@@ -34,6 +36,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   const [privateHand, setPrivateHand] = useState<PrivateHand | null>(null);
   const [roundEnd, setRoundEnd] = useState<RoundEnd | null>(null);
   const [matchEnd, setMatchEnd] = useState<MatchEnd | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
   const gameStartedHandlersRef = useRef<Set<(roomId: string) => void>>(new Set());
@@ -78,6 +81,18 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
 
     conn.on('MatchEnd', (e: MatchEnd) => {
       setMatchEnd(e);
+    });
+
+    conn.on('ChatHistory', (h: ChatHistory) => {
+      setChatMessages(h.messages ?? []);
+    });
+
+    conn.on('ChatMessage', (m: ChatMessage) => {
+      setChatMessages(prev => {
+        if (prev.some(x => x.id === m.id)) return prev;
+        const next = [...prev, m];
+        return next.length > 200 ? next.slice(next.length - 200) : next;
+      });
     });
 
     conn.onreconnecting(() => setStatus('reconnecting'));
@@ -182,6 +197,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('DeclineTrickCut');
   }, []);
 
+  const sendChat = useCallback(async (text: string) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('SendChat', text);
+  }, []);
+
   const requestMatchState = useCallback(async () => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -194,9 +215,9 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   }, []);
 
   return {
-    status, state, matchState, privateHand, roundEnd, matchEnd, error,
+    status, state, matchState, privateHand, roundEnd, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, respondWhiteWin, cutNewTrick, declineTrickCut,
-    requestMatchState, clearRoundEnd, onGameStarted
+    sendChat, requestMatchState, clearRoundEnd, onGameStarted
   };
 }

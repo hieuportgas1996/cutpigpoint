@@ -13,13 +13,15 @@ public class RoomHub : Hub
     private readonly AppDbContext _db;
     private readonly RoomPresenceTracker _presence;
     private readonly MatchManager _matches;
+    private readonly ChatStore _chat;
     private readonly ILogger<RoomHub> _logger;
 
-    public RoomHub(AppDbContext db, RoomPresenceTracker presence, MatchManager matches, ILogger<RoomHub> logger)
+    public RoomHub(AppDbContext db, RoomPresenceTracker presence, MatchManager matches, ChatStore chat, ILogger<RoomHub> logger)
     {
         _db = db;
         _presence = presence;
         _matches = matches;
+        _chat = chat;
         _logger = logger;
     }
 
@@ -50,6 +52,12 @@ public class RoomHub : Hub
 
         var state = BuildState(room);
         await Clients.OthersInGroup(GroupName(room.Id)).SendAsync("RoomState", state);
+
+        // Push recent chat history to caller
+        var history = _chat.Recent(room.Id, 50)
+            .Select(m => new ChatMessageDto(m.Id, m.UserId, m.DisplayName, m.Text, m.CreatedAt))
+            .ToList();
+        await Clients.Caller.SendAsync("ChatHistory", new ChatHistoryDto(history));
 
         // If a match exists for this room (in any active phase), push match state + private hand
         var match = _matches.GetByRoom(room.Id);
@@ -256,6 +264,25 @@ public class RoomHub : Hub
         }
     }
 
+    public async Task SendChat(string text)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        if (string.IsNullOrWhiteSpace(text)) return;
+        var trimmed = text.Trim();
+        if (trimmed.Length > 300) trimmed = trimmed[..300];
+
+        var displayName = string.IsNullOrWhiteSpace(auth.Value.User.DisplayName)
+            ? auth.Value.User.Username
+            : auth.Value.User.DisplayName;
+        var msg = _chat.Append(roomId.Value, auth.Value.UserId, displayName, trimmed);
+        var dto = new ChatMessageDto(msg.Id, msg.UserId, msg.DisplayName, msg.Text, msg.CreatedAt);
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("ChatMessage", dto);
+    }
+
     public async Task DeclineTrickCut()
     {
         var auth = await AuthenticateAsync();
@@ -423,6 +450,7 @@ public class RoomHub : Hub
             await _db.SaveChangesAsync();
         }
         _matches.Remove(match.RoomId);
+        _chat.Clear(match.RoomId);
     }
 
     private static MatchPublicStateDto BuildMatchPublic(Match m)
