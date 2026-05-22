@@ -393,6 +393,7 @@ public class RoomHub : Hub
     private async Task EmitRoundEndAsync(Match match)
     {
         var roundScores = _matches.ComputeRoundScores(match);
+        var chopExtras = _matches.GetRoundChopExtras(match);
         bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
         // Apply to total
         for (int i = 0; i < match.Players.Count; i++)
@@ -403,12 +404,14 @@ public class RoomHub : Hub
             .Select((p, _) =>
             {
                 int idx = match.Players.IndexOf(p);
+                int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
                     roundScores[idx],
                     p.TotalScore,
-                    p.WhiteWinReason);
+                    p.WhiteWinReason,
+                    chop);
             })
             .ToList();
 
@@ -439,7 +442,7 @@ public class RoomHub : Hub
     {
         var finalScores = match.Players
             .OrderByDescending(p => p.TotalScore)
-            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null))
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0))
             .ToList();
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 

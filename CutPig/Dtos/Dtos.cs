@@ -61,7 +61,7 @@ public record PlayMoveRequest(List<CardDto> Cards);
 public record ChatMessageDto(Guid Id, Guid UserId, string DisplayName, string Text, DateTime CreatedAt);
 public record ChatHistoryDto(List<ChatMessageDto> Messages);
 
-public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason);
+public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus);
 public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, List<RoundResultEntryDto> Results);
 public record MatchEndDto(Guid MatchId, List<RoundResultEntryDto> FinalScores);
 

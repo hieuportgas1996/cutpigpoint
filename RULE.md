@@ -94,13 +94,38 @@ Mỗi người **về trắng** ăn của mỗi người **không về trắng**
 
 ## Tính điểm ván thường (không về trắng)
 
-Theo rank kết thúc trong ván:
+### Điểm theo rank
 
 | Số người | Nhất | Nhì | Ba | Tư |
 |---|---|---|---|---|
 | 4 | +2 | +1 | -1 | -2 |
 | 3 | +2 | 0 | -2 | — |
 | 2 | +1 | -1 | — | — |
+
+### Thưởng "chặt heo" (cộng vào điểm ván)
+
+Mỗi combo "có chop value" đánh ra trong 1 trick được tích lại. Khi trick kết thúc (tất cả pass và trick reset, hoặc round end giữa trick), **người chặt cuối cùng** trong chain ăn toàn bộ pot từ **người bị chặt cuối cùng** (= người đánh combo bị chặt cuối). Các người ở giữa chain net 0.
+
+**Bảng chop value**:
+
+| Combo | Điểm |
+|---|---|
+| Heo đen (lá `2♠` / `2♣`) | 1 mỗi con |
+| Heo đỏ (lá `2♦` / `2♥`) | 2 mỗi con |
+| Đôi 2 | Cộng điểm 2 con (VD `2♠+2♥` = 1+2 = 3đ) |
+| 3 đôi thông | 3 |
+| Tứ quý non-2 | 4 |
+| 4 đôi thông | 5 |
+
+**Ví dụ chain**: P1 đánh `2♠` (1đ heo treo) → P2 đánh `2♥` (2đ treo) → P3 đánh 3-đôi-thông (3đ treo) → P4 đánh tứ quý.
+- Last cutter = P4. Người bị chặt cuối = P3.
+- Pot = 1+2+3 = 6 (sum chop value tất cả combo trước P4).
+- P3 **-6** (cho P4); P4 **+6**; P1, P2 net 0.
+
+**Lưu ý**:
+- Same-kind cũng tính: VD P1=`2♠`, P2=`2♥` (chặn same-kind), reset trick → P1 -1, P2 +1.
+- Sám 2 và tứ quý 2 unbeatable theo luật chặt heo → không bao giờ kích hoạt chop chain, không ai bị trừ.
+- Tứ quý không chặt được sám 2 / tứ quý 2 (nhưng chặt 3-đôi-thông, đôi 2, lá 2).
 
 ## Trận đấu nhiều ván
 

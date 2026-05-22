@@ -20,6 +20,7 @@ Stack: ASP.NET Core 6 + EF Core + SignalR + PostgreSQL · React + Vite + TypeScr
 - **CORS phải `AllowCredentials()`** cho SignalR; CORS origin lấy từ env `FRONTEND_ORIGIN` + localhost mặc định.
 - **Scoring**:
   - Online (TLMN): rank → +2/+1/-1/-2 (4 người), +2/0/-2 (3), +1/-1 (2). Cộng dồn `TotalScore` qua các ván trong cùng trận.
+  - **Chop-pig bonus**: mỗi trick, chain các combo có chop value (heo 1-2đ, 3-đôi-thông 3đ, tứ quý 4đ, 4-đôi-thông 5đ); last cutter ăn sum(chain[0..^1]) từ second-to-last. Cộng vào điểm ván (xem `ChopBonus` trong `RoundResultEntryDto`).
   - Về trắng zero-sum multi-winner: mỗi loser **-2 × số winner**, mỗi winner **+2 × số loser** (1 trắng / 3 thua → trắng +6, mỗi thua -2; 2 trắng / 2 thua → mỗi trắng +4, mỗi thua -4). Là **opt-in**: candidate có 10s chọn Có/Không, không ai chọn → chơi bình thường.
   - Legacy manual ([CutPig/Services/TienLenScoringService.cs](CutPig/Services/TienLenScoringService.cs)): validate round phải zero-sum (tổng = 0) và có cả score > 0 lẫn < 0.
 

@@ -73,6 +73,8 @@ public class MatchManager
         match.TrickCutDeadline = null;
         match.PendingTrickWinnerId = null;
         match.TrickCutCandidates.Clear();
+        match.TrickChopChain.Clear();
+        match.RoundChopExtra.Clear();
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -254,6 +256,7 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            RecordChopPlay(match, userId, combo);
             match.Status = MatchStatus.InProgress;
             match.TrickCutDeadline = null;
             match.PendingTrickWinnerId = null;
@@ -281,6 +284,7 @@ public class MatchManager
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
                 }
+                SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
                 match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                 return new PlayResult(combo, justFinished, true, match);
@@ -329,6 +333,7 @@ public class MatchManager
     {
         if (!match.PendingTrickWinnerId.HasValue) return;
         var ownerId = match.PendingTrickWinnerId.Value;
+        SettleTrickChopChain(match);
         match.CurrentTrick = null;
         match.CurrentTrickOwnerId = null;
         match.TrickCutDeadline = null;
@@ -391,6 +396,7 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            RecordChopPlay(match, userId, combo);
             // If player was previously passed in this trick but used 4-pair-run, clear pass flag (they're back in)
             if (TienLenComboEngine.IsFourPairRun(combo) && player.PassedThisTrick)
             {
@@ -417,6 +423,7 @@ public class MatchManager
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
                 }
+                SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
                 match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                 return new PlayResult(combo, justFinished, true, match);
@@ -449,6 +456,7 @@ public class MatchManager
                     current.Hand.Remove(smallest);
                     match.CurrentTrick = combo;
                     match.CurrentTrickOwnerId = userId;
+                    RecordChopPlay(match, userId, combo);
 
                     if (current.Hand.Count == 0)
                     {
@@ -466,6 +474,7 @@ public class MatchManager
                             p.FinalRank = match.FinishedCount;
                             match.FinishOrder.Add(p.UserId);
                         }
+                        SettleTrickChopChain(match);
                         match.Status = MatchStatus.WaitingNextRound;
                 match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                         return new PassResult(false, true, match);
@@ -509,6 +518,7 @@ public class MatchManager
                 }
                 else
                 {
+                    SettleTrickChopChain(match);
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
                     foreach (var p in match.Players) p.PassedThisTrick = false;
@@ -533,6 +543,43 @@ public class MatchManager
                 match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PassResult(newTrick, false, match);
         }
+    }
+
+    /// <summary>
+    /// Settle the chop-pig chain at end of trick: if chain has ≥2 entries, the second-to-last player
+    /// pays the sum of chopValue of chain[0..^1] to the last player. Intermediate players net zero.
+    /// Then clear the chain. Safe to call when chain is empty or has 1 entry (no-op).
+    /// </summary>
+    private static void SettleTrickChopChain(Match match)
+    {
+        var chain = match.TrickChopChain;
+        if (chain.Count >= 2)
+        {
+            var last = chain[^1];
+            var secondLast = chain[^2];
+            int pot = 0;
+            for (int i = 0; i < chain.Count - 1; i++) pot += chain[i].ChopValue;
+            if (pot > 0)
+            {
+                AddChopExtra(match, last.PlayerId, +pot);
+                AddChopExtra(match, secondLast.PlayerId, -pot);
+            }
+        }
+        chain.Clear();
+    }
+
+    private static void AddChopExtra(Match match, Guid playerId, int delta)
+    {
+        match.RoundChopExtra.TryGetValue(playerId, out var current);
+        match.RoundChopExtra[playerId] = current + delta;
+    }
+
+    /// <summary>Append a play to the chop chain (only if combo has nonzero chop value).</summary>
+    private static void RecordChopPlay(Match match, Guid playerId, Combo combo)
+    {
+        var value = TienLenComboEngine.ChopValue(combo);
+        if (value > 0)
+            match.TrickChopChain.Add((playerId, value));
     }
 
     /// <summary>Advance to next seat that is still active (not finished, not passed this trick).</summary>
@@ -566,12 +613,12 @@ public class MatchManager
         var n = match.Players.Count;
         var scores = new int[n];
 
-        // White-win path: each loser pays 2 per winner; winners share the total equally
+        // White-win path: each loser pays 2 per winner; winners share the total equally.
+        // (Chop-pig extras don't apply on white-win since the round ends before any trick is played.)
         var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
         if (winnerCount > 0)
         {
             int loserCount = n - winnerCount;
-            // Each loser pays 2 per winner; winners split the total equally.
             int perWinner = 2 * loserCount;
             int perLoser = -2 * winnerCount;
             for (int i = 0; i < n; i++)
@@ -581,7 +628,7 @@ public class MatchManager
             return scores;
         }
 
-        // Normal path
+        // Normal path: base rank score + chop-pig settlements from this round.
         int[] table = n switch
         {
             4 => new[] { 2, 1, -1, -2 },
@@ -593,9 +640,14 @@ public class MatchManager
         {
             var rank = (match.Players[i].FinalRank ?? n) - 1;
             scores[i] = table[Math.Clamp(rank, 0, table.Length - 1)];
+            if (match.RoundChopExtra.TryGetValue(match.Players[i].UserId, out var chop))
+                scores[i] += chop;
         }
         return scores;
     }
+
+    /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
+    public IReadOnlyDictionary<Guid, int> GetRoundChopExtras(Match match) => match.RoundChopExtra;
 }
 
 public record PlayResult(Combo Played, bool PlayerFinished, bool RoundEnded, Match Match);

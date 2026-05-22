@@ -479,6 +479,11 @@ export default function RoomPlayPage() {
                     <div className="match-end-name">
                       <div>{r.displayName}</div>
                       {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
+                      {r.chopBonus !== 0 && (
+                        <div className="white-win-reason">
+                          Chặt heo: {r.chopBonus > 0 ? `+${r.chopBonus}` : r.chopBonus}
+                        </div>
+                      )}
                     </div>
                     <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
                       {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}

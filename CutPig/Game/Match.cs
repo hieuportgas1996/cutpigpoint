@@ -44,6 +44,16 @@ public class Match
     public DateTime? TrickCutDeadline { get; set; }
     public Guid? PendingTrickWinnerId { get; set; } // owner of trick that just won, awaiting possible 4-pair-run cut
     public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
+
+    /// <summary>
+    /// Chop-pig chain for the current trick: sequence of (playerId, chopValue) for each play in this trick.
+    /// Cleared on trick reset. On settle: if chain.Count >= 2, the second-to-last player pays the sum of
+    /// chopValue of chain[0..^1] to the last player; intermediate players net zero.
+    /// </summary>
+    public List<(Guid PlayerId, int ChopValue)> TrickChopChain { get; init; } = new();
+
+    /// <summary>Accumulated chop-pig deltas per player across all tricks of the current round.</summary>
+    public Dictionary<Guid, int> RoundChopExtra { get; init; } = new();
 }
 
 // (round history persistence reserved for future phase)

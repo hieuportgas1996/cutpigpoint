@@ -174,7 +174,8 @@ Auth: `?access_token=<bearer>`. Sau khi connect, client gọi `JoinRoom(code)` �
 - **`Play(roomId, userId, cards)`**: validate (có trong tay, combo hợp lệ, chặn được, mở nước ván 1 chứa 3♠ **nếu 3♠ trong tay ai đó**), apply, clear PassedThisTrick nếu đánh 4 đôi thông, check round end (≤1 người còn bài) → set WaitingNextRound + NextRoundAt.
 - **`Pass(roomId, userId, isAutoPass=false)`**: set PassedThisTrick. Khi tất cả người khác đều pass: nếu ai còn 4 đôi thông trong tay → status `PendingTrickCut` + 5s window (xem `CutNewTrick` / `DeclineTrickCut`); nếu không → reset trick, turn về owner. Auto-pass khi mở nước = đánh lá nhỏ nhất.
 - **`CutNewTrick(userId, cards)`**: trong phase `PendingTrickCut`, player có 4 đôi thông đánh ra để chặn người sắp mở trick mới, giành lượt cho mình.
-- **`ComputeRoundScores(match)`**: white-win zero-sum multi-winner — mỗi loser **-2 × số winner**, mỗi winner **+2 × số loser** (ví dụ 4 người 1 trắng = trắng +6, mỗi người kia -2; 4 người 2 trắng = mỗi trắng +4, mỗi thua -4). Bình thường theo table rank: 4 người ±2/±1, 3 người +2/0/-2, 2 người +1/-1.
+- **`ComputeRoundScores(match)`**: white-win zero-sum multi-winner — mỗi loser **-2 × số winner**, mỗi winner **+2 × số loser** (ví dụ 4 người 1 trắng = trắng +6, mỗi người kia -2; 4 người 2 trắng = mỗi trắng +4, mỗi thua -4). Bình thường theo table rank: 4 người ±2/±1, 3 người +2/0/-2, 2 người +1/-1, **cộng thêm `RoundChopExtra[playerId]`** (chop-pig settlements tích lại từ các trick trong ván).
+- **Chop-pig chain**: `Match.TrickChopChain` track sequence (playerId, chopValue) cho trick hiện tại. Mỗi `Play` / `CutNewTrick` / auto-pass play smallest → push entry nếu `ChopValue(combo) > 0` (heo, 3-đôi-thông, tứ quý, 4-đôi-thông). Khi trick reset (allOthersPassed → reset, hoặc decline trick-cut, hoặc round end) → `SettleTrickChopChain`: nếu chain.Count ≥ 2, last cutter +sum(chain[0..^1]), second-to-last -sum. Pot dồn vào `RoundChopExtra` để cộng vào điểm ván.
 
 ## Avatar
 

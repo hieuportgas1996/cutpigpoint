@@ -116,6 +116,39 @@ public static class TienLenComboEngine
     /// <summary>True if this combo is a "4-pair-run" (4 đôi thông) — exempt from pass-tracking.</summary>
     public static bool IsFourPairRun(Combo c) => c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8;
 
+    /// <summary>
+    /// "Chop pig" points contributed by this combo when played. Used by chain settlement:
+    /// the last cutter in a trick collects the cumulative chop value of all previous combos
+    /// in the chain from the second-to-last player.
+    ///
+    /// - Lá 2 đen (♠/♣): 1; lá 2 đỏ (♦/♥): 2 (per card, summed for pair/triple/four 2).
+    /// - 3 đôi thông: 3.
+    /// - Tứ quý non-2: 4.
+    /// - 4 đôi thông: 5.
+    /// - Combo khác: 0.
+    /// </summary>
+    public static int ChopValue(Combo c)
+    {
+        // 2s (rank 15) as Single/Pair/Triple/Four — sum per-card pig value.
+        // Sám/tứ quý 2 are unbeatable per current rules so this will never settle, but compute anyway.
+        if (c.Cards.Count > 0 && c.Cards.All(card => card.Rank == 15)
+            && (c.Kind == ComboKind.Single || c.Kind == ComboKind.Pair
+                || c.Kind == ComboKind.Triple || c.Kind == ComboKind.Four))
+        {
+            return c.Cards.Sum(PigValue);
+        }
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 6) return 3; // 3 đôi thông
+        if (c.Kind == ComboKind.Four) return 4;                              // tứ quý non-2
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8) return 5;  // 4 đôi thông
+        return 0;
+    }
+
+    private static int PigValue(Card c)
+    {
+        if (c.Rank != 15) return 0;
+        return c.Suit == Suit.Spades || c.Suit == Suit.Clubs ? 1 : 2;
+    }
+
     /// <summary>True if hand contains 4 consecutive pairs (4 đôi thông) — used for trick-cut detection.</summary>
     public static bool HasFourPairRunInHand(IReadOnlyList<Card> hand)
     {

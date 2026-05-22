@@ -129,6 +129,7 @@ public class MatchTimerService : BackgroundService
     private async Task EmitRoundEndAsync(Match match, CancellationToken ct)
     {
         var roundScores = _matches.ComputeRoundScores(match);
+        var chopExtras = _matches.GetRoundChopExtras(match);
         bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
         for (int i = 0; i < match.Players.Count; i++)
             match.Players[i].TotalScore += roundScores[i];
@@ -138,12 +139,14 @@ public class MatchTimerService : BackgroundService
             .Select(p =>
             {
                 int idx = match.Players.IndexOf(p);
+                int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
                     roundScores[idx],
                     p.TotalScore,
-                    p.WhiteWinReason);
+                    p.WhiteWinReason,
+                    chop);
             })
             .ToList();
 

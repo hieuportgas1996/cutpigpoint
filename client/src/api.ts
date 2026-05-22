@@ -309,6 +309,7 @@ export interface RoundResultEntry {
   roundScore: number;
   totalScore: number;
   whiteWinReason: string | null;
+  chopBonus: number;
 }
 
 export interface RoundEnd {
