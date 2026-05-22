@@ -16,10 +16,11 @@ Stack: ASP.NET Core 6 + EF Core + SignalR + PostgreSQL · React + Vite + TypeScr
 - **Card combo logic ở 2 nơi**: server [CutPig/Game/TienLenCombo.cs](CutPig/Game/TienLenCombo.cs) là source of truth, client [client/src/game/cards.ts](client/src/game/cards.ts) là mirror cho UX. Đổi rule = sửa cả 2.
 - **Auth**: multi-user, admin tạo account đưa username/password cho người chơi (không self-signup). Token Bearer 8h trong bảng `AuthTokens`. `AuthMiddleware` chặn `/api/*` trừ `/api/auth/login` và `/hubs/*`. Bootstrap admin từ env `INITIAL_USERNAME`/`INITIAL_PASSWORD` (default `admin`/`admin`, `IsAdmin=true`).
 - **SignalR auth**: token gửi qua query string `?access_token=...` (không phải header). Hub [CutPig/Hubs/RoomHub.cs](CutPig/Hubs/RoomHub.cs) tự validate trong `AuthenticateAsync()`.
-- **Match state in-memory** trong `MatchManager` (Singleton) + `MatchTimerService` (HostedService) auto-pass 30s/lượt + auto-next-round 5s. Railway restart giữa ván = mất ván — chưa persist DB.
+- **Match state in-memory** trong `MatchManager` (Singleton) + `MatchTimerService` (HostedService) auto-pass 45s/lượt + auto-next-round 5s + auto-resolve `WhiteWinChoice` 10s + auto-finalize `PendingTrickCut` 5s. Railway restart giữa ván = mất ván — chưa persist DB.
 - **CORS phải `AllowCredentials()`** cho SignalR; CORS origin lấy từ env `FRONTEND_ORIGIN` + localhost mặc định.
 - **Scoring**:
-  - Online (TLMN): rank → +2/+1/-1/-2 (4 người), +2/0/-2 (3), +1/-1 (2); về trắng = +6 winner / -2 mỗi người khác. Cộng dồn `TotalScore` qua các ván trong cùng trận.
+  - Online (TLMN): rank → +2/+1/-1/-2 (4 người), +2/0/-2 (3), +1/-1 (2). Cộng dồn `TotalScore` qua các ván trong cùng trận.
+  - Về trắng zero-sum multi-winner: mỗi loser **-2 × số winner**, mỗi winner **+2 × số loser** (1 trắng / 3 thua → trắng +6, mỗi thua -2; 2 trắng / 2 thua → mỗi trắng +4, mỗi thua -4). Là **opt-in**: candidate có 10s chọn Có/Không, không ai chọn → chơi bình thường.
   - Legacy manual ([CutPig/Services/TienLenScoringService.cs](CutPig/Services/TienLenScoringService.cs)): validate round phải zero-sum (tổng = 0) và có cả score > 0 lẫn < 0.
 
 ## Cảnh báo bug đã gặp

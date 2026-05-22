@@ -168,11 +168,13 @@ Auth: `?access_token=<bearer>`. Sau khi connect, client gọi `JoinRoom(code)` �
 
 `Match` (in-memory) chứa: Players (gồm Hand, FinalRank, TotalScore cộng dồn, PassedThisTrick, WhiteWinReason), CurrentTurnSeatIndex, CurrentTrick + CurrentTrickOwnerId, Status (InProgress/WaitingNextRound/Finished), RoundNumber, PreviousRoundWinnerId, TurnDeadline, NextRoundAt.
 
-- **`Create(roomId, hostUserId, players)`**: deal lần 1 (13 lá/người, dư úp), detect về trắng; nếu có → status WaitingNextRound + NextRoundAt = now + 5s. Nếu không: chọn người đi đầu (giữ 3♠, fallback seat 0).
+- **`Create(roomId, hostUserId, players)`**: deal lần 1 (13 lá/người, dư úp), detect về trắng; nếu có ai → status `WhiteWinChoice` + `WhiteWinDeadline = now + 10s` (mỗi candidate Accept/Decline). Nếu không: chọn người đi đầu (giữ 3♠, fallback seat 0).
 - **`StartNextRound(roomId, hostUserId?)`**: tham số host nullable để cho phép timer service (system) trigger. Reset hand + flag, deal lại; người đi đầu = winner ván trước (PreviousRoundWinnerId).
+- **`RespondWhiteWin(userId, accept)`**: candidate chọn Có/Không trong phase `WhiteWinChoice`. Khi tất cả candidate đã chọn (hoặc timeout 10s qua `ResolveWhiteWinTimeout`): nếu **không ai accept** → clear WhiteWinReason, ván chơi bình thường; nếu **có** → end round với candidates accepted thắng.
 - **`Play(roomId, userId, cards)`**: validate (có trong tay, combo hợp lệ, chặn được, mở nước ván 1 chứa 3♠ **nếu 3♠ trong tay ai đó**), apply, clear PassedThisTrick nếu đánh 4 đôi thông, check round end (≤1 người còn bài) → set WaitingNextRound + NextRoundAt.
-- **`Pass(roomId, userId, isAutoPass=false)`**: set PassedThisTrick. Khi tất cả người khác đều pass → reset trick, turn về owner. Auto-pass khi mở nước = đánh lá nhỏ nhất.
-- **`ComputeRoundScores(match)`**: nếu có white-win → +6 cho người về trắng, -2 cho người khác. Còn lại theo table: 4 người ±2/±1, 3 người +2/0/-2, 2 người +1/-1.
+- **`Pass(roomId, userId, isAutoPass=false)`**: set PassedThisTrick. Khi tất cả người khác đều pass: nếu ai còn 4 đôi thông trong tay → status `PendingTrickCut` + 5s window (xem `CutNewTrick` / `DeclineTrickCut`); nếu không → reset trick, turn về owner. Auto-pass khi mở nước = đánh lá nhỏ nhất.
+- **`CutNewTrick(userId, cards)`**: trong phase `PendingTrickCut`, player có 4 đôi thông đánh ra để chặn người sắp mở trick mới, giành lượt cho mình.
+- **`ComputeRoundScores(match)`**: white-win zero-sum multi-winner — mỗi loser **-2 × số winner**, mỗi winner **+2 × số loser** (ví dụ 4 người 1 trắng = trắng +6, mỗi người kia -2; 4 người 2 trắng = mỗi trắng +4, mỗi thua -4). Bình thường theo table rank: 4 người ±2/±1, 3 người +2/0/-2, 2 người +1/-1.
 
 ## Avatar
 
