@@ -312,12 +312,17 @@ export interface RoundResultEntry {
   chopBonus: number;
   wonByThreeOfSpades: boolean;
   lostByThreeOfSpades: boolean;
+  judgeIsWinner: boolean;
+  judgeIsVictim: boolean;
+  judgeIsPardoned: boolean;
+  judgeHeldValue: number;
 }
 
 export interface RoundEnd {
   matchId: string;
   roundNumber: number;
   wasWhiteWin: boolean;
+  wasJudge: boolean;
   results: RoundResultEntry[];
 }
 

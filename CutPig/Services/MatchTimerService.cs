@@ -148,12 +148,16 @@ public class MatchTimerService : BackgroundService
                     p.WhiteWinReason,
                     chop,
                     p.FinishedWithThreeOfSpades,
-                    p.StuckWithThreeOfSpades);
+                    p.StuckWithThreeOfSpades,
+                    p.JudgeIsWinner,
+                    p.JudgeIsVictim,
+                    p.JudgeIsPardoned,
+                    p.JudgeHeldValue);
             })
             .ToList();
 
         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("RoundEnd",
-            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, entries), ct);
+            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries), ct);
         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), ct);
     }
 

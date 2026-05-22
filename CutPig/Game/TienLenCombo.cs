@@ -149,6 +149,47 @@ public static class TienLenComboEngine
         return c.Suit == Suit.Spades || c.Suit == Suit.Clubs ? 1 : 2;
     }
 
+    /// <summary>
+    /// Compute the "held value" of a hand for judge ("Phán xử") scoring: sum of pig points (per 2 card),
+    /// + 3 if hand contains 3 đôi thông (3 consecutive pair runs, no 2s),
+    /// + 4 if hand contains a tứ quý (any rank with 4 cards),
+    /// + 5 if hand contains 4 đôi thông (4 consecutive pair runs, no 2s).
+    /// Bonuses stack (a hand with both 3-pair-run and tứ quý held adds both).
+    /// </summary>
+    public static int ComputeHeldValue(IReadOnlyList<Card> hand)
+    {
+        int total = hand.Sum(PigValue);
+        // Tứ quý: any rank with 4 cards (including rank 15 — tứ quý 2)
+        if (hand.GroupBy(c => c.Rank).Any(g => g.Count() == 4))
+            total += 4;
+        // 4 đôi thông (4 consecutive pair runs, no 2s)
+        if (HasFourPairRunInHand(hand))
+            total += 5;
+        // 3 đôi thông (3 consecutive pair runs, no 2s)
+        else if (HasThreePairRunInHand(hand))
+            total += 3;
+        return total;
+    }
+
+    private static bool HasThreePairRunInHand(IReadOnlyList<Card> hand)
+    {
+        var pairRanks = hand
+            .Where(c => c.Rank != 15)
+            .GroupBy(c => c.Rank)
+            .Where(g => g.Count() >= 2)
+            .Select(g => g.Key)
+            .OrderBy(r => r)
+            .ToList();
+        if (pairRanks.Count < 3) return false;
+        for (int i = 0; i <= pairRanks.Count - 3; i++)
+        {
+            if (pairRanks[i + 1] == pairRanks[i] + 1
+                && pairRanks[i + 2] == pairRanks[i] + 2)
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>True if hand contains 4 consecutive pairs (4 đôi thông) — used for trick-cut detection.</summary>
     public static bool HasFourPairRunInHand(IReadOnlyList<Card> hand)
     {

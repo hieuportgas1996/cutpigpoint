@@ -23,6 +23,13 @@ public class MatchPlayer
     public bool? WhiteWinAccepted { get; set; } // null = chưa chọn, true = về trắng, false = từ chối
     public bool FinishedWithThreeOfSpades { get; set; } // last play that emptied the hand contained 3♠
     public bool StuckWithThreeOfSpades { get; set; }   // round ended while this player still held 3♠
+    public bool HasPlayedThisRound { get; set; }        // true once player has played at least 1 card this round
+
+    // Judge ("Phán xử") flags — set when 1st player finishes and ≥1 other has not played yet
+    public bool JudgeIsWinner { get; set; }             // true if this player triggered the judge by winning #1
+    public bool JudgeIsVictim { get; set; }             // true if this player is being judged (didn't play this round)
+    public bool JudgeIsPardoned { get; set; }           // true if Case B: judge fired but this player had already played
+    public int JudgeHeldValue { get; set; }             // pig/3-pair/four/4-pair value held when judged (only for victims)
 }
 
 public class Match
@@ -56,6 +63,9 @@ public class Match
 
     /// <summary>Accumulated chop-pig deltas per player across all tricks of the current round.</summary>
     public Dictionary<Guid, int> RoundChopExtra { get; init; } = new();
+
+    /// <summary>True if this round was decided by "Phán xử" (judge) — winner finished while ≥1 other player had not played yet.</summary>
+    public bool JudgeTriggered { get; set; }
 }
 
 // (round history persistence reserved for future phase)

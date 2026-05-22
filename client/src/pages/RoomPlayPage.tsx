@@ -468,7 +468,11 @@ export default function RoomPlayPage() {
             {roundEnd.wasWhiteWin && <Confetti active={true} />}
             <div className="match-end-card">
               <h2>
-                {roundEnd.wasWhiteWin ? '🌟 Có người về trắng!' : `🎉 Kết quả ván ${roundEnd.roundNumber}`}
+                {roundEnd.wasWhiteWin
+                  ? '🌟 Có người về trắng!'
+                  : roundEnd.wasJudge
+                  ? `⚖️ Phán xử — Ván ${roundEnd.roundNumber}`
+                  : `🎉 Kết quả ván ${roundEnd.roundNumber}`}
               </h2>
               <div className="match-end-list">
                 {roundEnd.results.map(r => (
@@ -489,6 +493,17 @@ export default function RoomPlayPage() {
                       )}
                       {r.lostByThreeOfSpades && (
                         <div className="white-win-reason">💀 Đui 3♠</div>
+                      )}
+                      {r.judgeIsWinner && (
+                        <div className="white-win-reason">⚖️ Người phán xử</div>
+                      )}
+                      {r.judgeIsVictim && (
+                        <div className="white-win-reason">
+                          ⚠️ Bị xử (giữ {r.judgeHeldValue}đ)
+                        </div>
+                      )}
+                      {r.judgeIsPardoned && (
+                        <div className="white-win-reason">😶 Tha (đã ra bài)</div>
                       )}
                     </div>
                     <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>

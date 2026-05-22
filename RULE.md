@@ -127,6 +127,40 @@ Mỗi combo "có chop value" đánh ra trong 1 trick được tích lại. Khi t
 - Sám 2 và tứ quý 2 unbeatable theo luật chặt heo → không bao giờ kích hoạt chop chain, không ai bị trừ.
 - Tứ quý không chặt được sám 2 / tứ quý 2 (nhưng chặt 3-đôi-thông, đôi 2, lá 2).
 
+### Phán xử (Judge)
+
+Khi **người về Nhất** vừa hết bài, server check các player còn lại: ai **chưa đánh ra lá nào** trong ván này (HasPlayedThisRound = false) → là **nạn nhân** (victim). Nếu có ≥ 1 victim → phán xử kích hoạt và **thay thế toàn bộ scoring** của ván (bỏ qua base rank, chop-pig, 3♠).
+
+**Điểm bị xử** = `4 + held` mỗi victim, với `held` = giá trị các bộ còn cầm trong tay:
+- Heo đen (`2♠` / `2♣`): 1 mỗi con.
+- Heo đỏ (`2♦` / `2♥`): 2 mỗi con.
+- Tứ quý (4 lá cùng rank, bất kỳ): +4.
+- 3 đôi thông: +3.
+- 4 đôi thông: +5 (nếu vừa có 4 đôi thông và tứ quý → cộng cả 2).
+
+**Người Nhất** ăn tổng điểm phạt của các victim.
+
+**Phân loại theo số victim / pardoned** (pardoned = player đã ra ít nhất 1 lá, không phải Nhất):
+
+| Case | Victim | Pardoned | Hành động | Điểm |
+|---|---|---|---|---|
+| A | tất cả còn lại | 0 | Kết thúc ván ngay | Mỗi victim -(4+held), Nhất +∑ |
+| B | còn 1 người đã ra bài | 1 | Kết thúc ván ngay | Mỗi victim -(4+held), pardoned **-1**, Nhất +∑+1 |
+| C | còn ≥2 người đã ra bài | ≥2 | Victim được set rank chót; pardoned **tiếp tục chơi** xác định Nhì/Ba | Victim -(4+held), Nhất +(4+held). Sau khi pardoned đánh xong: áp base rank +1/-1 (2 người) hoặc +2/0/-2 (3 người); chop-pig + 3♠ vẫn tính giữa các pardoned. |
+
+**Áp dụng với mọi n ≥ 2**. Không áp khi về trắng.
+
+**Ví dụ** (4 người, Case A — cả P1/P2/P3 chưa ra bài, P4 về Nhất):
+- P1: không cầm gì → -4.
+- P2: cầm 1 `2♥` → held=2, -(4+2) = **-6**.
+- P3: cầm 3 đôi thông → held=3, -(4+3) = **-7**.
+- P4: +4+6+7 = **+17**.
+
+**Ví dụ Case C** (P1 chưa ra, P2/P3 đã ra, P4 Nhất):
+- P1 victim, không cầm gì: **-4**.
+- P4 nhận **+4**.
+- P2 & P3 chơi tiếp; xong áp +1/-1 (P2 Nhì = +1, P3 Ba = -1) + chop-pig nếu có.
+
 ### Thưởng / phạt `3♠` cuối
 
 - **Thắng cuối bằng `3♠`** (về Nhất, lá cuối đánh ra chứa `3♠`): người Nhất **+(n-1)**, mỗi người khác **-1**. Zero-sum.

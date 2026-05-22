@@ -75,6 +75,7 @@ public class MatchManager
         match.TrickCutCandidates.Clear();
         match.TrickChopChain.Clear();
         match.RoundChopExtra.Clear();
+        match.JudgeTriggered = false;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -84,6 +85,11 @@ public class MatchManager
             p.WhiteWinAccepted = null;
             p.FinishedWithThreeOfSpades = false;
             p.StuckWithThreeOfSpades = false;
+            p.HasPlayedThisRound = false;
+            p.JudgeIsWinner = false;
+            p.JudgeIsVictim = false;
+            p.JudgeIsPardoned = false;
+            p.JudgeHeldValue = 0;
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.
@@ -258,6 +264,7 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            player.HasPlayedThisRound = true;
             RecordChopPlay(match, userId, combo);
             match.Status = MatchStatus.InProgress;
             match.TrickCutDeadline = null;
@@ -277,6 +284,9 @@ public class MatchManager
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
                 if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
                     player.FinishedWithThreeOfSpades = true;
+
+                if (CheckAndApplyJudge(match, userId))
+                    return new PlayResult(combo, justFinished, true, match);
             }
 
             var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
@@ -402,6 +412,7 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            player.HasPlayedThisRound = true;
             RecordChopPlay(match, userId, combo);
             // If player was previously passed in this trick but used 4-pair-run, clear pass flag (they're back in)
             if (TienLenComboEngine.IsFourPairRun(combo) && player.PassedThisTrick)
@@ -419,6 +430,10 @@ public class MatchManager
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
                 if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
                     player.FinishedWithThreeOfSpades = true;
+
+                // Phán xử: nếu Nhất về và còn player khác chưa ra bài
+                if (CheckAndApplyJudge(match, userId))
+                    return new PlayResult(combo, justFinished, true, match);
             }
 
             // Check round end (only one or zero active player remaining)
@@ -466,6 +481,7 @@ public class MatchManager
                     current.Hand.Remove(smallest);
                     match.CurrentTrick = combo;
                     match.CurrentTrickOwnerId = userId;
+                    current.HasPlayedThisRound = true;
                     RecordChopPlay(match, userId, combo);
 
                     if (current.Hand.Count == 0)
@@ -476,6 +492,9 @@ public class MatchManager
                         if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
                         if (smallest.Rank == 3 && smallest.Suit == Suit.Spades)
                             current.FinishedWithThreeOfSpades = true;
+
+                        if (CheckAndApplyJudge(match, userId))
+                            return new PassResult(false, true, match);
                     }
                     var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
                     if (remaining.Count <= 1)
@@ -557,6 +576,73 @@ public class MatchManager
                 match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PassResult(newTrick, false, match);
         }
+    }
+
+    /// <summary>
+    /// Check for "Phán xử" (judge) trigger after a player just finishes #1.
+    /// If any other active player has not played any card this round, switch the round into judge mode:
+    ///   - Mark winner JudgeIsWinner, victims JudgeIsVictim (with held value), pardoned JudgeIsPardoned.
+    ///   - Case A (0 pardoned) / Case B (1 pardoned): end the round immediately; assign FinalRank to all.
+    ///   - Case C (≥2 pardoned): only victims get final rank (= n, tied at last); pardoned continue playing.
+    /// Returns true if judge triggered the round to end (caller should stop further turn advancement).
+    /// </summary>
+    private static bool CheckAndApplyJudge(Match match, Guid winnerId)
+    {
+        // Already triggered? Skip.
+        if (match.JudgeTriggered) return false;
+        var winner = match.Players.FirstOrDefault(p => p.UserId == winnerId);
+        if (winner == null || winner.FinalRank != 1) return false;
+
+        // Collect victims: other players who haven't played yet
+        var others = match.Players.Where(p => p.UserId != winnerId).ToList();
+        var victims = others.Where(p => !p.HasPlayedThisRound).ToList();
+        if (victims.Count == 0) return false;
+
+        // Activate judge mode
+        match.JudgeTriggered = true;
+        winner.JudgeIsWinner = true;
+        foreach (var v in victims)
+        {
+            v.JudgeIsVictim = true;
+            v.JudgeHeldValue = TienLenComboEngine.ComputeHeldValue(v.Hand);
+        }
+        var pardoned = others.Where(p => p.HasPlayedThisRound).ToList();
+        foreach (var p in pardoned)
+            p.JudgeIsPardoned = true;
+
+        if (pardoned.Count >= 2)
+        {
+            // Case C: victims share the last rank; pardoned continue playing normally
+            int lastRank = match.Players.Count;
+            foreach (var v in victims)
+            {
+                v.FinalRank = lastRank;
+                match.FinishOrder.Add(v.UserId);
+                match.FinishedCount++;
+            }
+            return false; // round continues with pardoned playing
+        }
+
+        // Case A or B: end the round immediately. Pardoned (if any) gets rank 2, victims share last.
+        // Order: winner (1), pardoned (2 if exists), victims (tied at last).
+        int nextRank = 2;
+        foreach (var p in pardoned)
+        {
+            p.FinalRank = nextRank++;
+            match.FinishOrder.Add(p.UserId);
+            match.FinishedCount++;
+        }
+        int victimRank = nextRank;
+        foreach (var v in victims)
+        {
+            v.FinalRank = victimRank;
+            match.FinishOrder.Add(v.UserId);
+            match.FinishedCount++;
+        }
+        SettleTrickChopChain(match);
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        return true;
     }
 
     /// <summary>
@@ -642,6 +728,12 @@ public class MatchManager
             return scores;
         }
 
+        // Phán xử path: replaces base rank + chop-pig + 3♠ scoring entirely.
+        if (match.JudgeTriggered)
+        {
+            return ComputeJudgeScores(match);
+        }
+
         // Normal path: base rank score + chop-pig settlements + 3♠ bonus/penalty.
         int[] table = n switch
         {
@@ -686,6 +778,84 @@ public class MatchManager
 
     /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
     public IReadOnlyDictionary<Guid, int> GetRoundChopExtras(Match match) => match.RoundChopExtra;
+
+    /// <summary>
+    /// Judge ("Phán xử") scoring: each victim loses (4 + JudgeHeldValue). Winner gains the sum.
+    /// Pardoned players:
+    ///   - Case A (no pardoned): no extra.
+    ///   - Case B (1 pardoned): pardoned loses -1, winner +1.
+    ///   - Case C (≥2 pardoned): pardoned play a sub-round determining Nhì/Ba/... among themselves with
+    ///     standard rank scoring (+1/-1 for 2, +2/0/-2 for 3, etc.) plus chop-pig + 3♠ between them.
+    /// </summary>
+    private static int[] ComputeJudgeScores(Match match)
+    {
+        int n = match.Players.Count;
+        var scores = new int[n];
+        var winnerIdx = -1;
+
+        // Apply victim penalty
+        for (int i = 0; i < n; i++)
+        {
+            var p = match.Players[i];
+            if (p.JudgeIsWinner) winnerIdx = i;
+            if (p.JudgeIsVictim)
+            {
+                int penalty = 4 + p.JudgeHeldValue;
+                scores[i] -= penalty;
+                if (winnerIdx >= 0) scores[winnerIdx] += penalty;
+                else scores[Array.FindIndex(match.Players.ToArray(), x => x.JudgeIsWinner)] += penalty;
+            }
+        }
+        // (If winnerIdx was -1 above, the inner branch handles it; recompute for the next blocks.)
+        if (winnerIdx < 0) winnerIdx = Array.FindIndex(match.Players.ToArray(), x => x.JudgeIsWinner);
+
+        var pardoned = match.Players.Where(p => p.JudgeIsPardoned).ToList();
+
+        if (pardoned.Count == 1)
+        {
+            // Case B: pardoned -1, winner +1
+            int pi = match.Players.IndexOf(pardoned[0]);
+            scores[pi] -= 1;
+            scores[winnerIdx] += 1;
+        }
+        else if (pardoned.Count >= 2)
+        {
+            // Case C: sub-round among pardoned by their FinalRank.
+            // Sort pardoned by FinalRank ascending → assign sub-rank table.
+            var ordered = pardoned.OrderBy(p => p.FinalRank ?? int.MaxValue).ToList();
+            int m = ordered.Count;
+            int[] subTable = m switch
+            {
+                3 => new[] { 2, 0, -2 },
+                2 => new[] { 1, -1 },
+                _ => Enumerable.Range(0, m).Select(_ => 0).ToArray()
+            };
+            for (int k = 0; k < m; k++)
+            {
+                int idx = match.Players.IndexOf(ordered[k]);
+                scores[idx] += subTable[k];
+            }
+
+            // Chop-pig settlements only count for pardoned (their plays were tracked in chain).
+            // RoundChopExtra includes everyone, but victims didn't play so their delta is 0.
+            // Winner's chop-pig also shouldn't count (their plays were before judge fired) — but per user
+            // rule "Phán xử thay thế toàn bộ scoring", we exclude winner. Only pardoned chop deltas apply.
+            foreach (var p in pardoned)
+            {
+                int idx = match.Players.IndexOf(p);
+                if (match.RoundChopExtra.TryGetValue(p.UserId, out var chop))
+                    scores[idx] += chop;
+            }
+
+            // 3♠ bonus/penalty among pardoned (Nhất of the sub-round is whoever has FinalRank=2 overall).
+            // But user said "thắng cuối bằng 3♠" → applies to FinalRank=1 only, which is the judge winner —
+            // we already exclude winner. So 3♠ rules don't apply in sub-round.
+            // Chót 3♠: applies to FinalRank=n only, which here is the victim — also excluded.
+            // → no 3♠ adjustment.
+        }
+
+        return scores;
+    }
 }
 
 public record PlayResult(Combo Played, bool PlayerFinished, bool RoundEnded, Match Match);
