@@ -150,6 +150,8 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 
 **Áp dụng với mọi n ≥ 2**. Không áp khi về trắng.
 
+**Stack với 3♠**: Nếu người Nhất về bằng `3♠` cuối + có phán xử → **cộng thêm** thưởng 3♠ (`+(n-1)` cho Nhất, `-1` cho mỗi người khác) lên trên điểm phán xử. Đui 3♠ (Chót còn `3♠` trong tay) trong phán xử **không** tính.
+
 **Ví dụ** (4 người, Case A — cả P1/P2/P3 chưa ra bài, P4 về Nhất):
 - P1: không cầm gì → -4.
 - P2: cầm 1 `2♥` → held=2, -(4+2) = **-6**.

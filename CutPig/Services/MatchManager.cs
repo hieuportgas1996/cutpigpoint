@@ -837,22 +837,26 @@ public class MatchManager
             }
 
             // Chop-pig settlements only count for pardoned (their plays were tracked in chain).
-            // RoundChopExtra includes everyone, but victims didn't play so their delta is 0.
-            // Winner's chop-pig also shouldn't count (their plays were before judge fired) — but per user
-            // rule "Phán xử thay thế toàn bộ scoring", we exclude winner. Only pardoned chop deltas apply.
             foreach (var p in pardoned)
             {
                 int idx = match.Players.IndexOf(p);
                 if (match.RoundChopExtra.TryGetValue(p.UserId, out var chop))
                     scores[idx] += chop;
             }
-
-            // 3♠ bonus/penalty among pardoned (Nhất of the sub-round is whoever has FinalRank=2 overall).
-            // But user said "thắng cuối bằng 3♠" → applies to FinalRank=1 only, which is the judge winner —
-            // we already exclude winner. So 3♠ rules don't apply in sub-round.
-            // Chót 3♠: applies to FinalRank=n only, which here is the victim — also excluded.
-            // → no 3♠ adjustment.
         }
+
+        // Stack 3♠ bonus when the judge winner finished with 3♠ (applies on top of judge scoring).
+        var winner = match.Players[winnerIdx];
+        if (winner.FinishedWithThreeOfSpades)
+        {
+            int playerCount = match.Players.Count;
+            for (int i = 0; i < playerCount; i++)
+            {
+                if (i == winnerIdx) scores[i] += (playerCount - 1);
+                else scores[i] -= 1;
+            }
+        }
+        // Note: "đui 3♠" (Chót còn 3♠) is intentionally skipped in judge mode per rule.
 
         return scores;
     }
