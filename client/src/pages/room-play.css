@@ -263,22 +263,51 @@
   .room-play .tlmn-seat-timer { font-size: 10px; padding: 2px 7px; }
 }
 
-/* Chat toggle button + unread badge */
-.room-play .chat-toggle {
-  position: relative;
-  padding: 6px 12px;
+/* Floating chat button (visible regardless of header layout) */
+.room-play .chat-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--gold), #B8862E);
+  border: 3px solid #5A3320;
+  color: #2A1810;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
 }
-.room-play .chat-unread {
-  display: inline-block;
+
+.room-play .chat-fab:hover {
+  transform: scale(1.08);
+}
+
+.room-play .chat-fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   background: var(--red-tet);
   color: #fff;
+  border: 2px solid #2A1810;
   border-radius: 999px;
-  padding: 1px 6px;
-  font-size: 10px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
   font-weight: 800;
-  margin-left: 4px;
-  min-width: 16px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .room-play .chat-fab { right: 12px; bottom: 12px; width: 48px; height: 48px; font-size: 20px; }
 }
 
 /* Chat panel */

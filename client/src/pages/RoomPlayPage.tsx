@@ -249,14 +249,17 @@ export default function RoomPlayPage() {
           ) : (
             <div className="turn-timer" style={{ opacity: 0.4 }}>—</div>
           )}
-          <button
-            className="tlmn-btn ghost chat-toggle"
-            onClick={() => setChatOpen(o => !o)}
-            title="Chat trong phòng"
-          >
-            💬 {unreadChat > 0 && <span className="chat-unread">{unreadChat}</span>}
-          </button>
         </div>
+
+        <button
+          className="chat-fab"
+          onClick={() => setChatOpen(o => !o)}
+          title="Chat trong phòng"
+          aria-label="Mở chat"
+        >
+          💬
+          {unreadChat > 0 && <span className="chat-fab-badge">{unreadChat}</span>}
+        </button>
 
         <div className="tlmn-table">
           <MaiBranch corner="tl" />
