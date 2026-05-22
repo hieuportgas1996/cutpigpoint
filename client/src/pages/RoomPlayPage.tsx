@@ -6,7 +6,7 @@ import { useToast } from '../ui/Toast';
 import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
-import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun } from '../game/cards';
+import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, findFourPairRun } from '../game/cards';
 import { MatchStatus } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
@@ -23,6 +23,7 @@ export default function RoomPlayPage() {
   const {
     status, state: room, matchState, privateHand, roundEnd, matchEnd, error,
     playCards, passTurn, endMatch, clearRoundEnd,
+    respondWhiteWin, cutNewTrick, declineTrickCut,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -60,10 +61,12 @@ export default function RoomPlayPage() {
 
   // Auto-clear roundEnd when next round begins (server auto-advances)
   useEffect(() => {
-    if (matchState?.status === MatchStatus.InProgress && roundEnd) {
+    if (!roundEnd) return;
+    if (matchState?.status === MatchStatus.InProgress
+      || matchState?.status === MatchStatus.WhiteWinChoice) {
       clearRoundEnd();
     }
-  }, [matchState?.status, roundEnd, clearRoundEnd]);
+  }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
 
   const myUserId = state.status === 'authenticated' ? state.userId : '';
   const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
@@ -93,6 +96,20 @@ export default function RoomPlayPage() {
     (trickCombo === null || comboBeats(trickCombo, myCombo));
 
   const canPass = isMyTurn && trickCombo !== null;
+
+  const isWhiteWinChoicePhase = matchState?.status === MatchStatus.WhiteWinChoice;
+  const myWhiteWinReason = me?.whiteWinReason ?? null;
+  const myWhiteWinAccepted = me?.whiteWinAccepted ?? null;
+  const whiteWinLeftSec = matchState?.whiteWinDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.whiteWinDeadline).getTime() - now) / 1000))
+    : 0;
+
+  const isPendingTrickCut = matchState?.status === MatchStatus.PendingTrickCut;
+  const canCutTrick = isPendingTrickCut && (matchState?.trickCutCandidates ?? []).includes(myUserId);
+  const trickCutLeftSec = matchState?.trickCutDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.trickCutDeadline).getTime() - now) / 1000))
+    : 0;
+  const trickWinnerName = matchState?.players.find(p => p.userId === matchState.pendingTrickWinnerId)?.displayName ?? '';
 
   if (state.status !== 'authenticated') return null;
 
@@ -159,6 +176,31 @@ export default function RoomPlayPage() {
     }
   }
 
+  async function handleAcceptWhiteWin() {
+    try { await respondWhiteWin(true); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleDeclineWhiteWin() {
+    try { await respondWhiteWin(false); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleCutTrick() {
+    const fourPair = findFourPairRun(myHand);
+    if (!fourPair) {
+      toast.push('error', 'Không tìm thấy 4 đôi thông trong tay.');
+      return;
+    }
+    try { await cutNewTrick(fourPair.map(cardToDto)); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleDeclineCut() {
+    try { await declineTrickCut(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   const tooltipMsg = !isMyTurn
     ? 'Chưa đến lượt bạn'
     : myCombo === null
@@ -178,9 +220,13 @@ export default function RoomPlayPage() {
             <span className="muted small">Ván {matchState.roundNumber} · Mã</span>
             <code>{code}</code>
           </div>
-          <div className={`turn-timer ${turnLeftSec <= 5 ? 'low' : ''}`}>
-            ⏱ {turnLeftSec}s
-          </div>
+          {matchState.status === MatchStatus.InProgress ? (
+            <div className={`turn-timer ${turnLeftSec <= 5 ? 'low' : ''}`}>
+              ⏱ {turnLeftSec}s
+            </div>
+          ) : (
+            <div className="turn-timer" style={{ opacity: 0.4 }}>—</div>
+          )}
         </div>
 
         <div className="tlmn-table">
@@ -293,7 +339,69 @@ export default function RoomPlayPage() {
           )}
         </div>
 
-        {roundEnd && !matchEnd && (
+        {isWhiteWinChoicePhase && (
+          <div className="match-end-overlay">
+            <div className="match-end-card">
+              <h2>🌟 Có bộ về trắng</h2>
+              <div className="match-end-list">
+                {matchState.players.filter(p => p.whiteWinReason).map(p => (
+                  <div key={p.userId} className="match-end-row">
+                    <span className="rank-tag">★</span>
+                    <div className="match-end-name">
+                      <div>{p.userId === myUserId ? 'Bạn' : p.displayName}</div>
+                      <div className="white-win-reason">{p.whiteWinReason}</div>
+                    </div>
+                    <span className="muted small">
+                      {p.whiteWinAccepted === true ? '✓ Về trắng'
+                        : p.whiteWinAccepted === false ? '✗ Từ chối'
+                        : '… đang chọn'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {myWhiteWinReason && myWhiteWinAccepted === null ? (
+                <div className="match-end-actions">
+                  <div className="next-round-countdown">
+                    Bạn có <b>{myWhiteWinReason}</b> — về trắng để thắng ngay? ({whiteWinLeftSec}s)
+                  </div>
+                  <button className="tlmn-btn primary" onClick={handleAcceptWhiteWin}>✓ Về trắng</button>
+                  <button className="tlmn-btn ghost" onClick={handleDeclineWhiteWin}>✗ Đánh tiếp</button>
+                </div>
+              ) : (
+                <div className="match-end-actions">
+                  <div className="next-round-countdown">
+                    Đang chờ chọn… <b>{whiteWinLeftSec}s</b>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isPendingTrickCut && (
+          <div className="match-end-overlay" style={{ pointerEvents: canCutTrick ? 'auto' : 'none', background: 'rgba(0,0,0,0.35)' }}>
+            <div className="match-end-card" style={{ pointerEvents: 'auto' }}>
+              <h2>⚡ {trickWinnerName} sắp mở trick mới</h2>
+              {canCutTrick ? (
+                <>
+                  <div className="next-round-countdown">
+                    Bạn có 4 đôi thông — chặn để giành lượt? <b>{trickCutLeftSec}s</b>
+                  </div>
+                  <div className="match-end-actions">
+                    <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
+                    <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
+                  </div>
+                </>
+              ) : (
+                <div className="next-round-countdown">
+                  Đang chờ người có 4 đôi thông quyết định… <b>{trickCutLeftSec}s</b>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {roundEnd && !matchEnd && !isWhiteWinChoicePhase && (
           <div className="match-end-overlay">
             {roundEnd.wasWhiteWin && <Confetti active={true} />}
             <div className="match-end-card">

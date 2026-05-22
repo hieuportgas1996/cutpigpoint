@@ -33,7 +33,8 @@ public record MatchPlayerDto(
     int? FinalRank,
     bool PassedThisTrick,
     int TotalScore,
-    string? WhiteWinReason);
+    string? WhiteWinReason,
+    bool? WhiteWinAccepted);
 
 public record MatchPublicStateDto(
     Guid MatchId,
@@ -46,7 +47,11 @@ public record MatchPublicStateDto(
     DateTime TurnDeadline,
     DateTime? NextRoundAt,
     Guid HostUserId,
-    List<MatchPlayerDto> Players);
+    List<MatchPlayerDto> Players,
+    DateTime? WhiteWinDeadline,
+    DateTime? TrickCutDeadline,
+    Guid? PendingTrickWinnerId,
+    List<Guid>? TrickCutCandidates);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

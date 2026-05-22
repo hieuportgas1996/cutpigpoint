@@ -253,7 +253,13 @@ export interface CardDto {
   suit: number;
 }
 
-export const MatchStatus = { InProgress: 0, Finished: 1, WaitingNextRound: 2 } as const;
+export const MatchStatus = {
+  InProgress: 0,
+  Finished: 1,
+  WaitingNextRound: 2,
+  WhiteWinChoice: 3,
+  PendingTrickCut: 4,
+} as const;
 
 export interface MatchPlayerPublic {
   userId: string;
@@ -264,6 +270,7 @@ export interface MatchPlayerPublic {
   passedThisTrick: boolean;
   totalScore: number;
   whiteWinReason: string | null;
+  whiteWinAccepted: boolean | null;
 }
 
 export interface MatchPublicState {
@@ -278,6 +285,10 @@ export interface MatchPublicState {
   nextRoundAt: string | null;
   hostUserId: string;
   players: MatchPlayerPublic[];
+  whiteWinDeadline: string | null;
+  trickCutDeadline: string | null;
+  pendingTrickWinnerId: string | null;
+  trickCutCandidates: string[] | null;
 }
 
 export interface PrivateHand {

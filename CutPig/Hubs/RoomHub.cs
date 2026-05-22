@@ -51,9 +51,9 @@ public class RoomHub : Hub
         var state = BuildState(room);
         await Clients.OthersInGroup(GroupName(room.Id)).SendAsync("RoomState", state);
 
-        // If a match is in progress for this room, push match state + private hand
+        // If a match exists for this room (in any active phase), push match state + private hand
         var match = _matches.GetByRoom(room.Id);
-        if (match != null && match.Status == GameEngine.MatchStatus.InProgress)
+        if (match != null && match.Status != GameEngine.MatchStatus.Finished)
         {
             await Clients.Caller.SendAsync("MatchState", BuildMatchPublic(match));
             var player = match.Players.FirstOrDefault(p => p.UserId == auth.Value.UserId);
@@ -199,11 +199,80 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
         await SendPrivateHandsAsync(match);
 
-        // If white-win immediately again, emit round-end
         if (match.Status == MatchStatus.WaitingNextRound)
         {
             await EmitRoundEndAsync(match);
         }
+    }
+
+    public async Task RespondWhiteWin(bool accept)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.RespondWhiteWin(roomId.Value, auth.Value.UserId, accept);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        if (match.Status == MatchStatus.WaitingNextRound)
+        {
+            await EmitRoundEndAsync(match);
+        }
+    }
+
+    public async Task CutNewTrick(List<CardDto> cards)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        var parsed = cards.Select(c => new Card(c.Rank, (Suit)c.Suit)).ToList();
+        PlayResult result;
+        try
+        {
+            result = _matches.CutNewTrick(roomId.Value, auth.Value.UserId, parsed);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
+        var player = result.Match.Players.First(p => p.UserId == auth.Value.UserId);
+        await SendPrivateHandToUserAsync(roomId.Value, player);
+        if (result.RoundEnded)
+        {
+            await EmitRoundEndAsync(result.Match);
+        }
+    }
+
+    public async Task DeclineTrickCut()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.DeclineTrickCut(roomId.Value, auth.Value.UserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
     public async Task EndMatch()
@@ -377,7 +446,12 @@ public class RoomHub : Hub
                 p.FinalRank,
                 p.PassedThisTrick,
                 p.TotalScore,
-                p.WhiteWinReason)).ToList());
+                p.WhiteWinReason,
+                p.WhiteWinAccepted)).ToList(),
+            m.WhiteWinDeadline,
+            m.TrickCutDeadline,
+            m.PendingTrickWinnerId,
+            m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

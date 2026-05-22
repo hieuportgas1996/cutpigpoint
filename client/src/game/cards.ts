@@ -130,8 +130,14 @@ function isRunOfPairs(sorted: Card[]): boolean {
 }
 
 export function comboBeats(current: ComboInfo, next: ComboInfo): boolean {
-  // 4-pair-run beats everything
-  if (next.kind === 'runOfPairs' && next.cards.length === 8) return true;
+  // Sám 2 (triple of 2s) is unbeatable.
+  if (current.kind === 'triple' && current.cards[0].rank === 15) return false;
+
+  // 4-pair-run: beats only 1 con 2 / đôi 2 (NOT triple/four 2)
+  if (next.kind === 'runOfPairs' && next.cards.length === 8) {
+    if (current.kind === 'single' && current.cards[0].rank === 15) return true;
+    if (current.kind === 'pair' && current.cards[0].rank === 15) return true;
+  }
 
   // Tứ quý beats: 1 con 2, đôi 2, 3 đôi thông
   if (next.kind === 'four') {
@@ -151,6 +157,37 @@ export function comboBeats(current: ComboInfo, next: ComboInfo): boolean {
 
 export function isFourPairRun(combo: ComboInfo): boolean {
   return combo.kind === 'runOfPairs' && combo.cards.length === 8;
+}
+
+export function hasFourPairRunInHand(hand: Card[]): boolean {
+  return findFourPairRun(hand) !== null;
+}
+
+export function findFourPairRun(hand: Card[]): Card[] | null {
+  const byRank = new Map<number, Card[]>();
+  for (const c of hand) {
+    if (c.rank === 15) continue;
+    const arr = byRank.get(c.rank) ?? [];
+    arr.push(c);
+    byRank.set(c.rank, arr);
+  }
+  const pairRanks = [...byRank.entries()]
+    .filter(([, arr]) => arr.length >= 2)
+    .map(([rank]) => rank)
+    .sort((a, b) => a - b);
+  for (let i = 0; i + 3 < pairRanks.length; i++) {
+    if (pairRanks[i + 1] === pairRanks[i] + 1
+      && pairRanks[i + 2] === pairRanks[i] + 2
+      && pairRanks[i + 3] === pairRanks[i] + 3) {
+      const cards: Card[] = [];
+      for (let k = 0; k < 4; k++) {
+        const group = byRank.get(pairRanks[i + k])!;
+        cards.push(group[0], group[1]);
+      }
+      return cards.sort(compareCard);
+    }
+  }
+  return null;
 }
 
 export function cardFromDto(d: { rank: number; suit: number }): Card {

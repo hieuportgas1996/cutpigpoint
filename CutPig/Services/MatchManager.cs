@@ -9,6 +9,8 @@ public class MatchManager
     private readonly ConcurrentDictionary<Guid, object> _locks = new();
 
     public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(30);
+    public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(10);
+    public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -66,12 +68,17 @@ public class MatchManager
         match.CurrentTrickOwnerId = null;
         match.FinishedCount = 0;
         match.FinishOrder.Clear();
+        match.WhiteWinDeadline = null;
+        match.TrickCutDeadline = null;
+        match.PendingTrickWinnerId = null;
+        match.TrickCutCandidates.Clear();
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
             p.FinalRank = null;
             p.PassedThisTrick = false;
             p.WhiteWinReason = null;
+            p.WhiteWinAccepted = null;
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.
@@ -84,7 +91,7 @@ public class MatchManager
             p.Hand = p.Hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).ToList();
         }
 
-        // Detect white-win for each player
+        // Detect white-win candidates
         bool anyWhiteWin = false;
         foreach (var p in match.Players)
         {
@@ -98,26 +105,17 @@ public class MatchManager
 
         if (anyWhiteWin)
         {
-            // Immediately end round
-            // FinalRank: white-winners get rank 1 (tie if multiple), others share following ranks
-            int rank = 1;
-            foreach (var p in match.Players.Where(p => p.WhiteWinReason != null))
-            {
-                p.FinalRank = rank;
-                match.FinishOrder.Add(p.UserId);
-                match.FinishedCount++;
-            }
-            rank = match.FinishedCount + 1;
-            foreach (var p in match.Players.Where(p => p.WhiteWinReason == null))
-            {
-                p.FinalRank = rank++;
-                match.FinishOrder.Add(p.UserId);
-                match.FinishedCount++;
-            }
-            match.Status = MatchStatus.WaitingNextRound;
+            // Move to choice phase: each candidate must accept/decline
+            match.Status = MatchStatus.WhiteWinChoice;
+            match.WhiteWinDeadline = DateTime.UtcNow + WhiteWinChoiceTimeout;
             return;
         }
 
+        SetupFirstTurn(match, isFirstRound);
+    }
+
+    private static void SetupFirstTurn(Match match, bool isFirstRound)
+    {
         // Determine first turn
         int firstSeat;
         if (isFirstRound)
@@ -141,6 +139,212 @@ public class MatchManager
     public void Remove(Guid roomId)
     {
         _matchesByRoom.TryRemove(roomId, out _);
+    }
+
+    /// <summary>
+    /// Player chooses accept/decline white-win during WhiteWinChoice phase.
+    /// Returns true if the round was fully resolved (status changed to WaitingNextRound or InProgress).
+    /// </summary>
+    public Match RespondWhiteWin(Guid roomId, Guid userId, bool accept)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.Status != MatchStatus.WhiteWinChoice)
+                throw new InvalidOperationException("Không trong lúc chọn về trắng.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.WhiteWinReason == null)
+                throw new InvalidOperationException("Bạn không có bộ về trắng.");
+            if (player.WhiteWinAccepted.HasValue)
+                throw new InvalidOperationException("Đã chọn rồi.");
+
+            player.WhiteWinAccepted = accept;
+            TryResolveWhiteWinChoice(match);
+            return match;
+        }
+    }
+
+    /// <summary>Called by timer service when WhiteWinDeadline passes — treat unset as decline.</summary>
+    public Match? ResolveWhiteWinTimeout(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match)) return null;
+            if (match.Status != MatchStatus.WhiteWinChoice) return null;
+            foreach (var p in match.Players.Where(p => p.WhiteWinReason != null && !p.WhiteWinAccepted.HasValue))
+                p.WhiteWinAccepted = false;
+            TryResolveWhiteWinChoice(match);
+            return match;
+        }
+    }
+
+    private static void TryResolveWhiteWinChoice(Match match)
+    {
+        var candidates = match.Players.Where(p => p.WhiteWinReason != null).ToList();
+        if (candidates.Any(p => !p.WhiteWinAccepted.HasValue)) return; // còn người chưa chọn
+
+        var accepted = candidates.Where(p => p.WhiteWinAccepted == true).ToList();
+        match.WhiteWinDeadline = null;
+
+        if (accepted.Count == 0)
+        {
+            // Không ai về trắng → chơi bình thường, xoá WhiteWinReason để không tính điểm white-win
+            foreach (var p in candidates)
+            {
+                p.WhiteWinReason = null;
+                p.WhiteWinAccepted = null;
+            }
+            SetupFirstTurn(match, isFirstRound: match.RoundNumber == 1);
+            return;
+        }
+
+        // Có người về trắng → kết thúc ván ngay
+        // Người từ chối: clear reason, sẽ chia điểm như người không về trắng
+        foreach (var p in candidates.Where(p => p.WhiteWinAccepted != true))
+        {
+            p.WhiteWinReason = null;
+        }
+
+        int rank = 1;
+        foreach (var p in match.Players.Where(p => p.WhiteWinReason != null))
+        {
+            p.FinalRank = rank;
+            match.FinishOrder.Add(p.UserId);
+            match.FinishedCount++;
+        }
+        rank = match.FinishedCount + 1;
+        foreach (var p in match.Players.Where(p => p.WhiteWinReason == null))
+        {
+            p.FinalRank = rank++;
+            match.FinishOrder.Add(p.UserId);
+            match.FinishedCount++;
+        }
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+    }
+
+    /// <summary>
+    /// Player with 4-pair-run interrupts the trick reset to play it. Returns updated match.
+    /// </summary>
+    public PlayResult CutNewTrick(Guid roomId, Guid userId, IReadOnlyList<Card> cards)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.Status != MatchStatus.PendingTrickCut)
+                throw new InvalidOperationException("Không trong lúc chặn trick.");
+            if (!match.TrickCutCandidates.Contains(userId))
+                throw new InvalidOperationException("Bạn không có quyền chặn.");
+
+            var player = match.Players.First(p => p.UserId == userId);
+            foreach (var c in cards)
+                if (!player.Hand.Contains(c))
+                    throw new InvalidOperationException("Bài không có trong tay.");
+            var combo = TienLenComboEngine.Detect(cards)
+                ?? throw new InvalidOperationException("Bộ bài không hợp lệ.");
+            if (!TienLenComboEngine.IsFourPairRun(combo))
+                throw new InvalidOperationException("Chỉ được chặn bằng 4 đôi thông.");
+
+            // Apply: 4-pair-run beats the trick that just won (single 2 / pair 2)
+            // Replace current trick with the 4-pair-run, switch owner to cutter, resume play
+            foreach (var c in cards) player.Hand.Remove(c);
+            match.CurrentTrick = combo;
+            match.CurrentTrickOwnerId = userId;
+            match.Status = MatchStatus.InProgress;
+            match.TrickCutDeadline = null;
+            match.PendingTrickWinnerId = null;
+            match.TrickCutCandidates.Clear();
+            foreach (var p in match.Players) p.PassedThisTrick = false;
+            // Cutter is now "active" again
+            player.PassedThisTrick = false;
+
+            bool justFinished = false;
+            if (player.Hand.Count == 0)
+            {
+                match.FinishedCount++;
+                player.FinalRank = match.FinishedCount;
+                match.FinishOrder.Add(userId);
+                justFinished = true;
+                if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
+            }
+
+            var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
+            if (remaining.Count <= 1)
+            {
+                foreach (var p in remaining)
+                {
+                    match.FinishedCount++;
+                    p.FinalRank = match.FinishedCount;
+                    match.FinishOrder.Add(p.UserId);
+                }
+                match.Status = MatchStatus.WaitingNextRound;
+                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                return new PlayResult(combo, justFinished, true, match);
+            }
+
+            // Next turn after cutter
+            match.CurrentTurnSeatIndex = match.Players.FindIndex(p => p.UserId == userId);
+            AdvanceTurnSkippingPassed(match);
+            match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+            return new PlayResult(combo, justFinished, false, match);
+        }
+    }
+
+    /// <summary>Player declines to cut, or timer expires → finalize the trick reset.</summary>
+    public Match? ResolveTrickCutTimeout(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match)) return null;
+            if (match.Status != MatchStatus.PendingTrickCut) return null;
+            FinalizeTrickReset(match);
+            return match;
+        }
+    }
+
+    public Match DeclineTrickCut(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.Status != MatchStatus.PendingTrickCut)
+                throw new InvalidOperationException("Không trong lúc chặn trick.");
+            if (!match.TrickCutCandidates.Remove(userId))
+                throw new InvalidOperationException("Bạn không có quyền chặn.");
+
+            if (match.TrickCutCandidates.Count == 0)
+            {
+                FinalizeTrickReset(match);
+            }
+            return match;
+        }
+    }
+
+    private static void FinalizeTrickReset(Match match)
+    {
+        if (!match.PendingTrickWinnerId.HasValue) return;
+        var ownerId = match.PendingTrickWinnerId.Value;
+        match.CurrentTrick = null;
+        match.CurrentTrickOwnerId = null;
+        match.TrickCutDeadline = null;
+        match.PendingTrickWinnerId = null;
+        match.TrickCutCandidates.Clear();
+        match.Status = MatchStatus.InProgress;
+        foreach (var p in match.Players) p.PassedThisTrick = false;
+        var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+        if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
+        {
+            match.CurrentTurnSeatIndex = ownerSeat;
+        }
+        else
+        {
+            AdvanceTurnSkippingPassed(match);
+        }
+        match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
     }
 
     public PlayResult Play(Guid roomId, Guid userId, IReadOnlyList<Card> cards)
@@ -274,38 +478,58 @@ public class MatchManager
 
             current.PassedThisTrick = true;
 
-            // If all other active players passed → trick won by owner → reset
+            // If all other active players passed → trick won by owner
             bool allOthersPassed = match.Players.All(p =>
                 p.FinalRank.HasValue
                 || p.UserId == match.CurrentTrickOwnerId
                 || p.PassedThisTrick);
 
             bool newTrick = false;
+            bool pendingCut = false;
             if (allOthersPassed && match.CurrentTrickOwnerId.HasValue)
             {
+                // Check if any non-owner, non-finished player still holds 4-pair-run → offer trick-cut window
                 var ownerId = match.CurrentTrickOwnerId.Value;
-                match.CurrentTrick = null;
-                match.CurrentTrickOwnerId = null;
-                foreach (var p in match.Players) p.PassedThisTrick = false;
-                // Turn goes to trick owner (who must still be active)
-                var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
-                if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
+                var cutCandidates = match.Players
+                    .Where(p => p.UserId != ownerId
+                        && !p.FinalRank.HasValue
+                        && TienLenComboEngine.HasFourPairRunInHand(p.Hand))
+                    .Select(p => p.UserId)
+                    .ToList();
+
+                if (cutCandidates.Count > 0)
                 {
-                    match.CurrentTurnSeatIndex = ownerSeat;
+                    match.Status = MatchStatus.PendingTrickCut;
+                    match.PendingTrickWinnerId = ownerId;
+                    match.TrickCutCandidates.Clear();
+                    match.TrickCutCandidates.AddRange(cutCandidates);
+                    match.TrickCutDeadline = DateTime.UtcNow + TrickCutTimeout;
+                    pendingCut = true;
                 }
                 else
                 {
-                    // Owner already finished — advance from current seat
-                    AdvanceTurnSkippingPassed(match);
+                    match.CurrentTrick = null;
+                    match.CurrentTrickOwnerId = null;
+                    foreach (var p in match.Players) p.PassedThisTrick = false;
+                    var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+                    if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
+                    {
+                        match.CurrentTurnSeatIndex = ownerSeat;
+                    }
+                    else
+                    {
+                        AdvanceTurnSkippingPassed(match);
+                    }
+                    newTrick = true;
                 }
-                newTrick = true;
             }
             else
             {
                 AdvanceTurnSkippingPassed(match);
             }
 
-            match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+            if (!pendingCut)
+                match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PassResult(newTrick, false, match);
         }
     }
@@ -331,20 +555,27 @@ public class MatchManager
 
     public IEnumerable<Match> AllWaitingNextRound() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.WaitingNextRound);
 
+    public IEnumerable<Match> AllWhiteWinChoice() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.WhiteWinChoice);
+
+    public IEnumerable<Match> AllPendingTrickCut() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.PendingTrickCut);
+
     public int[] ComputeRoundScores(Match match)
     {
         // Returns score for each player in seat order
         var n = match.Players.Count;
         var scores = new int[n];
 
-        // White-win path
-        var winners = match.Players.Where(p => p.WhiteWinReason != null).ToList();
-        if (winners.Any())
+        // White-win path: each loser pays 2 per winner; winners share the total equally
+        var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
+        if (winnerCount > 0)
         {
+            int loserCount = n - winnerCount;
+            // Each loser pays 2 per winner; winners split the total equally.
+            int perWinner = 2 * loserCount;
+            int perLoser = -2 * winnerCount;
             for (int i = 0; i < n; i++)
             {
-                if (match.Players[i].WhiteWinReason != null) scores[i] = 6;
-                else scores[i] = -2;
+                scores[i] = match.Players[i].WhiteWinReason != null ? perWinner : perLoser;
             }
             return scores;
         }

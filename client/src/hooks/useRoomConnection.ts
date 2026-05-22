@@ -19,6 +19,9 @@ interface UseRoomConnectionResult {
   endMatch: () => Promise<void>;
   playCards: (cards: CardDto[]) => Promise<void>;
   passTurn: () => Promise<void>;
+  respondWhiteWin: (accept: boolean) => Promise<void>;
+  cutNewTrick: (cards: CardDto[]) => Promise<void>;
+  declineTrickCut: () => Promise<void>;
   requestMatchState: () => Promise<void>;
   clearRoundEnd: () => void;
   onGameStarted: (handler: (roomId: string) => void) => () => void;
@@ -161,6 +164,24 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('PassTurn');
   }, []);
 
+  const respondWhiteWin = useCallback(async (accept: boolean) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('RespondWhiteWin', accept);
+  }, []);
+
+  const cutNewTrick = useCallback(async (cards: CardDto[]) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('CutNewTrick', cards);
+  }, []);
+
+  const declineTrickCut = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('DeclineTrickCut');
+  }, []);
+
   const requestMatchState = useCallback(async () => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -175,6 +196,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   return {
     status, state, matchState, privateHand, roundEnd, matchEnd, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
-    playCards, passTurn, requestMatchState, clearRoundEnd, onGameStarted
+    playCards, passTurn, respondWhiteWin, cutNewTrick, declineTrickCut,
+    requestMatchState, clearRoundEnd, onGameStarted
   };
 }

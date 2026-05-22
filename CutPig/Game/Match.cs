@@ -4,7 +4,9 @@ public enum MatchStatus
 {
     InProgress = 0,
     Finished = 1,
-    WaitingNextRound = 2, // round ended, waiting for host to start next
+    WaitingNextRound = 2,        // round ended, waiting for host to start next
+    WhiteWinChoice = 3,          // round just dealt, white-win candidates choosing accept/decline
+    PendingTrickCut = 4,         // trick about to reset, but someone has 4-pair-run → giving them chance to cut
 }
 
 public class MatchPlayer
@@ -17,6 +19,7 @@ public class MatchPlayer
     public int TotalScore { get; set; } // cumulative across rounds
     public bool PassedThisTrick { get; set; }
     public string? WhiteWinReason { get; set; }
+    public bool? WhiteWinAccepted { get; set; } // null = chưa chọn, true = về trắng, false = từ chối
 }
 
 public class Match
@@ -36,6 +39,10 @@ public class Match
     public int RoundNumber { get; set; } = 1;
     public Guid? PreviousRoundWinnerId { get; set; }
     public DateTime? NextRoundAt { get; set; }
+    public DateTime? WhiteWinDeadline { get; set; }
+    public DateTime? TrickCutDeadline { get; set; }
+    public Guid? PendingTrickWinnerId { get; set; } // owner of trick that just won, awaiting possible 4-pair-run cut
+    public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
 }
 
 // (round history persistence reserved for future phase)

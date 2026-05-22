@@ -60,6 +60,42 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // White-win choice timeout → treat unset as decline, resolve
+                foreach (var match in _matches.AllWhiteWinChoice())
+                {
+                    if (!match.WhiteWinDeadline.HasValue || match.WhiteWinDeadline.Value > now) continue;
+                    try
+                    {
+                        var resolved = _matches.ResolveWhiteWinTimeout(match.RoomId);
+                        if (resolved == null) continue;
+                        await _hub.Clients.Group($"room:{resolved.RoomId}").SendAsync("MatchState", BuildPublic(resolved), stoppingToken);
+                        if (resolved.Status == MatchStatus.WaitingNextRound)
+                        {
+                            await EmitRoundEndAsync(resolved, stoppingToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "WhiteWin timeout resolve failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
+                // Trick-cut timeout → finalize trick reset
+                foreach (var match in _matches.AllPendingTrickCut())
+                {
+                    if (!match.TrickCutDeadline.HasValue || match.TrickCutDeadline.Value > now) continue;
+                    try
+                    {
+                        var resolved = _matches.ResolveTrickCutTimeout(match.RoomId);
+                        if (resolved == null) continue;
+                        await _hub.Clients.Group($"room:{resolved.RoomId}").SendAsync("MatchState", BuildPublic(resolved), stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "TrickCut timeout resolve failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
@@ -137,6 +173,11 @@ public class MatchTimerService : BackgroundService
                 p.FinalRank,
                 p.PassedThisTrick,
                 p.TotalScore,
-                p.WhiteWinReason)).ToList());
+                p.WhiteWinReason,
+                p.WhiteWinAccepted)).ToList(),
+            m.WhiteWinDeadline,
+            m.TrickCutDeadline,
+            m.PendingTrickWinnerId,
+            m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null);
     }
 }

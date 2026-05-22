@@ -37,13 +37,15 @@ Từ thấp đến cao: **♠ (bích) < ♣ (chuồn) < ♦ (rô) < ♥ (cơ)**
 
 ### Quy tắc chặt heo (cut)
 
-Các bộ đặc biệt **vượt loại** để chặt **con 2** hoặc đôi/sám/tứ quý 2:
+Các bộ đặc biệt **vượt loại** để chặt **con 2** hoặc đôi/sám 2:
 
 | Bộ chặt | Chặt được |
 |---|---|
 | **3 đôi thông** | 1 con 2 |
 | **Tứ quý** | 1 con 2, đôi 2, 3 đôi thông |
-| **4 đôi thông** | Tất cả (con 2, đôi 2, sám 2, tứ quý 2, 3 đôi thông) |
+| **4 đôi thông** | Tối đa **2 con 2** (1 con 2, hoặc đôi 2). **Không** chặt được sám 2 và tứ quý 2 (sám 2 là bộ mạnh nhất, không thể chặt). |
+
+**Lưu ý**: **Sám 2** là bộ mạnh nhất trong game, **không có bộ nào chặt được**.
 
 ### Quy tắc "phải có lượt" (turn order with pass tracking)
 
@@ -53,22 +55,42 @@ Các bộ đặc biệt **vượt loại** để chặt **con 2** hoặc đôi/s
 - Khi tất cả người khác đều pass → người đánh lá mạnh nhất thắng trick → **trick reset** → mọi người tham gia lại trick mới (bao gồm cả người đã pass).
 
 ### Ngoại lệ "4 đôi thông"
-- 4 đôi thông có thể đánh ra **bất kỳ lúc nào** trong lượt của mình, kể cả nếu đã pass trick này hoặc đối thủ đang đánh con 2.
-- Ví dụ: P1 đánh `2♥`, P2 đã pass trick này từ trước, nhưng **P2 vẫn được phép chặt** bằng 4 đôi thông.
+- 4 đôi thông có thể đánh ra **bất kỳ lúc nào** trong lượt của mình, kể cả nếu đã pass trick này hoặc đối thủ đang đánh con 2 / đôi 2.
+- Ví dụ: P1 đánh `2♥`, P2 đã pass trick này từ trước, nhưng **P2 vẫn được phép chặt** bằng 4 đôi thông (chặt 1 con 2).
+- **Chặn quyền mở trick mới**: khi một người vừa thắng trick (mọi người khác pass) và sắp được mở trick mới, người có 4 đôi thông trong tay **có nút "Chặn"** để ngắt, buộc trick hiện tại tiếp tục bằng 4 đôi thông của mình (chặt con 2 / đôi 2 vừa thắng trick).
+  - Nếu **không** bấm Chặn → người thắng trick mở trick mới như bình thường.
+  - Nếu bấm Chặn → đánh 4 đôi thông ra, đối thủ không có cách chặn lại (sám 2 không tồn tại trong tay đối thủ vì 4 con 2 đã ở đâu đó, và không có bộ nào khác chặn được 4 đôi thông).
+  - Cho phép trường hợp người chơi cố tình "giả vờ pass" để giấu 4 đôi thông, chờ thời điểm vàng.
 
 ## Về trắng (white-win)
 
-Sau khi chia bài, người chơi **tự động về trắng** (thắng ngay không cần đánh) nếu có **một trong** các bộ sau:
+Sau khi chia bài, người chơi **được quyền chọn về trắng** (thắng ngay không cần đánh) nếu có **một trong** các bộ sau:
 
 1. **Sảnh từ 3 đến A (12 lá)**: bất kỳ chất nào, mỗi rank 3,4,...,A xuất hiện đúng 1 lần.
 2. **Tứ quý 2**: cả 4 con `2♠ 2♣ 2♦ 2♥`.
 3. **6 đôi**: bất kỳ 6 đôi nào trong 13 lá.
 4. **5 đôi thông**: 5 đôi rank liên tiếp (không chứa 2).
 
+### Quyền chọn về trắng
+- Sau khi chia bài, nếu phát hiện bộ về trắng, người chơi được hỏi **"Về trắng?"** với 2 lựa chọn:
+  - **Có** → tự động thắng, ván kết thúc, tính điểm về trắng.
+  - **Không** → đánh tiếp như ván bình thường (mất quyền về trắng cho ván này).
+- Có timeout (ví dụ 10s) để chọn; hết giờ không chọn = **không** về trắng, đánh bình thường.
+
 ### Tính điểm về trắng
-- Người về trắng: **+6**.
-- Mỗi người khác: **-2**.
-- Ván kết thúc ngay sau khi chia, không đánh.
+
+Mỗi người **về trắng** ăn của mỗi người **không về trắng** **+2 điểm** (zero-sum).
+
+- **1 người về trắng**: người trắng +2 × (số người còn lại); mỗi người không trắng -2.
+  - Ví dụ 4 người, 1 trắng: trắng **+6**, mỗi người kia **-2**.
+  - Ví dụ 3 người, 1 trắng: trắng **+4**, mỗi người kia **-2**.
+  - Ví dụ 2 người, 1 trắng: trắng **+2**, người kia **-2**.
+- **Nhiều người cùng về trắng**: mỗi người không trắng đóng -2 cho mỗi người trắng; tổng điểm âm đó chia đều cho các người trắng.
+  - Ví dụ 4 người, 2 trắng + 2 không trắng: mỗi người không trắng **-2** (tổng -4 từ 2 người); 2 người trắng chia nhau **+4** → mỗi người trắng **+2**.
+  - Ví dụ 4 người, 3 trắng + 1 không trắng: người không trắng **-6** (-2 × 3 người trắng); 3 người trắng chia nhau **+6** → mỗi người trắng **+2**.
+- Ván kết thúc ngay sau khi (các) người chọn về trắng xác nhận, không đánh.
+
+**Lưu ý**: Nếu tất cả người có bộ về trắng đều **chọn không** về trắng → ván đánh bình thường, tính điểm theo bảng rank.
 
 ## Tính điểm ván thường (không về trắng)
 

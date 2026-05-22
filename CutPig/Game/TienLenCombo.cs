@@ -76,12 +76,21 @@ public static class TienLenComboEngine
 
     /// <summary>
     /// Returns true if "next" beats "current" according to TLMN rules.
+    /// Triple of 2 (sám 2) is the strongest combo — nothing beats it.
     /// </summary>
     public static bool Beats(Combo current, Combo next)
     {
-        // 4-pair-run beats everything (including 2s) — no restriction.
+        // Sám 2 (triple of 2s) is unbeatable.
+        if (current.Kind == ComboKind.Triple && current.Cards[0].Rank == 15)
+            return false;
+
+        // 4-pair-run: beats single 2 and pair of 2 only (NOT triple/four 2).
         if (next.Kind == ComboKind.RunOfPairs && next.Cards.Count == 8)
-            return true;
+        {
+            if (current.Kind == ComboKind.Single && current.Cards[0].Rank == 15) return true;
+            if (current.Kind == ComboKind.Pair && current.Cards[0].Rank == 15) return true;
+            // Same kind + length + higher top still applies below
+        }
 
         // Tứ quý beats: con 2, đôi 2, 3 đôi thông
         if (next.Kind == ComboKind.Four)
@@ -106,6 +115,27 @@ public static class TienLenComboEngine
 
     /// <summary>True if this combo is a "4-pair-run" (4 đôi thông) — exempt from pass-tracking.</summary>
     public static bool IsFourPairRun(Combo c) => c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8;
+
+    /// <summary>True if hand contains 4 consecutive pairs (4 đôi thông) — used for trick-cut detection.</summary>
+    public static bool HasFourPairRunInHand(IReadOnlyList<Card> hand)
+    {
+        var pairRanks = hand
+            .Where(c => c.Rank != 15)
+            .GroupBy(c => c.Rank)
+            .Where(g => g.Count() >= 2)
+            .Select(g => g.Key)
+            .OrderBy(r => r)
+            .ToList();
+        if (pairRanks.Count < 4) return false;
+        for (int i = 0; i <= pairRanks.Count - 4; i++)
+        {
+            if (pairRanks[i + 1] == pairRanks[i] + 1
+                && pairRanks[i + 2] == pairRanks[i] + 2
+                && pairRanks[i + 3] == pairRanks[i] + 3)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Detect ve-trang (white-win) hands. Returns reason string or null if not white-win.
