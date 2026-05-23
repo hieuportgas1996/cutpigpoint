@@ -476,7 +476,7 @@ export default function RoomPlayPage() {
           )}
         </div>
 
-        {isWhiteWinChoicePhase && (
+        {isWhiteWinChoicePhase && myWhiteWinReason && (
           <div className="match-end-overlay">
             <div className="match-end-card">
               <h2>🌟 Có bộ về trắng</h2>
@@ -496,7 +496,7 @@ export default function RoomPlayPage() {
                   </div>
                 ))}
               </div>
-              {myWhiteWinReason && myWhiteWinAccepted === null ? (
+              {myWhiteWinAccepted === null ? (
                 <div className="match-end-actions">
                   <div className="next-round-countdown">
                     Bạn có <b>{myWhiteWinReason}</b> — về trắng để thắng ngay? ({whiteWinLeftSec}s)
@@ -507,7 +507,9 @@ export default function RoomPlayPage() {
               ) : (
                 <div className="match-end-actions">
                   <div className="next-round-countdown">
-                    Đang chờ chọn… <b>{whiteWinLeftSec}s</b>
+                    {whiteWinLeftSec > 0
+                      ? <>Đang chờ người khác chọn… <b>{whiteWinLeftSec}s</b></>
+                      : <>Đang xử lý…</>}
                   </div>
                 </div>
               )}

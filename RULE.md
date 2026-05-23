@@ -75,7 +75,7 @@ Sau khi chia bài, người chơi **được quyền chọn về trắng** (th�
 - Sau khi chia bài, nếu phát hiện bộ về trắng, người chơi được hỏi **"Về trắng?"** với 2 lựa chọn:
   - **Có** → tự động thắng, ván kết thúc, tính điểm về trắng.
   - **Không** → đánh tiếp như ván bình thường (mất quyền về trắng cho ván này).
-- Có timeout (ví dụ 10s) để chọn; hết giờ không chọn = **không** về trắng, đánh bình thường.
+- Có timeout 20s để chọn; hết giờ không chọn = **không** về trắng, đánh bình thường.
 
 ### Tính điểm về trắng
 

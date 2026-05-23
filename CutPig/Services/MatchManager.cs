@@ -10,7 +10,7 @@ public class MatchManager
 
     public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(60);
     public static TimeSpan NextRoundDelay { get; } = TimeSpan.FromSeconds(20);
-    public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(10);
+    public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(20);
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
