@@ -816,20 +816,9 @@ public class MatchManager
             int winnerIdx = winnerJudge != null ? match.Players.IndexOf(winnerJudge) : -1;
             bool stack3s = winnerJudge?.FinishedWithThreeOfSpades ?? false;
 
-            // Recompute đui-3♠ delta inside Case C so UI can show it separately from judge penalty.
-            var pardonedForBreakdown = match.Players.Where(p => p.JudgeIsPardoned).OrderBy(p => p.FinalRank ?? int.MaxValue).ToList();
-            var stuckPardoned = pardonedForBreakdown.Count >= 2 && pardonedForBreakdown[^1].StuckWithThreeOfSpades
-                ? pardonedForBreakdown[^1]
-                : null;
-
             for (int i = 0; i < n; i++)
             {
                 int threeBonus = stack3s ? (i == winnerIdx ? (n - 1) : -1) : 0;
-                if (stuckPardoned != null)
-                {
-                    if (match.Players[i].UserId == stuckPardoned.UserId) threeBonus += -3;
-                    else if (match.Players[i].JudgeIsPardoned) threeBonus += 1;
-                }
                 int judgePart = judgeScores[i] - threeBonus;
                 result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, judgeScores[i]);
             }
@@ -942,18 +931,24 @@ public class MatchManager
                     scores[idx] += chop;
             }
 
-            // Đui 3♠ within the pardoned sub-round: the pardoned with the worst FinalRank who still
-            // holds 3♠ pays -3 to the other pardoned (+1 each within the sub-group, zero-sum among pardoned).
+            // Pardoned chót còn held (heo / 3-đôi / tứ quý / 4-đôi) → -held, mỗi pardoned khác chia đều +held
+            // (zero-sum trong nhóm pardoned). Held=0 không phạt thêm.
             var lastPardoned = ordered[^1];
-            if (lastPardoned.StuckWithThreeOfSpades)
+            int lastHeld = TienLenComboEngine.ComputeHeldValue(lastPardoned.Hand);
+            if (lastHeld > 0)
             {
                 int lastIdx = match.Players.IndexOf(lastPardoned);
-                scores[lastIdx] -= 3;
-                foreach (var p in pardoned)
+                scores[lastIdx] -= lastHeld;
+                var others = pardoned.Where(p => p.UserId != lastPardoned.UserId).ToList();
+                if (others.Count > 0)
                 {
-                    if (p.UserId == lastPardoned.UserId) continue;
-                    int idx = match.Players.IndexOf(p);
-                    scores[idx] += 1;
+                    int share = lastHeld / others.Count;
+                    int remainder = lastHeld % others.Count;
+                    for (int k = 0; k < others.Count; k++)
+                    {
+                        int idx = match.Players.IndexOf(others[k]);
+                        scores[idx] += share + (k < remainder ? 1 : 0);
+                    }
                 }
             }
         }
