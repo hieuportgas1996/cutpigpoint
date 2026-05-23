@@ -40,7 +40,7 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
     <div className="match-end-list">
       {round.results.map(r => {
         const parts = scoreBreakdownParts(r);
-        const held = r.heldDetails ?? [];
+        const held = round.wasWhiteWin ? [] : (r.heldDetails ?? []);
         return (
           <div key={r.userId} className="match-end-row">
             <span className="rank-tag">
