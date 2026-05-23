@@ -175,8 +175,8 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.
 - Sau mỗi ván:
   - Bảng kết quả ván hiển thị (rank, điểm ván, **tổng điểm cộng dồn** trong trận).
-  - **Đếm ngược 5 giây** rồi tự động sang ván tiếp.
-  - Host có nút **"Kết thúc trận"** trong 5s đó nếu muốn dừng hẳn (đóng phòng, broadcast `MatchEnd`).
+  - **Đếm ngược 20 giây** rồi tự động sang ván tiếp.
+  - Host có nút **"Bắt đầu ngay"** để skip countdown deal ván tiếp luôn, và nút **"Kết thúc trận"** nếu muốn dừng hẳn (đóng phòng, broadcast `MatchEnd`).
 - Ván tiếp:
   - Chia bài lại (13 lá/người, bài dư úp).
   - Detect về trắng lại; nếu lại có về trắng → ván tiếp đó kết thúc ngay, đếm tiếp 5s.
@@ -187,7 +187,7 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 
 ## Quy tắc khác
 
-- **Disconnect**: timer **45 giây/lượt**. Hết giờ không action → auto-pass. Auto-pass khi đang mở nước (không có trick để chặn) → tự động đánh lá nhỏ nhất trong tay.
+- **Disconnect**: timer **60 giây/lượt**. Hết giờ không action → auto-pass. Auto-pass khi đang mở nước (không có trick để chặn) → tự động đánh lá nhỏ nhất trong tay.
 - **Reconnect**: tay bài (`PrivateHand`) được gửi lại tự động sau khi connect lại; state ván vẫn còn (in-memory hiện tại — Railway restart giữa trận = mất ván).
 - **Host xoá phòng**: chỉ khi phòng đang chờ (`Waiting`). Phòng đang chơi không xoá được.
 - **Admin**: có thể xoá **bất kỳ phòng nào**, kể cả đang chơi hoặc đã kết thúc; cũng thấy được tất cả phòng (không chỉ phòng đang chờ).

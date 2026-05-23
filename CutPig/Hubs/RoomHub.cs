@@ -64,6 +64,7 @@ public class RoomHub : Hub
         if (match != null && match.Status != GameEngine.MatchStatus.Finished)
         {
             await Clients.Caller.SendAsync("MatchState", BuildMatchPublic(match));
+            await Clients.Caller.SendAsync("RoundHistory", new RoundHistoryDto(match.Id, match.RoundHistory.ToList()));
             var player = match.Players.FirstOrDefault(p => p.UserId == auth.Value.UserId);
             if (player != null)
             {
@@ -335,6 +336,7 @@ public class RoomHub : Hub
                 match.Id,
                 player.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList()));
         }
+        await Clients.Caller.SendAsync("RoundHistory", new RoundHistoryDto(match.Id, match.RoundHistory.ToList()));
         return BuildMatchPublic(match);
     }
 
@@ -393,6 +395,7 @@ public class RoomHub : Hub
     private async Task EmitRoundEndAsync(Match match)
     {
         var roundScores = _matches.ComputeRoundScores(match);
+        var breakdowns = _matches.ComputeRoundScoreBreakdowns(match);
         var chopExtras = _matches.GetRoundChopExtras(match);
         bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
         // Apply to total
@@ -405,6 +408,7 @@ public class RoomHub : Hub
             {
                 int idx = match.Players.IndexOf(p);
                 int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
+                var bd = breakdowns[idx];
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -417,12 +421,17 @@ public class RoomHub : Hub
                     p.JudgeIsWinner,
                     p.JudgeIsVictim,
                     p.JudgeIsPardoned,
-                    p.JudgeHeldValue);
+                    p.JudgeHeldValue,
+                    bd.BaseRank,
+                    bd.ThreeOfSpades,
+                    bd.Judge,
+                    bd.WhiteWin);
             })
             .ToList();
 
-        await Clients.Group(GroupName(match.RoomId)).SendAsync("RoundEnd",
-            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries));
+        var dto = new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries);
+        match.RoundHistory.Add(dto);
+        await Clients.Group(GroupName(match.RoomId)).SendAsync("RoundEnd", dto);
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
@@ -448,7 +457,7 @@ public class RoomHub : Hub
     {
         var finalScores = match.Players
             .OrderByDescending(p => p.TotalScore)
-            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0))
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0, 0, 0, 0, 0))
             .ToList();
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 

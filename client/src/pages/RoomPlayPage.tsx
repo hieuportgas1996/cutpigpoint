@@ -7,7 +7,7 @@ import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, findFourPairRun } from '../game/cards';
-import { api, MatchStatus } from '../api';
+import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
@@ -15,18 +15,76 @@ import './room-play.css';
 const SEAT_POSITIONS: Array<'bottom' | 'right' | 'top' | 'left'> = ['bottom', 'right', 'top', 'left'];
 const RANK_LABEL: Record<number, string> = { 1: 'Nhất', 2: 'Nhì', 3: 'Ba', 4: 'Tư' };
 
+function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
+  const parts: Array<{ label: string; value: number }> = [];
+  if (r.whiteWinDelta !== 0) parts.push({ label: '🌟 Về trắng', value: r.whiteWinDelta });
+  if (r.baseRankScore !== 0) parts.push({ label: `Hạng ${RANK_LABEL[r.finalRank] ?? r.finalRank}`, value: r.baseRankScore });
+  if (r.chopBonus !== 0) parts.push({ label: '🐷 Chặt heo', value: r.chopBonus });
+  if (r.judgeDelta !== 0) {
+    if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử (ăn)', value: r.judgeDelta });
+    else if (r.judgeIsVictim) parts.push({ label: `⚖️ Bị xử (4 + giữ ${r.judgeHeldValue})`, value: r.judgeDelta });
+    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Tha (đã ra bài)', value: r.judgeDelta });
+    else parts.push({ label: '⚖️ Phán xử', value: r.judgeDelta });
+  }
+  if (r.threeOfSpadesDelta !== 0) {
+    const label = r.wonByThreeOfSpades ? '🏆 Thắng cuối 3♠'
+      : r.lostByThreeOfSpades ? '💀 Đui 3♠'
+      : '3♠';
+    parts.push({ label, value: r.threeOfSpadesDelta });
+  }
+  return parts;
+}
+
+function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  return (
+    <div className="match-end-list">
+      {round.results.map(r => {
+        const parts = scoreBreakdownParts(r);
+        return (
+          <div key={r.userId} className="match-end-row">
+            <span className="rank-tag">
+              {r.whiteWinReason ? '★' : RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}
+            </span>
+            <div className="match-end-name">
+              <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+              {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
+              {parts.length > 0 && (
+                <div className="score-breakdown">
+                  {parts.map((p, i) => (
+                    <div key={i} className="score-breakdown-row">
+                      <span className="score-breakdown-label">{p.label}</span>
+                      <span className={`score-breakdown-value ${p.value > 0 ? 'pos' : p.value < 0 ? 'neg' : ''}`}>
+                        {p.value > 0 ? `+${p.value}` : p.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+              {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+            </span>
+            <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function RoomPlayPage() {
   const { id: code } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
   const { state } = useAuth();
   const {
-    status, state: room, matchState, privateHand, roundEnd, matchEnd, chatMessages, error,
+    status, state: room, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
-    respondWhiteWin, cutNewTrick, declineTrickCut, sendChat,
+    respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [viewportW, setViewportW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1024);
   const handAreaRef = useRef<HTMLDivElement | null>(null);
@@ -209,6 +267,14 @@ export default function RoomPlayPage() {
     }
   }
 
+  async function handleStartNextRoundNow() {
+    try {
+      await startNextRound();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    }
+  }
+
   async function handleAcceptWhiteWin() {
     try { await respondWhiteWin(true); }
     catch (e) { toast.push('error', (e as Error).message); }
@@ -268,6 +334,15 @@ export default function RoomPlayPage() {
           ) : (
             <div className="turn-timer" style={{ opacity: 0.4 }}>—</div>
           )}
+          <button
+            type="button"
+            className="tlmn-btn ghost sm history-toggle"
+            onClick={() => setHistoryOpen(true)}
+            title="Lịch sử các ván trong trận"
+            disabled={roundHistory.length === 0}
+          >
+            📜 Lịch sử {roundHistory.length > 0 && `(${roundHistory.length})`}
+          </button>
         </div>
 
         <button
@@ -474,51 +549,16 @@ export default function RoomPlayPage() {
                   ? `⚖️ Phán xử — Ván ${roundEnd.roundNumber}`
                   : `🎉 Kết quả ván ${roundEnd.roundNumber}`}
               </h2>
-              <div className="match-end-list">
-                {roundEnd.results.map(r => (
-                  <div key={r.userId} className="match-end-row">
-                    <span className="rank-tag">
-                      {r.whiteWinReason ? '★' : RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}
-                    </span>
-                    <div className="match-end-name">
-                      <div>{r.displayName}</div>
-                      {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
-                      {r.chopBonus !== 0 && (
-                        <div className="white-win-reason">
-                          Chặt heo: {r.chopBonus > 0 ? `+${r.chopBonus}` : r.chopBonus}
-                        </div>
-                      )}
-                      {r.wonByThreeOfSpades && (
-                        <div className="white-win-reason">🏆 Thắng cuối bằng 3♠</div>
-                      )}
-                      {r.lostByThreeOfSpades && (
-                        <div className="white-win-reason">💀 Đui 3♠</div>
-                      )}
-                      {r.judgeIsWinner && (
-                        <div className="white-win-reason">⚖️ Người phán xử</div>
-                      )}
-                      {r.judgeIsVictim && (
-                        <div className="white-win-reason">
-                          ⚠️ Bị xử (giữ {r.judgeHeldValue}đ)
-                        </div>
-                      )}
-                      {r.judgeIsPardoned && (
-                        <div className="white-win-reason">😶 Tha (đã ra bài)</div>
-                      )}
-                    </div>
-                    <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
-                      {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
-                    </span>
-                    <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
-                  </div>
-                ))}
-              </div>
+              <RoundResultRows round={roundEnd} myUserId={myUserId} />
               <div className="match-end-actions">
                 <div className="next-round-countdown">
                   🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
                 </div>
                 {isHost && (
-                  <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
+                  <>
+                    <button className="tlmn-btn primary" onClick={handleStartNextRoundNow}>▶ Bắt đầu ngay</button>
+                    <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
+                  </>
                 )}
               </div>
             </div>
@@ -542,6 +582,50 @@ export default function RoomPlayPage() {
                 ))}
               </div>
               <button className="tlmn-btn primary" onClick={() => navigate('/rooms')}>Về danh sách phòng</button>
+            </div>
+          </div>
+        )}
+
+        {historyOpen && (
+          <div className="match-end-overlay" onClick={() => setHistoryOpen(false)}>
+            <div className="match-end-card history-card" onClick={e => e.stopPropagation()}>
+              <div className="history-header">
+                <h2>📜 Lịch sử ván trong trận</h2>
+                <button className="tlmn-btn ghost sm" onClick={() => setHistoryOpen(false)} aria-label="Đóng">✕</button>
+              </div>
+              {roundHistory.length === 0 ? (
+                <div className="muted">Chưa có ván nào kết thúc.</div>
+              ) : (
+                <div className="history-list">
+                  {[...roundHistory].reverse().map(r => {
+                    const winner = r.results.find(x => x.finalRank === 1);
+                    const title = r.wasWhiteWin
+                      ? `Ván ${r.roundNumber} · 🌟 Về trắng`
+                      : r.wasJudge
+                      ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
+                      : `Ván ${r.roundNumber}${winner ? ` · ${winner.displayName} Nhất` : ''}`;
+                    return (
+                      <details key={`${r.matchId}-${r.roundNumber}`} className="history-item" open={r === roundHistory[roundHistory.length - 1]}>
+                        <summary className="history-item-summary">
+                          <span>{title}</span>
+                          <span className="history-item-scores">
+                            {r.results.map(x => (
+                              <span
+                                key={x.userId}
+                                className={`score-chip ${x.roundScore > 0 ? 'pos' : x.roundScore < 0 ? 'neg' : ''}`}
+                                title={x.displayName}
+                              >
+                                {x.displayName.split(' ').pop()}: {x.roundScore > 0 ? `+${x.roundScore}` : x.roundScore}
+                              </span>
+                            ))}
+                          </span>
+                        </summary>
+                        <RoundResultRows round={r} myUserId={myUserId} />
+                      </details>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

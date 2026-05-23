@@ -66,6 +66,7 @@ public class Match
 
     /// <summary>True if this round was decided by "Phán xử" (judge) — winner finished while ≥1 other player had not played yet.</summary>
     public bool JudgeTriggered { get; set; }
-}
 
-// (round history persistence reserved for future phase)
+    /// <summary>Snapshot of every round-end emitted in this match (in-memory only). Used so players can review past rounds at any time.</summary>
+    public List<Dtos.RoundEndDto> RoundHistory { get; init; } = new();
+}

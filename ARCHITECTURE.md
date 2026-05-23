@@ -143,13 +143,14 @@ Auth: `?access_token=<bearer>`. Sau khi connect, client gọi `JoinRoom(code)` �
 | `MatchState` | `MatchPublicStateDto` | Mỗi play/pass/round start. Chứa `roundNumber`, `currentTurnSeatIndex`, `currentTrick`, `turnDeadline`, `nextRoundAt`, `hostUserId`, players info (cards left, finalRank, passedThisTrick, totalScore, whiteWinReason). |
 | `PrivateHand` | `PrivateHandDto` (matchId, hand) | Send chỉ tới connections của user đó qua `Clients.Clients(connIds)`. |
 | `RoundEnd` | `RoundEndDto` (roundNumber, wasWhiteWin, results[]) | Hết ván (có cả tổng điểm dồn). |
+| `RoundHistory` | `RoundHistoryDto` (matchId, rounds[]) | Khi `JoinRoom`/`RequestMatchState`: gửi snapshot tất cả ván đã kết thúc trong trận hiện tại (in-memory). |
 | `MatchEnd` | `MatchEndDto` (finalScores[]) | Host kết thúc trận → đóng phòng. |
 
 ### Auto behaviors (`MatchTimerService`)
 - Mỗi 1 giây, scan:
   - **Active matches có `TurnDeadline < now`** → gọi `Pass(... isAutoPass: true)`. Nếu mở nước (không trick) → auto đánh lá nhỏ nhất.
   - **Matches `WaitingNextRound` có `NextRoundAt < now`** → gọi `StartNextRound(... null)` (system trigger) → deal lại + broadcast `MatchState` + `PrivateHand`.
-- `NextRoundAt` set = `now + 5s` mỗi khi round chuyển sang `WaitingNextRound`.
+- `NextRoundAt` set = `now + 20s` mỗi khi round chuyển sang `WaitingNextRound` (host có thể gọi `StartNextRound` để skip countdown).
 
 ## Card engine TLMN (`CutPig/Game/`)
 

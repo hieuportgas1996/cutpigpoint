@@ -156,6 +156,124 @@
   margin-top: 2px;
 }
 
+.room-play .history-toggle {
+  white-space: nowrap;
+}
+
+.room-play .history-card {
+  max-width: min(720px, 95vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-play .history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.room-play .history-header h2 {
+  margin: 0;
+}
+
+.room-play .history-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.room-play .history-item {
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.room-play .history-item-summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.room-play .history-item-summary::-webkit-details-marker {
+  display: none;
+}
+
+.room-play .history-item-summary::before {
+  content: '▸';
+  margin-right: 6px;
+  transition: transform 0.15s;
+  opacity: 0.6;
+}
+
+.room-play .history-item[open] > .history-item-summary::before {
+  transform: rotate(90deg);
+}
+
+.room-play .history-item-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.room-play .score-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-play .score-chip.pos {
+  color: var(--success, #6ee2a8);
+}
+
+.room-play .score-chip.neg {
+  color: var(--danger, #ff7373);
+}
+
+.room-play .score-breakdown {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-play .score-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--cream);
+  opacity: 0.85;
+}
+
+.room-play .score-breakdown-label {
+  color: var(--gold-soft);
+}
+
+.room-play .score-breakdown-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.room-play .score-breakdown-value.pos {
+  color: var(--success, #6ee2a8);
+}
+
+.room-play .score-breakdown-value.neg {
+  color: var(--danger, #ff7373);
+}
+
 .room-play .total-score {
   font-size: 11px;
   color: var(--cream);

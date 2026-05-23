@@ -85,7 +85,7 @@ function AppShell() {
               title="Đăng xuất"
               aria-label="Đăng xuất"
             >
-              <Icon name="flag" size={14} />
+              <Icon name="logout" size={14} />
               <span className="hide-mobile">Đăng xuất</span>
             </button>
           </div>

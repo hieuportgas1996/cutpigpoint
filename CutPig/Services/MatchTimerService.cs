@@ -129,6 +129,7 @@ public class MatchTimerService : BackgroundService
     private async Task EmitRoundEndAsync(Match match, CancellationToken ct)
     {
         var roundScores = _matches.ComputeRoundScores(match);
+        var breakdowns = _matches.ComputeRoundScoreBreakdowns(match);
         var chopExtras = _matches.GetRoundChopExtras(match);
         bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
         for (int i = 0; i < match.Players.Count; i++)
@@ -140,6 +141,7 @@ public class MatchTimerService : BackgroundService
             {
                 int idx = match.Players.IndexOf(p);
                 int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
+                var bd = breakdowns[idx];
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -152,12 +154,17 @@ public class MatchTimerService : BackgroundService
                     p.JudgeIsWinner,
                     p.JudgeIsVictim,
                     p.JudgeIsPardoned,
-                    p.JudgeHeldValue);
+                    p.JudgeHeldValue,
+                    bd.BaseRank,
+                    bd.ThreeOfSpades,
+                    bd.Judge,
+                    bd.WhiteWin);
             })
             .ToList();
 
-        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("RoundEnd",
-            new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries), ct);
+        var dto = new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries);
+        match.RoundHistory.Add(dto);
+        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("RoundEnd", dto, ct);
         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), ct);
     }
 

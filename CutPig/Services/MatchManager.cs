@@ -8,7 +8,8 @@ public class MatchManager
     private readonly ConcurrentDictionary<Guid, Match> _matchesByRoom = new();
     private readonly ConcurrentDictionary<Guid, object> _locks = new();
 
-    public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(45);
+    public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(60);
+    public static TimeSpan NextRoundDelay { get; } = TimeSpan.FromSeconds(20);
     public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(10);
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
 
@@ -233,7 +234,7 @@ public class MatchManager
             match.FinishedCount++;
         }
         match.Status = MatchStatus.WaitingNextRound;
-        match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
 
     /// <summary>
@@ -302,7 +303,7 @@ public class MatchManager
                 }
                 SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
-                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
                 return new PlayResult(combo, justFinished, true, match);
             }
 
@@ -450,7 +451,7 @@ public class MatchManager
                 }
                 SettleTrickChopChain(match);
                 match.Status = MatchStatus.WaitingNextRound;
-                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
                 return new PlayResult(combo, justFinished, true, match);
             }
 
@@ -509,7 +510,7 @@ public class MatchManager
                         }
                         SettleTrickChopChain(match);
                         match.Status = MatchStatus.WaitingNextRound;
-                match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
                         return new PassResult(false, true, match);
                     }
                     AdvanceTurnSkippingPassed(match);
@@ -641,7 +642,7 @@ public class MatchManager
         }
         SettleTrickChopChain(match);
         match.Status = MatchStatus.WaitingNextRound;
-        match.NextRoundAt = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
         return true;
     }
 
@@ -778,6 +779,85 @@ public class MatchManager
 
     /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
     public IReadOnlyDictionary<Guid, int> GetRoundChopExtras(Match match) => match.RoundChopExtra;
+
+    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int Total);
+
+    /// <summary>Per-player breakdown of the round score by component (for UI display).</summary>
+    public RoundScoreBreakdown[] ComputeRoundScoreBreakdowns(Match match)
+    {
+        int n = match.Players.Count;
+        var result = new RoundScoreBreakdown[n];
+
+        var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
+        if (winnerCount > 0)
+        {
+            int loserCount = n - winnerCount;
+            int perWinner = 2 * loserCount;
+            int perLoser = -2 * winnerCount;
+            for (int i = 0; i < n; i++)
+            {
+                int v = match.Players[i].WhiteWinReason != null ? perWinner : perLoser;
+                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, v, v);
+            }
+            return result;
+        }
+
+        if (match.JudgeTriggered)
+        {
+            var judgeScores = ComputeJudgeScores(match);
+            var winnerJudge = match.Players.FirstOrDefault(p => p.JudgeIsWinner);
+            int winnerIdx = winnerJudge != null ? match.Players.IndexOf(winnerJudge) : -1;
+            bool stack3s = winnerJudge?.FinishedWithThreeOfSpades ?? false;
+
+            for (int i = 0; i < n; i++)
+            {
+                int threeBonus = stack3s ? (i == winnerIdx ? (n - 1) : -1) : 0;
+                int judgePart = judgeScores[i] - threeBonus;
+                result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, judgeScores[i]);
+            }
+            return result;
+        }
+
+        int[] table = n switch
+        {
+            4 => new[] { 2, 1, -1, -2 },
+            3 => new[] { 2, 0, -2 },
+            2 => new[] { 1, -1 },
+            _ => Enumerable.Range(0, n).Select(_ => 0).ToArray()
+        };
+
+        var baseRank = new int[n];
+        var chop = new int[n];
+        var three = new int[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            var rank = (match.Players[i].FinalRank ?? n) - 1;
+            baseRank[i] = table[Math.Clamp(rank, 0, table.Length - 1)];
+            if (match.RoundChopExtra.TryGetValue(match.Players[i].UserId, out var chopVal))
+                chop[i] = chopVal;
+        }
+
+        var winner = match.Players.FirstOrDefault(p => p.FinalRank == 1 && p.FinishedWithThreeOfSpades);
+        if (winner != null)
+        {
+            for (int i = 0; i < n; i++)
+                three[i] += (match.Players[i].UserId == winner.UserId) ? (n - 1) : -1;
+        }
+        var loser = match.Players.FirstOrDefault(p => p.FinalRank == n && p.StuckWithThreeOfSpades);
+        if (loser != null)
+        {
+            for (int i = 0; i < n; i++)
+                three[i] += (match.Players[i].UserId == loser.UserId) ? -3 : 1;
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            int total = baseRank[i] + chop[i] + three[i];
+            result[i] = new RoundScoreBreakdown(baseRank[i], chop[i], three[i], 0, 0, total);
+        }
+        return result;
+    }
 
     /// <summary>
     /// Judge ("Phán xử") scoring: each victim loses (4 + JudgeHeldValue). Winner gains the sum.

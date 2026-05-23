@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { auth, CardDto, ChatHistory, ChatMessage, HUB_BASE, MatchEnd, MatchPublicState, PrivateHand, RoomState, RoundEnd } from '../api';
+import { auth, CardDto, ChatHistory, ChatMessage, HUB_BASE, MatchEnd, MatchPublicState, PrivateHand, RoomState, RoundEnd, RoundHistory } from '../api';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
@@ -10,6 +10,7 @@ interface UseRoomConnectionResult {
   matchState: MatchPublicState | null;
   privateHand: PrivateHand | null;
   roundEnd: RoundEnd | null;
+  roundHistory: RoundEnd[];
   matchEnd: MatchEnd | null;
   chatMessages: ChatMessage[];
   error: string | null;
@@ -35,6 +36,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   const [matchState, setMatchState] = useState<MatchPublicState | null>(null);
   const [privateHand, setPrivateHand] = useState<PrivateHand | null>(null);
   const [roundEnd, setRoundEnd] = useState<RoundEnd | null>(null);
+  const [roundHistory, setRoundHistory] = useState<RoundEnd[]>([]);
   const [matchEnd, setMatchEnd] = useState<MatchEnd | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -77,10 +79,23 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
 
     conn.on('RoundEnd', (e: RoundEnd) => {
       setRoundEnd(e);
+      setRoundHistory(prev => {
+        if (prev.some(r => r.matchId === e.matchId && r.roundNumber === e.roundNumber)) return prev;
+        return [...prev, e];
+      });
+    });
+
+    conn.on('RoundHistory', (h: RoundHistory) => {
+      setRoundHistory(h.rounds ?? []);
     });
 
     conn.on('MatchEnd', (e: MatchEnd) => {
       setMatchEnd(e);
+    });
+
+    conn.on('GameStarted', () => {
+      // New match starts → reset history of previous match.
+      setRoundHistory([]);
     });
 
     conn.on('ChatHistory', (h: ChatHistory) => {
@@ -215,7 +230,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   }, []);
 
   return {
-    status, state, matchState, privateHand, roundEnd, matchEnd, chatMessages, error,
+    status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted

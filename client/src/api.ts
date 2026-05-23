@@ -316,6 +316,10 @@ export interface RoundResultEntry {
   judgeIsVictim: boolean;
   judgeIsPardoned: boolean;
   judgeHeldValue: number;
+  baseRankScore: number;
+  threeOfSpadesDelta: number;
+  judgeDelta: number;
+  whiteWinDelta: number;
 }
 
 export interface RoundEnd {
@@ -329,6 +333,11 @@ export interface RoundEnd {
 export interface MatchEnd {
   matchId: string;
   finalScores: RoundResultEntry[];
+}
+
+export interface RoundHistory {
+  matchId: string;
+  rounds: RoundEnd[];
 }
 
 export interface ChatMessage {
