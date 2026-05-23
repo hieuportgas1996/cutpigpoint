@@ -15,6 +15,24 @@ import './room-play.css';
 const SEAT_POSITIONS: Array<'bottom' | 'right' | 'top' | 'left'> = ['bottom', 'right', 'top', 'left'];
 const RANK_LABEL: Record<number, string> = { 1: 'Nhất', 2: 'Nhì', 3: 'Ba', 4: 'Tư' };
 
+const STICKER_PREFIX = '::sticker:';
+const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string }> = [
+  { code: 'sos', emoji: '🆘', label: 'SOS', hint: 'Báo sắp xử' },
+  { code: 'no-kill', emoji: '🙏', label: 'Không giết', hint: 'Không xử đâu' },
+  { code: 'go-away', emoji: '👋', label: 'Bỏ đi nhỏ', hint: 'Pass đi nào' },
+];
+const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
+  (acc, s) => { acc[s.code] = s; return acc; },
+  {} as Record<string, typeof STICKERS[number]>,
+);
+const STICKER_COOLDOWN_MS = 3000;
+
+function parseSticker(text: string): typeof STICKERS[number] | null {
+  if (!text.startsWith(STICKER_PREFIX)) return null;
+  const code = text.slice(STICKER_PREFIX.length).trim();
+  return STICKER_BY_CODE[code] ?? null;
+}
+
 function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
   const parts: Array<{ label: string; value: number }> = [];
   if (r.whiteWinDelta !== 0) parts.push({ label: '🌟 Về trắng', value: r.whiteWinDelta });
@@ -115,6 +133,9 @@ export default function RoomPlayPage() {
   const lastBubbledChatId = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
+  const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string } | null>(null);
+  const lastStickerSentAt = useRef<number>(0);
+  const [stickerCooldownLeft, setStickerCooldownLeft] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -143,12 +164,20 @@ export default function RoomPlayPage() {
     if (chatOpen) setChatSeenCount(chatMessages.length);
   }, [chatMessages.length, chatOpen]);
 
-  // Show seat bubble for newest chat message; auto-clear after 5s
+  // Show seat bubble (chat) or center sticker overlay for newest chat message
   useEffect(() => {
     if (chatMessages.length === 0) return;
     const latest = chatMessages[chatMessages.length - 1];
     if (lastBubbledChatId.current === latest.id) return;
     lastBubbledChatId.current = latest.id;
+    const sticker = parseSticker(latest.text);
+    if (sticker) {
+      setStickerOverlay({ id: latest.id, code: sticker.code, emoji: sticker.emoji, label: sticker.label, sender: latest.displayName });
+      const t = setTimeout(() => {
+        setStickerOverlay(prev => (prev?.id === latest.id ? null : prev));
+      }, 3000);
+      return () => clearTimeout(t);
+    }
     setSeatBubbles(prev => ({ ...prev, [latest.userId]: { id: latest.id, text: latest.text } }));
     const t = setTimeout(() => {
       setSeatBubbles(prev => {
@@ -159,6 +188,17 @@ export default function RoomPlayPage() {
     }, 5000);
     return () => clearTimeout(t);
   }, [chatMessages]);
+
+  // Tick cooldown countdown so buttons re-enable visually
+  useEffect(() => {
+    if (stickerCooldownLeft <= 0) return;
+    const t = setInterval(() => {
+      const left = Math.max(0, STICKER_COOLDOWN_MS - (Date.now() - lastStickerSentAt.current));
+      setStickerCooldownLeft(left);
+      if (left <= 0) clearInterval(t);
+    }, 100);
+    return () => clearInterval(t);
+  }, [stickerCooldownLeft]);
 
   const unreadChat = Math.max(0, chatMessages.length - chatSeenCount);
 
@@ -354,6 +394,19 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleSendSticker(code: string) {
+    const left = STICKER_COOLDOWN_MS - (Date.now() - lastStickerSentAt.current);
+    if (left > 0) return;
+    lastStickerSentAt.current = Date.now();
+    setStickerCooldownLeft(STICKER_COOLDOWN_MS);
+    try { await sendChat(`${STICKER_PREFIX}${code}`); }
+    catch (e) {
+      lastStickerSentAt.current = 0;
+      setStickerCooldownLeft(0);
+      toast.push('error', (e as Error).message);
+    }
+  }
+
   const tooltipMsg = !isMyTurn
     ? 'Chưa đến lượt bạn'
     : myCombo === null
@@ -372,6 +425,15 @@ export default function RoomPlayPage() {
             <div className="cut-pig-pigs">🐷💥🐷</div>
             <div className="cut-pig-text">Siuuu chặt heo chết mẹ mày nè</div>
             <div className="cut-pig-sub">{cutPigBanner.cutter} · {cutPigBanner.comboLabel}</div>
+          </div>
+        </div>
+      )}
+      {stickerOverlay && (
+        <div className="sticker-overlay" key={stickerOverlay.id}>
+          <div className={`sticker-overlay-inner sticker-${stickerOverlay.code}`}>
+            <div className="sticker-emoji">{stickerOverlay.emoji}</div>
+            <div className="sticker-label">{stickerOverlay.label}</div>
+            <div className="sticker-sender">— {stickerOverlay.sender}</div>
           </div>
         </div>
       )}
@@ -697,17 +759,45 @@ export default function RoomPlayPage() {
               {chatMessages.length === 0 ? (
                 <div className="muted small">Chưa có tin nhắn nào.</div>
               ) : (
-                chatMessages.map(m => (
-                  <div key={m.id} className={`chat-msg ${m.userId === myUserId ? 'mine' : ''}`}>
-                    <div className="chat-msg-meta">
-                      <span className="chat-msg-name">{m.userId === myUserId ? 'Bạn' : m.displayName}</span>
-                      <span className="chat-msg-time muted small">
-                        {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                chatMessages.map(m => {
+                  const sticker = parseSticker(m.text);
+                  return (
+                    <div key={m.id} className={`chat-msg ${m.userId === myUserId ? 'mine' : ''}`}>
+                      <div className="chat-msg-meta">
+                        <span className="chat-msg-name">{m.userId === myUserId ? 'Bạn' : m.displayName}</span>
+                        <span className="chat-msg-time muted small">
+                          {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {sticker ? (
+                        <div className="chat-msg-sticker">
+                          <span className="chat-msg-sticker-emoji">{sticker.emoji}</span>
+                          <span>{sticker.label}</span>
+                        </div>
+                      ) : (
+                        <div className="chat-msg-text">{m.text}</div>
+                      )}
                     </div>
-                    <div className="chat-msg-text">{m.text}</div>
-                  </div>
-                ))
+                  );
+                })
+              )}
+            </div>
+            <div className="sticker-bar">
+              {STICKERS.map(s => (
+                <button
+                  key={s.code}
+                  type="button"
+                  className="sticker-chip"
+                  title={s.hint}
+                  disabled={stickerCooldownLeft > 0}
+                  onClick={() => handleSendSticker(s.code)}
+                >
+                  <span className="sticker-chip-emoji">{s.emoji}</span>
+                  <span className="sticker-chip-label">{s.label}</span>
+                </button>
+              ))}
+              {stickerCooldownLeft > 0 && (
+                <span className="sticker-cooldown muted small">{Math.ceil(stickerCooldownLeft / 1000)}s</span>
               )}
             </div>
             <form

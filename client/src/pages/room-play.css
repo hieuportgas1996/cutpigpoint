@@ -696,3 +696,145 @@
   .cut-pig-pigs { font-size: 40px; }
   .cut-pig-sub { font-size: 12px; }
 }
+
+/* === Sticker overlay (center stage) === */
+.sticker-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 9998;
+  animation: stickerFade 3s ease-out forwards;
+}
+
+.sticker-overlay-inner {
+  text-align: center;
+  padding: 22px 38px;
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(60,40,20,0.96), rgba(35,20,10,0.96));
+  border: 3px solid #d4a445;
+  box-shadow:
+    0 0 40px rgba(212, 164, 69, 0.5),
+    0 18px 40px rgba(0,0,0,0.6);
+  animation: stickerPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+             stickerWiggle 0.5s ease-in-out 0.45s 2;
+}
+
+.sticker-emoji {
+  font-size: 84px;
+  line-height: 1;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5));
+  animation: stickerBounce 0.7s ease-in-out infinite alternate;
+}
+
+.sticker-label {
+  margin-top: 6px;
+  font-size: clamp(20px, 3.5vw, 30px);
+  font-weight: 800;
+  color: #fff4d0;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+
+.sticker-sender {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #d4b88a;
+  letter-spacing: 0.5px;
+}
+
+/* Per-code accents */
+.sticker-overlay-inner.sticker-sos { border-color: #ff5252; box-shadow: 0 0 40px rgba(255,80,80,0.55), 0 18px 40px rgba(0,0,0,0.6); }
+.sticker-overlay-inner.sticker-no-kill { border-color: #7dd3a8; box-shadow: 0 0 40px rgba(125,211,168,0.45), 0 18px 40px rgba(0,0,0,0.6); }
+.sticker-overlay-inner.sticker-go-away { border-color: #ffb84d; box-shadow: 0 0 40px rgba(255,184,77,0.5), 0 18px 40px rgba(0,0,0,0.6); }
+
+@keyframes stickerFade {
+  0%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes stickerPop {
+  0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+  60%  { transform: scale(1.18) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes stickerWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-3deg); }
+  75%      { transform: rotate(3deg); }
+}
+
+@keyframes stickerBounce {
+  0%   { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-6px) scale(1.05); }
+}
+
+@media (max-width: 720px) {
+  .sticker-overlay-inner { padding: 16px 22px; border-radius: 18px; }
+  .sticker-emoji { font-size: 60px; }
+  .sticker-sender { font-size: 11px; }
+}
+
+/* === Sticker quick-react bar (in chat panel) === */
+.sticker-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(212,164,69,0.18);
+  align-items: center;
+}
+
+.sticker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 18px;
+  background: rgba(212,164,69,0.1);
+  border: 1px solid rgba(212,164,69,0.35);
+  color: #f5e4be;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.sticker-chip:hover:not(:disabled) {
+  background: rgba(212,164,69,0.22);
+  transform: translateY(-1px);
+}
+
+.sticker-chip:active:not(:disabled) { transform: translateY(0); }
+
+.sticker-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sticker-chip-emoji { font-size: 18px; line-height: 1; }
+
+.sticker-cooldown {
+  margin-left: auto;
+  color: #d4a445;
+}
+
+/* === Sticker rendered inside chat list === */
+.chat-msg-sticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(212,164,69,0.12);
+  border: 1px solid rgba(212,164,69,0.3);
+  color: #f5e4be;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.chat-msg-sticker-emoji { font-size: 22px; line-height: 1; }
