@@ -454,7 +454,7 @@ export default function RoomPlayPage() {
                       key={c.id}
                       className="my-hand-slot"
                       style={{
-                        transform: `translateX(${offset}px) translateY(${isSelected ? -16 : 0}px)`,
+                        transform: `translate3d(${offset}px, 0, 0)`,
                         marginLeft: -cardWidth / 2,
                       }}
                     >

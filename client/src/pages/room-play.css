@@ -73,7 +73,7 @@
 .room-play .my-hand-slot {
   position: absolute;
   left: 50%;
-  transition: transform 0.2s ease;
+  will-change: transform;
 }
 
 .room-play .match-end-overlay {

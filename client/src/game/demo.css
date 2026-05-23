@@ -175,14 +175,14 @@
   position: relative;
   border-radius: 8px;
   cursor: default;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: transform 0.12s ease-out;
   filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
   user-select: none;
 }
 
-.tlmn-card.is-clickable { cursor: pointer; }
-.tlmn-card.is-clickable:hover { transform: translateY(-6px); filter: drop-shadow(0 8px 14px rgba(212,164,69,0.4)); }
-.tlmn-card.is-selected { transform: translateY(-14px); filter: drop-shadow(0 10px 16px rgba(212,164,69,0.6)); }
+.tlmn-card.is-clickable { cursor: pointer; will-change: transform; }
+.tlmn-card.is-clickable:hover { transform: translate3d(0, -6px, 0); }
+.tlmn-card.is-selected { transform: translate3d(0, -14px, 0); }
 .tlmn-card.is-dim { opacity: 0.55; }
 
 .tlmn-hand {
