@@ -321,6 +321,7 @@ export interface RoundResultEntry {
   judgeDelta: number;
   whiteWinDelta: number;
   held: HeldItems;
+  heldDetails: HeldDetail[];
 }
 
 export interface HeldItems {
@@ -329,6 +330,11 @@ export interface HeldItems {
   hasFourOfAKind: boolean;
   hasThreePairRun: boolean;
   hasFourPairRun: boolean;
+}
+
+export interface HeldDetail {
+  label: string;
+  value: number;
 }
 
 export interface RoundEnd {

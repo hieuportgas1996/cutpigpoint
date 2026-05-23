@@ -143,6 +143,8 @@ public class MatchTimerService : BackgroundService
                 int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
                 var bd = breakdowns[idx];
                 var held = GameEngine.TienLenComboEngine.ComputeHeldBreakdown(p.Hand);
+                var heldDetails = GameEngine.TienLenComboEngine.ComputeHeldDetails(p.Hand)
+                    .Select(d => new HeldDetailDto(d.Label, d.Value)).ToList();
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -160,7 +162,8 @@ public class MatchTimerService : BackgroundService
                     bd.ThreeOfSpades,
                     bd.Judge,
                     bd.WhiteWin,
-                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun));
+                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
+                    heldDetails);
             })
             .ToList();
 

@@ -410,6 +410,8 @@ public class RoomHub : Hub
                 int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
                 var bd = breakdowns[idx];
                 var held = GameEngine.TienLenComboEngine.ComputeHeldBreakdown(p.Hand);
+                var heldDetails = GameEngine.TienLenComboEngine.ComputeHeldDetails(p.Hand)
+                    .Select(d => new HeldDetailDto(d.Label, d.Value)).ToList();
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -427,7 +429,8 @@ public class RoomHub : Hub
                     bd.ThreeOfSpades,
                     bd.Judge,
                     bd.WhiteWin,
-                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun));
+                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
+                    heldDetails);
             })
             .ToList();
 
@@ -459,7 +462,7 @@ public class RoomHub : Hub
     {
         var finalScores = match.Players
             .OrderByDescending(p => p.TotalScore)
-            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0, 0, 0, 0, 0, new HeldItemsDto(0, 0, false, false, false)))
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0, 0, 0, 0, 0, new HeldItemsDto(0, 0, false, false, false), new List<HeldDetailDto>()))
             .ToList();
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 

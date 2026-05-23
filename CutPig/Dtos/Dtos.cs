@@ -62,7 +62,8 @@ public record ChatMessageDto(Guid Id, Guid UserId, string DisplayName, string Te
 public record ChatHistoryDto(List<ChatMessageDto> Messages);
 
 public record HeldItemsDto(int BlackPigs, int RedPigs, bool HasFourOfAKind, bool HasThreePairRun, bool HasFourPairRun);
-public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus, bool WonByThreeOfSpades, bool LostByThreeOfSpades, bool JudgeIsWinner, bool JudgeIsVictim, bool JudgeIsPardoned, int JudgeHeldValue, int BaseRankScore, int ThreeOfSpadesDelta, int JudgeDelta, int WhiteWinDelta, HeldItemsDto Held);
+public record HeldDetailDto(string Label, int Value);
+public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus, bool WonByThreeOfSpades, bool LostByThreeOfSpades, bool JudgeIsWinner, bool JudgeIsVictim, bool JudgeIsPardoned, int JudgeHeldValue, int BaseRankScore, int ThreeOfSpadesDelta, int JudgeDelta, int WhiteWinDelta, HeldItemsDto Held, List<HeldDetailDto> HeldDetails);
 public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, bool WasJudge, List<RoundResultEntryDto> Results);
 public record RoundHistoryDto(Guid MatchId, List<RoundEndDto> Rounds);
 public record MatchEndDto(Guid MatchId, List<RoundResultEntryDto> FinalScores);

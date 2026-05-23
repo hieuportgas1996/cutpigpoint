@@ -166,6 +166,80 @@ public static class TienLenComboEngine
 
     public record HeldBreakdown(int BlackPigs, int RedPigs, bool HasFourOfAKind, bool HasThreePairRun, bool HasFourPairRun);
 
+    /// <summary>One concrete held item with its Vietnamese label and point value.</summary>
+    public record HeldDetailItem(string Label, int Value);
+
+    private static readonly string[] RankLabels = {
+        "", "", "", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"
+    };
+
+    private static string SuitLabel(Suit s) => s switch
+    {
+        Suit.Spades => "bích ♠",
+        Suit.Clubs => "chuồn ♣",
+        Suit.Diamonds => "rô ♦",
+        Suit.Hearts => "cơ ♥",
+        _ => "?"
+    };
+
+    /// <summary>
+    /// Build a list of concrete held items with Vietnamese labels and point values.
+    /// Each pig is listed individually by suit ("Heo bích", "Heo cơ"...). Tứ quý/3-đôi/4-đôi are listed with their ranks.
+    /// </summary>
+    public static List<HeldDetailItem> ComputeHeldDetails(IReadOnlyList<Card> hand)
+    {
+        var items = new List<HeldDetailItem>();
+
+        foreach (var c in hand.Where(c => c.Rank == 15).OrderBy(c => (int)c.Suit))
+        {
+            int v = (c.Suit == Suit.Spades || c.Suit == Suit.Clubs) ? 1 : 2;
+            items.Add(new HeldDetailItem($"Heo {SuitLabel(c.Suit)}", v));
+        }
+
+        // Tứ quý — list each rank with 4 cards.
+        var fourRanks = hand.GroupBy(c => c.Rank).Where(g => g.Count() == 4).Select(g => g.Key).OrderBy(r => r).ToList();
+        foreach (var r in fourRanks)
+        {
+            items.Add(new HeldDetailItem($"Tứ quý {RankLabels[r]}", 4));
+        }
+
+        // 4 đôi thông (priority over 3-đôi). Find first run of 4 consecutive pair-ranks.
+        var pairRanks = hand
+            .Where(c => c.Rank != 15)
+            .GroupBy(c => c.Rank).Where(g => g.Count() >= 2)
+            .Select(g => g.Key).OrderBy(r => r).ToList();
+
+        bool addedFourPair = false;
+        for (int i = 0; !addedFourPair && i <= pairRanks.Count - 4; i++)
+        {
+            if (pairRanks[i + 1] == pairRanks[i] + 1
+                && pairRanks[i + 2] == pairRanks[i] + 2
+                && pairRanks[i + 3] == pairRanks[i] + 3)
+            {
+                items.Add(new HeldDetailItem(
+                    $"4 đôi thông {RankLabels[pairRanks[i]]}-{RankLabels[pairRanks[i + 1]]}-{RankLabels[pairRanks[i + 2]]}-{RankLabels[pairRanks[i + 3]]}",
+                    5));
+                addedFourPair = true;
+            }
+        }
+        if (!addedFourPair)
+        {
+            for (int i = 0; i <= pairRanks.Count - 3; i++)
+            {
+                if (pairRanks[i + 1] == pairRanks[i] + 1
+                    && pairRanks[i + 2] == pairRanks[i] + 2)
+                {
+                    items.Add(new HeldDetailItem(
+                        $"3 đôi thông {RankLabels[pairRanks[i]]}-{RankLabels[pairRanks[i + 1]]}-{RankLabels[pairRanks[i + 2]]}",
+                        3));
+                    break;
+                }
+            }
+        }
+
+        return items;
+    }
+
     /// <summary>
     /// Tách giá trị "đang giữ" thành từng item rời để UI hiển thị: heo đen (♠/♣ count), heo đỏ (♦/♥ count),
     /// tứ quý (có/không), 3 đôi thông, 4 đôi thông. 4-pair-run đè 3-pair-run (cùng tay không cộng cả 2).

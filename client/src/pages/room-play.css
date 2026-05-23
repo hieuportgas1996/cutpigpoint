@@ -244,9 +244,8 @@
 .room-play .held-items {
   margin-top: 4px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
+  flex-direction: column;
+  gap: 2px;
   font-size: 11px;
 }
 
@@ -255,11 +254,24 @@
   opacity: 0.85;
 }
 
+.room-play .held-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
 .room-play .held-chip {
   padding: 1px 8px;
   border-radius: 10px;
   background: rgba(255,115,115,0.15);
   color: var(--cream);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-play .held-value {
+  color: var(--danger, #ff7373);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
