@@ -455,6 +455,28 @@ public class MatchManager
                 return new PlayResult(combo, justFinished, true, match);
             }
 
+            // Nếu cutter là active player duy nhất chưa pass → trick về cutter ngay (mọi đối thủ active khác đã pass).
+            // Reset trick + clear pass flags để họ vào lại trick mới (đúng rule pass-tracking per-trick).
+            // Bỏ qua nếu cutter vừa finish (FinalRank đã set) — case đó để turn advance bình thường.
+            if (!justFinished)
+            {
+                bool anyOtherActiveNotPassed = match.Players.Any(p =>
+                    p.UserId != userId
+                    && !p.FinalRank.HasValue
+                    && !p.PassedThisTrick);
+                if (!anyOtherActiveNotPassed)
+                {
+                    SettleTrickChopChain(match);
+                    match.CurrentTrick = null;
+                    match.CurrentTrickOwnerId = null;
+                    foreach (var p in match.Players) p.PassedThisTrick = false;
+                    var cutterSeat = match.Players.FindIndex(p => p.UserId == userId);
+                    match.CurrentTurnSeatIndex = cutterSeat;
+                    match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+                    return new PlayResult(combo, justFinished, false, match);
+                }
+            }
+
             AdvanceTurnSkippingPassed(match);
             match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PlayResult(combo, justFinished, false, match);
