@@ -142,6 +142,7 @@ public class MatchTimerService : BackgroundService
                 int idx = match.Players.IndexOf(p);
                 int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
                 var bd = breakdowns[idx];
+                var held = GameEngine.TienLenComboEngine.ComputeHeldBreakdown(p.Hand);
                 return new RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -158,7 +159,8 @@ public class MatchTimerService : BackgroundService
                     bd.BaseRank,
                     bd.ThreeOfSpades,
                     bd.Judge,
-                    bd.WhiteWin);
+                    bd.WhiteWin,
+                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun));
             })
             .ToList();
 

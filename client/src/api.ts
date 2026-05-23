@@ -320,6 +320,15 @@ export interface RoundResultEntry {
   threeOfSpadesDelta: number;
   judgeDelta: number;
   whiteWinDelta: number;
+  held: HeldItems;
+}
+
+export interface HeldItems {
+  blackPigs: number;
+  redPigs: number;
+  hasFourOfAKind: boolean;
+  hasThreePairRun: boolean;
+  hasFourPairRun: boolean;
 }
 
 export interface RoundEnd {

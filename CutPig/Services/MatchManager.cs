@@ -658,6 +658,13 @@ public class MatchManager
         {
             var last = chain[^1];
             var secondLast = chain[^2];
+            // Rule: chặt heo bằng "đơn thuần" (single 2 chặn single 2) không tính điểm.
+            // Chỉ tính khi cutter cuối dùng combo lớn (đôi 2, sám 2, tứ quý, 3-đôi-thông, 4-đôi-thông).
+            if (last.Kind == ComboKind.Single)
+            {
+                chain.Clear();
+                return;
+            }
             int pot = 0;
             for (int i = 0; i < chain.Count - 1; i++) pot += chain[i].ChopValue;
             if (pot > 0)
@@ -680,7 +687,7 @@ public class MatchManager
     {
         var value = TienLenComboEngine.ChopValue(combo);
         if (value > 0)
-            match.TrickChopChain.Add((playerId, value));
+            match.TrickChopChain.Add((playerId, value, combo.Kind));
     }
 
     /// <summary>Advance to next seat that is still active (not finished, not passed this trick).</summary>
@@ -809,9 +816,20 @@ public class MatchManager
             int winnerIdx = winnerJudge != null ? match.Players.IndexOf(winnerJudge) : -1;
             bool stack3s = winnerJudge?.FinishedWithThreeOfSpades ?? false;
 
+            // Recompute đui-3♠ delta inside Case C so UI can show it separately from judge penalty.
+            var pardonedForBreakdown = match.Players.Where(p => p.JudgeIsPardoned).OrderBy(p => p.FinalRank ?? int.MaxValue).ToList();
+            var stuckPardoned = pardonedForBreakdown.Count >= 2 && pardonedForBreakdown[^1].StuckWithThreeOfSpades
+                ? pardonedForBreakdown[^1]
+                : null;
+
             for (int i = 0; i < n; i++)
             {
                 int threeBonus = stack3s ? (i == winnerIdx ? (n - 1) : -1) : 0;
+                if (stuckPardoned != null)
+                {
+                    if (match.Players[i].UserId == stuckPardoned.UserId) threeBonus += -3;
+                    else if (match.Players[i].JudgeIsPardoned) threeBonus += 1;
+                }
                 int judgePart = judgeScores[i] - threeBonus;
                 result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, judgeScores[i]);
             }
@@ -923,6 +941,21 @@ public class MatchManager
                 if (match.RoundChopExtra.TryGetValue(p.UserId, out var chop))
                     scores[idx] += chop;
             }
+
+            // Đui 3♠ within the pardoned sub-round: the pardoned with the worst FinalRank who still
+            // holds 3♠ pays -3 to the other pardoned (+1 each within the sub-group, zero-sum among pardoned).
+            var lastPardoned = ordered[^1];
+            if (lastPardoned.StuckWithThreeOfSpades)
+            {
+                int lastIdx = match.Players.IndexOf(lastPardoned);
+                scores[lastIdx] -= 3;
+                foreach (var p in pardoned)
+                {
+                    if (p.UserId == lastPardoned.UserId) continue;
+                    int idx = match.Players.IndexOf(p);
+                    scores[idx] += 1;
+                }
+            }
         }
 
         // Stack 3♠ bonus when the judge winner finished with 3♠ (applies on top of judge scoring).
@@ -936,7 +969,6 @@ public class MatchManager
                 else scores[i] -= 1;
             }
         }
-        // Note: "đui 3♠" (Chót còn 3♠) is intentionally skipped in judge mode per rule.
 
         return scores;
     }

@@ -158,17 +158,26 @@ public static class TienLenComboEngine
     /// </summary>
     public static int ComputeHeldValue(IReadOnlyList<Card> hand)
     {
-        int total = hand.Sum(PigValue);
-        // Tứ quý: any rank with 4 cards (including rank 15 — tứ quý 2)
-        if (hand.GroupBy(c => c.Rank).Any(g => g.Count() == 4))
-            total += 4;
-        // 4 đôi thông (4 consecutive pair runs, no 2s)
-        if (HasFourPairRunInHand(hand))
-            total += 5;
-        // 3 đôi thông (3 consecutive pair runs, no 2s)
-        else if (HasThreePairRunInHand(hand))
-            total += 3;
-        return total;
+        var bd = ComputeHeldBreakdown(hand);
+        return bd.BlackPigs * 1 + bd.RedPigs * 2
+             + (bd.HasFourOfAKind ? 4 : 0)
+             + (bd.HasFourPairRun ? 5 : bd.HasThreePairRun ? 3 : 0);
+    }
+
+    public record HeldBreakdown(int BlackPigs, int RedPigs, bool HasFourOfAKind, bool HasThreePairRun, bool HasFourPairRun);
+
+    /// <summary>
+    /// Tách giá trị "đang giữ" thành từng item rời để UI hiển thị: heo đen (♠/♣ count), heo đỏ (♦/♥ count),
+    /// tứ quý (có/không), 3 đôi thông, 4 đôi thông. 4-pair-run đè 3-pair-run (cùng tay không cộng cả 2).
+    /// </summary>
+    public static HeldBreakdown ComputeHeldBreakdown(IReadOnlyList<Card> hand)
+    {
+        int black = hand.Count(c => c.Rank == 15 && (c.Suit == Suit.Spades || c.Suit == Suit.Clubs));
+        int red = hand.Count(c => c.Rank == 15 && (c.Suit == Suit.Diamonds || c.Suit == Suit.Hearts));
+        bool fourOfAKind = hand.GroupBy(c => c.Rank).Any(g => g.Count() == 4);
+        bool fourPair = HasFourPairRunInHand(hand);
+        bool threePair = !fourPair && HasThreePairRunInHand(hand);
+        return new HeldBreakdown(black, red, fourOfAKind, threePair, fourPair);
     }
 
     private static bool HasThreePairRunInHand(IReadOnlyList<Card> hand)

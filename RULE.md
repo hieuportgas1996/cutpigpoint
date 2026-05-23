@@ -123,7 +123,8 @@ Mỗi combo "có chop value" đánh ra trong 1 trick được tích lại. Khi t
 - P3 **-6** (cho P4); P4 **+6**; P1, P2 net 0.
 
 **Lưu ý**:
-- Same-kind cũng tính: VD P1=`2♠`, P2=`2♥` (chặn same-kind), reset trick → P1 -1, P2 +1.
+- **Same-kind đơn (single 2 chặn single 2) KHÔNG tính**: chain reset = 0. Vd P1=`2♠`, P2=`2♥` → P1, P2 đều net 0. Chỉ khi last cutter dùng đôi 2 / sám 2 / tứ quý / 3-đôi-thông / 4-đôi-thông mới settle pot.
+- Đôi 2 chặn đôi 2 (same-kind đôi) **vẫn tính**.
 - Sám 2 và tứ quý 2 unbeatable theo luật chặt heo → không bao giờ kích hoạt chop chain, không ai bị trừ.
 - Tứ quý không chặt được sám 2 / tứ quý 2 (nhưng chặt 3-đôi-thông, đôi 2, lá 2).
 
@@ -146,7 +147,7 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 |---|---|---|---|---|
 | A | tất cả còn lại | 0 | Kết thúc ván ngay | Mỗi victim -(4+held), Nhất +∑ |
 | B | còn 1 người đã ra bài | 1 | Kết thúc ván ngay | Mỗi victim -(4+held), pardoned **-1**, Nhất +∑+1 |
-| C | còn ≥2 người đã ra bài | ≥2 | Victim được set rank chót; pardoned **tiếp tục chơi** xác định Nhì/Ba | Victim -(4+held), Nhất +(4+held). Sau khi pardoned đánh xong: áp base rank +1/-1 (2 người) hoặc +2/0/-2 (3 người); chop-pig + 3♠ vẫn tính giữa các pardoned. |
+| C | còn ≥2 người đã ra bài | ≥2 | Victim được set rank chót; pardoned **tiếp tục chơi** xác định Nhì/Ba | Victim -(4+held), Nhất +(4+held). Sau khi pardoned đánh xong: áp base rank +1/-1 (2 người) hoặc +2/0/-2 (3 người); chop-pig + 3♠ + **đui 3♠** vẫn tính giữa các pardoned. Đui 3♠ trong Case C: pardoned hạng chót (sub-round) còn 3♠ → -3 / mỗi pardoned khác +1 (zero-sum trong nhóm pardoned). |
 
 **Áp dụng với mọi n ≥ 2**. Không áp khi về trắng.
 

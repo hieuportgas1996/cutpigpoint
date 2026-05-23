@@ -35,11 +35,23 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
   return parts;
 }
 
+function heldLabels(held: RoundResultEntry['held']): string[] {
+  if (!held) return [];
+  const out: string[] = [];
+  if (held.blackPigs > 0) out.push(`🐷 ♠♣ × ${held.blackPigs}`);
+  if (held.redPigs > 0) out.push(`🐷 ♦♥ × ${held.redPigs}`);
+  if (held.hasFourOfAKind) out.push('Tứ quý');
+  if (held.hasFourPairRun) out.push('4 đôi thông');
+  else if (held.hasThreePairRun) out.push('3 đôi thông');
+  return out;
+}
+
 function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
   return (
     <div className="match-end-list">
       {round.results.map(r => {
         const parts = scoreBreakdownParts(r);
+        const held = heldLabels(r.held);
         return (
           <div key={r.userId} className="match-end-row">
             <span className="rank-tag">
@@ -48,6 +60,12 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
             <div className="match-end-name">
               <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
               {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
+              {held.length > 0 && (
+                <div className="held-items">
+                  <span className="held-items-label">Còn giữ:</span>
+                  {held.map((h, i) => <span key={i} className="held-chip">{h}</span>)}
+                </div>
+              )}
               {parts.length > 0 && (
                 <div className="score-breakdown">
                   {parts.map((p, i) => (

@@ -241,6 +241,28 @@
   color: var(--danger, #ff7373);
 }
 
+.room-play .held-items {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.room-play .held-items-label {
+  color: var(--gold-soft);
+  opacity: 0.85;
+}
+
+.room-play .held-chip {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255,115,115,0.15);
+  color: var(--cream);
+  font-variant-numeric: tabular-nums;
+}
+
 .room-play .score-breakdown {
   margin-top: 4px;
   display: flex;
