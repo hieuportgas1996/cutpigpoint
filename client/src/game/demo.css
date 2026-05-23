@@ -181,7 +181,6 @@
 }
 
 .tlmn-card.is-clickable { cursor: pointer; will-change: transform; }
-.tlmn-card.is-clickable:hover { transform: translate3d(0, -6px, 0); }
 .tlmn-card.is-selected { transform: translate3d(0, -14px, 0); }
 .tlmn-card.is-dim { opacity: 0.55; }
 

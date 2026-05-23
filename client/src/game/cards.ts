@@ -159,6 +159,12 @@ export function isFourPairRun(combo: ComboInfo): boolean {
   return combo.kind === 'runOfPairs' && combo.cards.length === 8;
 }
 
+export function isBigCutCombo(combo: ComboInfo): boolean {
+  if (combo.kind === 'four') return true;
+  if (combo.kind === 'runOfPairs' && (combo.cards.length === 6 || combo.cards.length === 8)) return true;
+  return false;
+}
+
 export function hasFourPairRunInHand(hand: Card[]): boolean {
   return findFourPairRun(hand) !== null;
 }

@@ -6,7 +6,7 @@ import { useToast } from '../ui/Toast';
 import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
-import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, findFourPairRun } from '../game/cards';
+import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import '../game/demo.css';
 import './room-lobby.css';
@@ -113,6 +113,8 @@ export default function RoomPlayPage() {
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const [seatBubbles, setSeatBubbles] = useState<Record<string, { id: string; text: string }>>({});
   const lastBubbledChatId = useRef<string | null>(null);
+  const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
+  const lastCutSignature = useRef<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -176,6 +178,32 @@ export default function RoomPlayPage() {
       clearRoundEnd();
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
+
+  // Detect chặt heo (big cut combo): tứ quý / 3-đôi-thông / 4-đôi-thông vừa được đánh ra.
+  useEffect(() => {
+    const trickCards = matchState?.currentTrick;
+    if (!trickCards || trickCards.length === 0) {
+      lastCutSignature.current = null;
+      return;
+    }
+    const cards = trickCards.map(cardFromDto);
+    const combo = detectCombo(cards);
+    if (!combo || !isBigCutCombo(combo)) return;
+    const signature = `${matchState!.roundNumber}|${cards.map(c => c.id).sort().join(',')}`;
+    if (lastCutSignature.current === signature) return;
+    lastCutSignature.current = signature;
+    const cutterId = matchState!.currentTrickOwnerId;
+    const cutter = matchState!.players.find(p => p.userId === cutterId)?.displayName ?? 'Ai đó';
+    const comboLabel = combo.kind === 'four' ? 'Tứ quý'
+      : combo.cards.length === 8 ? '4 đôi thông'
+      : '3 đôi thông';
+    const id = Date.now();
+    setCutPigBanner({ id, cutter, comboLabel });
+    const t = setTimeout(() => {
+      setCutPigBanner(prev => (prev?.id === id ? null : prev));
+    }, 3200);
+    return () => clearTimeout(t);
+  }, [matchState?.currentTrick, matchState?.roundNumber, matchState?.currentTrickOwnerId]);
 
   const myUserId = state.status === 'authenticated' ? state.userId : '';
   const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
@@ -338,6 +366,15 @@ export default function RoomPlayPage() {
 
   return (
     <div className="tlmn-root room-play">
+      {cutPigBanner && (
+        <div className="cut-pig-banner" key={cutPigBanner.id}>
+          <div className="cut-pig-banner-inner">
+            <div className="cut-pig-pigs">🐷💥🐷</div>
+            <div className="cut-pig-text">Siuuu chặt heo chết mẹ mày nè</div>
+            <div className="cut-pig-sub">{cutPigBanner.cutter} · {cutPigBanner.comboLabel}</div>
+          </div>
+        </div>
+      )}
       <div className="tlmn-stage">
         <div className="play-header">
           <button className="tlmn-btn ghost" onClick={() => navigate('/rooms')}>← Thoát</button>

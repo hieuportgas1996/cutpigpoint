@@ -610,3 +610,89 @@
     max-height: 50vh;
   }
 }
+
+/* === Chặt heo banner === */
+.cut-pig-banner {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 9999;
+  animation: cutPigOverlayFade 3.2s ease-out forwards;
+}
+
+.cut-pig-banner-inner {
+  text-align: center;
+  padding: 26px 44px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 30%, rgba(255,72,72,0.95), rgba(140,20,20,0.92) 70%, rgba(60,0,0,0.95));
+  border: 3px solid #ffd166;
+  box-shadow:
+    0 0 60px 12px rgba(255, 100, 100, 0.55),
+    0 20px 60px rgba(0,0,0,0.6),
+    inset 0 0 30px rgba(255,255,255,0.08);
+  animation: cutPigPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+             cutPigShake 0.45s ease-in-out 0.5s 3;
+  transform-origin: center;
+}
+
+.cut-pig-pigs {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+  animation: cutPigBounce 0.6s ease-in-out infinite alternate;
+}
+
+.cut-pig-text {
+  font-size: clamp(22px, 4vw, 38px);
+  font-weight: 900;
+  color: #fff8d6;
+  letter-spacing: 1px;
+  text-shadow:
+    0 2px 0 #5a0000,
+    0 4px 14px rgba(255, 80, 80, 0.9),
+    0 0 30px rgba(255, 200, 80, 0.7);
+  font-family: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+}
+
+.cut-pig-sub {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #ffe9a8;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+@keyframes cutPigOverlayFade {
+  0%   { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes cutPigPop {
+  0%   { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes cutPigShake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25%      { transform: translateX(-6px) rotate(-1.5deg); }
+  75%      { transform: translateX(6px) rotate(1.5deg); }
+}
+
+@keyframes cutPigBounce {
+  0%   { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-8px) scale(1.06); }
+}
+
+@media (max-width: 720px) {
+  .cut-pig-banner-inner { padding: 18px 24px; border-radius: 16px; }
+  .cut-pig-pigs { font-size: 40px; }
+  .cut-pig-sub { font-size: 12px; }
+}
