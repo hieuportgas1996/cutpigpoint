@@ -167,7 +167,7 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 ### Thưởng / phạt `3♠` cuối
 
 - **Thắng cuối bằng `3♠`** (về Nhất, lá cuối đánh ra chứa `3♠`): người Nhất **+(n-1)**, mỗi người khác **-1**. Zero-sum.
-- **Đui `3♠`** (về Chót, kết ván vẫn còn `3♠` trong tay): người Chót **-3**, mỗi người khác **+1**. **Không** zero-sum khi <4 người (3 người: -3/+1/+1 = -1; 2 người: -3/+1 = -2).
+- **Đui `3♠`** (về Chót, kết ván trên tay **chỉ còn duy nhất 1 lá là `3♠`**): người Chót **-3**, mỗi người khác **+1**. **Không** zero-sum khi <4 người (3 người: -3/+1/+1 = -1; 2 người: -3/+1 = -2). Tay còn nhiều lá (kể cả có 3♠) → không tính.
 - Không áp dụng khi về trắng.
 - Cả 2 cộng/trừ vào điểm ván (sau base rank và sau chop-pig).
 

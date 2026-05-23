@@ -298,7 +298,7 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
-                    if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                    if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                         p.StuckWithThreeOfSpades = true;
                 }
                 SettleTrickChopChain(match);
@@ -446,7 +446,7 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
-                    if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                    if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                         p.StuckWithThreeOfSpades = true;
                 }
                 SettleTrickChopChain(match);
@@ -527,7 +527,7 @@ public class MatchManager
                             match.FinishedCount++;
                             p.FinalRank = match.FinishedCount;
                             match.FinishOrder.Add(p.UserId);
-                            if (p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                            if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                                 p.StuckWithThreeOfSpades = true;
                         }
                         SettleTrickChopChain(match);
