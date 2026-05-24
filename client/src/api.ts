@@ -203,6 +203,7 @@ export const api = {
   listRooms: () => request<RoomSummary[]>('/rooms'),
   listRoomHistory: () => request<RoomHistory[]>('/rooms/history'),
   getRoomHistory: (code: string) => request<RoomHistory>(`/rooms/history/${code.toUpperCase()}`),
+  deleteRoomHistory: (id: string) => request<void>(`/rooms/history/${id}`, { method: 'DELETE' }),
   createRoom: (gameType: number, maxSeats: number, name?: string) =>
     request<RoomSummary>('/rooms', { method: 'POST', body: JSON.stringify({ gameType, maxSeats, name }) }),
   getRoom: (code: string) => request<RoomState>(`/rooms/${code.toUpperCase()}`),

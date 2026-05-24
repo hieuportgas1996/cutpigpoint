@@ -74,6 +74,17 @@ export default function RoomsPage() {
     }
   }
 
+  async function handleDeleteHistory(h: RoomHistory) {
+    if (!confirm(`Xoá hẳn lịch sử phòng ${h.code}? Không thể khôi phục.`)) return;
+    try {
+      await api.deleteRoomHistory(h.id);
+      toast.push('success', `Đã xoá lịch sử phòng ${h.code}`);
+      await refresh();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card">
@@ -186,6 +197,14 @@ export default function RoomsPage() {
                       {h.finishedAt && ' · Kết thúc ' + new Date(h.finishedAt).toLocaleString('vi-VN')}
                     </div>
                   </div>
+                  {isAdmin && (
+                    <button
+                      className="sm danger"
+                      onClick={e => { e.stopPropagation(); handleDeleteHistory(h); }}
+                    >
+                      Xoá
+                    </button>
+                  )}
                 </div>
                 {h.finalScores.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

@@ -200,6 +200,23 @@ public class RoomsController : ControllerBase
             room.HostUserId, room.CreatedAt, room.StartedAt, seats);
     }
 
+    [HttpDelete("history/{id}")]
+    public async Task<IActionResult> DeleteHistory(Guid id)
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+        var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
+        if (!isAdmin) return StatusCode(403, "Chỉ admin mới được xoá lịch sử.");
+
+        var room = await _db.Rooms.FindAsync(id);
+        if (room == null) return NotFound();
+        if (room.Status != RoomStatus.Finished) return BadRequest("Chỉ xoá được lịch sử phòng đã kết thúc.");
+
+        _db.Rooms.Remove(room);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
