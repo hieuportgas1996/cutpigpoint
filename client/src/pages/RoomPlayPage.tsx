@@ -20,6 +20,8 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'sos', emoji: '🆘', label: 'SOS', hint: 'Báo sắp xử' },
   { code: 'no-kill', emoji: '🙏', label: 'Không giết', hint: 'Không xử đâu' },
   { code: 'go-away', emoji: '👋', label: 'Bỏ đi nhỏ', hint: 'Pass đi nào' },
+  { code: 'siuuu', emoji: '🐐', label: 'SIUUUU', hint: 'Ăn mừng' },
+  { code: 'chop-it', emoji: '🪓', label: 'Chặt chết mẹ nó', hint: 'Khích chặt heo' },
 ];
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
   (acc, s) => { acc[s.code] = s; return acc; },

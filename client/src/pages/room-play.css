@@ -749,6 +749,8 @@
 .sticker-overlay-inner.sticker-sos { border-color: #ff5252; box-shadow: 0 0 40px rgba(255,80,80,0.55), 0 18px 40px rgba(0,0,0,0.6); }
 .sticker-overlay-inner.sticker-no-kill { border-color: #7dd3a8; box-shadow: 0 0 40px rgba(125,211,168,0.45), 0 18px 40px rgba(0,0,0,0.6); }
 .sticker-overlay-inner.sticker-go-away { border-color: #ffb84d; box-shadow: 0 0 40px rgba(255,184,77,0.5), 0 18px 40px rgba(0,0,0,0.6); }
+.sticker-overlay-inner.sticker-siuuu { border-color: #facc15; box-shadow: 0 0 40px rgba(250,204,21,0.6), 0 18px 40px rgba(0,0,0,0.6); }
+.sticker-overlay-inner.sticker-chop-it { border-color: #ef4444; box-shadow: 0 0 40px rgba(239,68,68,0.6), 0 18px 40px rgba(0,0,0,0.6); }
 
 @keyframes stickerFade {
   0%   { opacity: 1; }
