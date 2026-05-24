@@ -202,6 +202,7 @@ export const api = {
 
   listRooms: () => request<RoomSummary[]>('/rooms'),
   listRoomHistory: () => request<RoomHistory[]>('/rooms/history'),
+  getRoomHistory: (code: string) => request<RoomHistory>(`/rooms/history/${code.toUpperCase()}`),
   createRoom: (gameType: number, maxSeats: number, name?: string) =>
     request<RoomSummary>('/rooms', { method: 'POST', body: JSON.stringify({ gameType, maxSeats, name }) }),
   getRoom: (code: string) => request<RoomState>(`/rooms/${code.toUpperCase()}`),
@@ -236,6 +237,7 @@ export interface RoomFinalScoreEntry {
   userId: string;
   displayName: string;
   totalScore: number;
+  hasAvatar: boolean;
 }
 
 export interface RoomHistory {

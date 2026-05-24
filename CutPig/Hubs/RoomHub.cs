@@ -472,9 +472,18 @@ public class RoomHub : Hub
         {
             room.Status = RoomStatus.Finished;
             room.FinishedAt = DateTime.UtcNow;
+            var userIds = match.Players.Select(p => p.UserId).ToList();
+            var avatarMap = await _db.AppUsers
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, HasAvatar = !string.IsNullOrEmpty(u.AvatarData) })
+                .ToDictionaryAsync(x => x.Id, x => x.HasAvatar);
             var persistScores = match.Players
                 .OrderByDescending(p => p.TotalScore)
-                .Select(p => new RoomFinalScoreEntryDto(p.UserId, p.DisplayName, p.TotalScore))
+                .Select(p => new RoomFinalScoreEntryDto(
+                    p.UserId,
+                    p.DisplayName,
+                    p.TotalScore,
+                    avatarMap.GetValueOrDefault(p.UserId, false)))
                 .ToList();
             room.FinalScoresJson = JsonSerializer.Serialize(persistScores);
             await _db.SaveChangesAsync();

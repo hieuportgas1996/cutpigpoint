@@ -21,6 +21,7 @@ public class Room
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
     public string? FinalScoresJson { get; set; }
+    public bool IsHidden { get; set; }
     public List<RoomSeat> Seats { get; set; } = new();
 }
 

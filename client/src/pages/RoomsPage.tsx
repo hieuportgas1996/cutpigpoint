@@ -171,7 +171,7 @@ export default function RoomsPage() {
                 key={h.id}
                 className="leader-row"
                 style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, cursor: 'pointer' }}
-                onClick={() => navigate(`/rooms/${h.code}`)}
+                onClick={() => navigate(`/rooms/${h.code}/history`)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <code style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2 }}>{h.code}</code>

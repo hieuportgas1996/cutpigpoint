@@ -118,6 +118,7 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Rooms_Code"" ON ""Rooms"" (""Code"")");
         db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""Name"" text");
         db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""FinalScoresJson"" text");
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""IsHidden"" boolean NOT NULL DEFAULT false");
         db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS ""RoomSeats"" (
                 ""Id"" uuid NOT NULL PRIMARY KEY,

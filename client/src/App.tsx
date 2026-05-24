@@ -10,6 +10,7 @@ import ProfilePage from './pages/ProfilePage';
 import RoomsPage from './pages/RoomsPage';
 import RoomLobbyPage from './pages/RoomLobbyPage';
 import RoomPlayPage from './pages/RoomPlayPage';
+import RoomHistoryDetailPage from './pages/RoomHistoryDetailPage';
 import { ToastProvider } from './ui/Toast';
 import { Icon } from './ui/Icon';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -98,6 +99,7 @@ function AppShell() {
           <Route path="/new" element={<NewGamePage />} />
           <Route path="/games/:id" element={<GamePlayPage />} />
           <Route path="/rooms" element={<RoomsPage />} />
+          <Route path="/rooms/:code/history" element={<RoomHistoryDetailPage />} />
           <Route path="/rooms/:code" element={<RoomLobbyPage />} />
           <Route path="/play/:id" element={<RoomPlayPage />} />
           <Route path="/profile" element={<ProfilePage />} />

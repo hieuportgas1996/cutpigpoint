@@ -24,7 +24,7 @@ public class RoomsController : ControllerBase
     public async Task<ActionResult<List<RoomSummaryDto>>> List()
     {
         var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
-        var query = _db.Rooms.AsQueryable();
+        var query = _db.Rooms.AsQueryable().Where(r => !r.IsHidden);
         if (!isAdmin) query = query.Where(r => r.Status == RoomStatus.Waiting);
 
         var rooms = await query
@@ -46,6 +46,43 @@ public class RoomsController : ControllerBase
             r.CreatedAt,
             r.FinishedAt
         )).ToList();
+    }
+
+    [HttpGet("history/{code}")]
+    public async Task<ActionResult<RoomHistoryDto>> HistoryDetail(string code)
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+        var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == RoomStatus.Finished);
+        if (room == null) return NotFound();
+
+        if (!isAdmin && !room.Seats.Any(s => s.UserId == userId.Value))
+            return StatusCode(403, "Không có quyền xem phòng này.");
+
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try
+            {
+                scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new();
+            }
+            catch { }
+        }
+        return new RoomHistoryDto(
+            room.Id,
+            room.Code,
+            room.Name,
+            room.MaxSeats,
+            string.IsNullOrWhiteSpace(room.HostUser?.DisplayName) ? (room.HostUser?.Username ?? "") : room.HostUser!.DisplayName,
+            room.CreatedAt,
+            room.FinishedAt,
+            scores
+        );
     }
 
     [HttpGet("history")]
@@ -180,7 +217,15 @@ public class RoomsController : ControllerBase
         }
         // Admin: can delete any room, any status
 
-        _db.Rooms.Remove(room);
+        // Soft-delete phòng đã kết thúc để giữ lịch sử điểm
+        if (room.Status == RoomStatus.Finished)
+        {
+            room.IsHidden = true;
+        }
+        else
+        {
+            _db.Rooms.Remove(room);
+        }
         await _db.SaveChangesAsync();
         return NoContent();
     }
