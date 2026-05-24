@@ -93,13 +93,16 @@ export default function RoomsPage() {
           <div>
             <h3 style={{ marginTop: 0, fontSize: 14 }}>Vào phòng bằng mã</h3>
             <form onSubmit={handleJoin} style={{ display: 'grid', gap: 10 }}>
-              <input
-                value={joinCode}
-                onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                placeholder="ABC123"
-                maxLength={6}
-                style={{ textTransform: 'uppercase', letterSpacing: 2, fontFamily: 'monospace', fontSize: 18 }}
-              />
+              <div>
+                <label>Mã phòng</label>
+                <input
+                  value={joinCode}
+                  onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="ABC123"
+                  maxLength={6}
+                  style={{ textTransform: 'uppercase', letterSpacing: 2, fontFamily: 'monospace', fontSize: 18, width: '100%' }}
+                />
+              </div>
               <button type="submit" disabled={!joinCode.trim()}>
                 <Icon name="cards" size={14} /> Vào phòng
               </button>
