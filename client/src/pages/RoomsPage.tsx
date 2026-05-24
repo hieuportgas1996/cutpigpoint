@@ -88,7 +88,7 @@ export default function RoomsPage() {
                 <input
                   value={roomName}
                   onChange={e => setRoomName(e.target.value)}
-                  placeholder="VD: Bàn nhậu cuối tuần"
+                  placeholder="VD: MU vô địch"
                   maxLength={50}
                   style={{ width: '100%' }}
                 />
