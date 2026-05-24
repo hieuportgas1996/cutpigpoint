@@ -283,7 +283,7 @@ public class MatchManager
                 match.FinishOrder.Add(userId);
                 justFinished = true;
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
-                if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                if (cards.Count == 1 && cards[0].Rank == 3 && cards[0].Suit == Suit.Spades)
                     player.FinishedWithThreeOfSpades = true;
 
                 if (CheckAndApplyJudge(match, userId))
@@ -429,7 +429,7 @@ public class MatchManager
                 match.FinishOrder.Add(userId);
                 justFinished = true;
                 if (match.FinishedCount == 1) match.PreviousRoundWinnerId = userId;
-                if (cards.Any(c => c.Rank == 3 && c.Suit == Suit.Spades))
+                if (cards.Count == 1 && cards[0].Rank == 3 && cards[0].Suit == Suit.Spades)
                     player.FinishedWithThreeOfSpades = true;
 
                 // Phán xử: nếu Nhất về và còn player khác chưa ra bài
