@@ -18,6 +18,8 @@ export default function RoomsPage() {
   const isAdmin = state.status === 'authenticated' && state.isAdmin;
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [history, setHistory] = useState<RoomHistory[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PAGE_SIZE = 5;
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState('');
   const [creating, setCreating] = useState(false);
@@ -166,7 +168,7 @@ export default function RoomsPage() {
           <div className="muted">Chưa có phòng nào đã kết thúc.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {history.map(h => (
+            {history.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE).map(h => (
               <div
                 key={h.id}
                 className="leader-row"
@@ -211,6 +213,27 @@ export default function RoomsPage() {
                 )}
               </div>
             ))}
+            {history.length > HISTORY_PAGE_SIZE && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+                <button
+                  className="sm ghost"
+                  disabled={historyPage <= 1}
+                  onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                >
+                  ← Trước
+                </button>
+                <span className="muted small">
+                  Trang {historyPage} / {Math.ceil(history.length / HISTORY_PAGE_SIZE)}
+                </span>
+                <button
+                  className="sm ghost"
+                  disabled={historyPage >= Math.ceil(history.length / HISTORY_PAGE_SIZE)}
+                  onClick={() => setHistoryPage(p => Math.min(Math.ceil(history.length / HISTORY_PAGE_SIZE), p + 1))}
+                >
+                  Sau →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
