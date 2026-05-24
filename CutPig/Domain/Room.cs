@@ -11,6 +11,7 @@ public class Room
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Code { get; set; } = string.Empty;
+    public string? Name { get; set; }
     public Guid HostUserId { get; set; }
     public AppUser? HostUser { get; set; }
     public int GameType { get; set; } = 1;
@@ -19,6 +20,7 @@ public class Room
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
+    public string? FinalScoresJson { get; set; }
     public List<RoomSeat> Seats { get; set; } = new();
 }
 

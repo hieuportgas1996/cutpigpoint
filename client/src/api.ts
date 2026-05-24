@@ -201,8 +201,9 @@ export const api = {
   deleteAdminUser: (id: string) => request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
 
   listRooms: () => request<RoomSummary[]>('/rooms'),
-  createRoom: (gameType: number, maxSeats: number) =>
-    request<RoomSummary>('/rooms', { method: 'POST', body: JSON.stringify({ gameType, maxSeats }) }),
+  listRoomHistory: () => request<RoomHistory[]>('/rooms/history'),
+  createRoom: (gameType: number, maxSeats: number, name?: string) =>
+    request<RoomSummary>('/rooms', { method: 'POST', body: JSON.stringify({ gameType, maxSeats, name }) }),
   getRoom: (code: string) => request<RoomState>(`/rooms/${code.toUpperCase()}`),
   deleteRoom: (id: string) => request<void>(`/rooms/${id}`, { method: 'DELETE' })
 };
@@ -221,12 +222,31 @@ export type RoomStatusValue = typeof RoomStatus[keyof typeof RoomStatus];
 export interface RoomSummary {
   id: string;
   code: string;
+  name: string | null;
   gameType: number;
   maxSeats: number;
   status: RoomStatusValue;
   occupiedSeats: number;
   hostDisplayName: string;
   createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface RoomFinalScoreEntry {
+  userId: string;
+  displayName: string;
+  totalScore: number;
+}
+
+export interface RoomHistory {
+  id: string;
+  code: string;
+  name: string | null;
+  maxSeats: number;
+  hostDisplayName: string;
+  createdAt: string;
+  finishedAt: string | null;
+  finalScores: RoomFinalScoreEntry[];
 }
 
 export interface RoomSeat {
@@ -242,6 +262,7 @@ export interface RoomSeat {
 export interface RoomState {
   id: string;
   code: string;
+  name: string | null;
   gameType: number;
   maxSeats: number;
   status: RoomStatusValue;

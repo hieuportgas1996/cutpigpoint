@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CutPig.Data;
 using CutPig.Domain;
 using CutPig.Dtos;
@@ -471,6 +472,11 @@ public class RoomHub : Hub
         {
             room.Status = RoomStatus.Finished;
             room.FinishedAt = DateTime.UtcNow;
+            var persistScores = match.Players
+                .OrderByDescending(p => p.TotalScore)
+                .Select(p => new RoomFinalScoreEntryDto(p.UserId, p.DisplayName, p.TotalScore))
+                .ToList();
+            room.FinalScoresJson = JsonSerializer.Serialize(persistScores);
             await _db.SaveChangesAsync();
         }
         _matches.Remove(match.RoomId);
@@ -538,6 +544,7 @@ public class RoomHub : Hub
         return new RoomStateDto(
             room.Id,
             room.Code,
+            room.Name,
             room.GameType,
             room.MaxSeats,
             (int)room.Status,

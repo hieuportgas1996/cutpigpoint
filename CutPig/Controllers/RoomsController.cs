@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CutPig.Data;
 using CutPig.Domain;
 using CutPig.Dtos;
@@ -36,13 +37,58 @@ public class RoomsController : ControllerBase
         return rooms.Select(r => new RoomSummaryDto(
             r.Id,
             r.Code,
+            r.Name,
             r.GameType,
             r.MaxSeats,
             (int)r.Status,
             r.Seats.Count,
             string.IsNullOrWhiteSpace(r.HostUser?.DisplayName) ? (r.HostUser?.Username ?? "") : r.HostUser!.DisplayName,
-            r.CreatedAt
+            r.CreatedAt,
+            r.FinishedAt
         )).ToList();
+    }
+
+    [HttpGet("history")]
+    public async Task<ActionResult<List<RoomHistoryDto>>> History()
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+        var isAdmin = (bool?)HttpContext.Items["IsAdmin"] == true;
+
+        var query = _db.Rooms.AsQueryable().Where(r => r.Status == RoomStatus.Finished);
+        if (!isAdmin)
+        {
+            query = query.Where(r => r.Seats.Any(s => s.UserId == userId));
+        }
+
+        var rooms = await query
+            .Include(r => r.HostUser)
+            .OrderByDescending(r => r.FinishedAt ?? r.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+
+        return rooms.Select(r =>
+        {
+            List<RoomFinalScoreEntryDto> scores = new();
+            if (!string.IsNullOrEmpty(r.FinalScoresJson))
+            {
+                try
+                {
+                    scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(r.FinalScoresJson) ?? new();
+                }
+                catch { }
+            }
+            return new RoomHistoryDto(
+                r.Id,
+                r.Code,
+                r.Name,
+                r.MaxSeats,
+                string.IsNullOrWhiteSpace(r.HostUser?.DisplayName) ? (r.HostUser?.Username ?? "") : r.HostUser!.DisplayName,
+                r.CreatedAt,
+                r.FinishedAt,
+                scores
+            );
+        }).ToList();
     }
 
     [HttpPost]
@@ -65,9 +111,14 @@ public class RoomsController : ControllerBase
             if (attempts > 10) return StatusCode(500, "Không tạo được mã phòng. Thử lại.");
         } while (await _db.Rooms.AnyAsync(r => r.Code == code));
 
+        var trimmedName = req.Name?.Trim();
+        if (!string.IsNullOrEmpty(trimmedName) && trimmedName.Length > 50)
+            trimmedName = trimmedName.Substring(0, 50);
+
         var room = new Room
         {
             Code = code,
+            Name = string.IsNullOrEmpty(trimmedName) ? null : trimmedName,
             HostUserId = user.Id,
             GameType = gameType,
             MaxSeats = maxSeats,
@@ -84,8 +135,8 @@ public class RoomsController : ControllerBase
         _db.Rooms.Add(room);
         await _db.SaveChangesAsync();
 
-        return new RoomSummaryDto(room.Id, room.Code, room.GameType, room.MaxSeats, (int)room.Status, 1,
-            string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName, room.CreatedAt);
+        return new RoomSummaryDto(room.Id, room.Code, room.Name, room.GameType, room.MaxSeats, (int)room.Status, 1,
+            string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName, room.CreatedAt, room.FinishedAt);
     }
 
     [HttpGet("{code}")]
@@ -108,7 +159,7 @@ public class RoomsController : ControllerBase
                 !string.IsNullOrEmpty(s.User?.AvatarData)))
             .ToList();
 
-        return new RoomStateDto(room.Id, room.Code, room.GameType, room.MaxSeats, (int)room.Status,
+        return new RoomStateDto(room.Id, room.Code, room.Name, room.GameType, room.MaxSeats, (int)room.Status,
             room.HostUserId, room.CreatedAt, room.StartedAt, seats);
     }
 
