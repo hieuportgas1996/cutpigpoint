@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, RoomHistory, RoomStatus, RoomSummary } from '../api';
+import { api, OnlineUser, RoomHistory, RoomStatus, RoomSummary } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../ui/Toast';
 import { Icon } from '../ui/Icon';
@@ -25,12 +25,18 @@ export default function RoomsPage() {
   const [creating, setCreating] = useState(false);
   const [maxSeats, setMaxSeats] = useState(4);
   const [roomName, setRoomName] = useState('');
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
   async function refresh() {
     try {
-      const [rs, hs] = await Promise.all([api.listRooms(), api.listRoomHistory().catch(() => [])]);
+      const [rs, hs, ou] = await Promise.all([
+        api.listRooms(),
+        api.listRoomHistory().catch(() => []),
+        api.listOnlineUsers().catch(() => [] as OnlineUser[]),
+      ]);
       setRooms(rs);
       setHistory(hs);
+      setOnlineUsers(ou);
     } catch (e) {
       toast.push('error', (e as Error).message);
     } finally {
@@ -38,7 +44,13 @@ export default function RoomsPage() {
     }
   }
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    const id = window.setInterval(() => {
+      api.listOnlineUsers().then(setOnlineUsers).catch(() => { /* ignore */ });
+    }, 30000);
+    return () => window.clearInterval(id);
+  }, []);
 
   async function handleCreate() {
     setCreating(true);
@@ -136,6 +148,68 @@ export default function RoomsPage() {
             </form>
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>
+          Người chơi đang online
+          <span className="muted small" style={{ marginLeft: 8, fontWeight: 400 }}>
+            ({onlineUsers.length})
+          </span>
+        </h3>
+        {loading ? (
+          <div className="muted">Đang tải…</div>
+        ) : onlineUsers.length === 0 ? (
+          <div className="muted">Chưa có ai đang online.</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {onlineUsers.map(u => (
+              <div
+                key={u.userId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 10px 4px 4px',
+                  borderRadius: 999,
+                  background: 'rgba(74, 222, 128, 0.12)',
+                  border: '1px solid rgba(74, 222, 128, 0.35)',
+                  fontSize: 13,
+                }}
+              >
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: 'rgba(148, 163, 184, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  {u.hasAvatar
+                    ? <img src={api.userAvatarUrl(u.userId)} alt={u.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : u.displayName.charAt(0).toUpperCase()}
+                </div>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#4ade80',
+                    boxShadow: '0 0 6px rgba(74, 222, 128, 0.6)',
+                  }}
+                />
+                <span style={{ fontWeight: 600 }}>{u.displayName}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card">

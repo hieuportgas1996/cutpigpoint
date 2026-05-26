@@ -3,6 +3,7 @@ namespace CutPig.Dtos;
 public record LoginRequest(string Username, string Password);
 public record LoginResponse(string Token, DateTime ExpiresAt, Guid UserId, string Username, string DisplayName, bool IsAdmin, bool HasAvatar);
 public record MeResponse(Guid UserId, string Username, string DisplayName, bool IsAdmin, bool HasAvatar);
+public record OnlineUserDto(Guid UserId, string Username, string DisplayName, bool HasAvatar);
 
 public record AdminUserDto(Guid Id, string Username, string DisplayName, bool IsAdmin, DateTime CreatedAt);
 public record AdminCreateUserRequest(string Username, string Password, string? DisplayName, bool IsAdmin);

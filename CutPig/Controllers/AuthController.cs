@@ -89,6 +89,29 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("online-users")]
+    public async Task<ActionResult<List<OnlineUserDto>>> OnlineUsers()
+    {
+        var userId = (Guid?)HttpContext.Items["UserId"];
+        if (userId == null) return Unauthorized();
+
+        var now = DateTime.UtcNow;
+        var users = await _db.AuthTokens
+            .Where(t => t.ExpiresAt > now)
+            .Select(t => t.UserId)
+            .Distinct()
+            .Join(_db.AppUsers, id => id, u => u.Id, (id, u) => u)
+            .OrderBy(u => u.DisplayName)
+            .Select(u => new OnlineUserDto(
+                u.Id,
+                u.Username,
+                string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+                !string.IsNullOrEmpty(u.AvatarData)))
+            .ToListAsync();
+
+        return users;
+    }
+
     [HttpGet("me")]
     public async Task<ActionResult<MeResponse>> Me()
     {

@@ -183,6 +183,7 @@ export const api = {
     }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   me: () => request<{ userId: string; username: string; displayName: string; isAdmin: boolean; hasAvatar: boolean }>('/auth/me'),
+  listOnlineUsers: () => request<OnlineUser[]>('/auth/online-users'),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>('/auth/change-password', {
       method: 'POST',
@@ -216,6 +217,13 @@ export interface AdminUser {
   displayName: string;
   isAdmin: boolean;
   createdAt: string;
+}
+
+export interface OnlineUser {
+  userId: string;
+  username: string;
+  displayName: string;
+  hasAvatar: boolean;
 }
 
 export const RoomStatus = { Waiting: 0, Playing: 1, Finished: 2 } as const;
