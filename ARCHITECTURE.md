@@ -85,7 +85,7 @@ Luật chơi chi tiết: xem [RULE.md](RULE.md).
   - `/hubs/room` — SignalR endpoint (chi tiết bên dưới).
 - **Auth** ([CutPig/Middleware/AuthMiddleware.cs](CutPig/Middleware/AuthMiddleware.cs)):
   - Mọi `/api/*` (trừ `/api/auth/login` và `/hubs/*`) yêu cầu `Authorization: Bearer <token>`.
-  - Token random 32 byte base64url, lifetime 8h, lưu `AuthTokens`. Hash PBKDF2-SHA256 100k iter ([Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs)).
+  - Token random 32 byte base64url, lifetime 4h, lưu `AuthTokens`. Hash PBKDF2-SHA256 100k iter ([Services/PasswordHasher.cs](CutPig/Services/PasswordHasher.cs)).
   - Middleware set `HttpContext.Items["UserId" | "Username" | "DisplayName" | "IsAdmin"]` để controllers đọc.
   - SignalR auth: token gửi qua query string `?access_token=...` (vì WebSocket browser không tiện gắn header). `RoomHub.AuthenticateAsync()` đọc từ `Context.GetHttpContext()?.Request.Query`.
 
