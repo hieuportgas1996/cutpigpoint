@@ -352,6 +352,7 @@ export interface RoundResultEntry {
   threeOfSpadesDelta: number;
   judgeDelta: number;
   whiteWinDelta: number;
+  heldPenaltyDelta: number;
   held: HeldItems;
   heldDetails: HeldDetail[];
 }

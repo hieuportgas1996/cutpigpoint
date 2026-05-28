@@ -430,6 +430,7 @@ public class RoomHub : Hub
                     bd.ThreeOfSpades,
                     bd.Judge,
                     bd.WhiteWin,
+                    bd.HeldPenalty,
                     new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
                     heldDetails);
             })
@@ -463,7 +464,7 @@ public class RoomHub : Hub
     {
         var finalScores = match.Players
             .OrderByDescending(p => p.TotalScore)
-            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0, 0, 0, 0, 0, new HeldItemsDto(0, 0, false, false, false), new List<HeldDetailDto>()))
+            .Select(p => new RoundResultEntryDto(p.UserId, p.DisplayName, 0, 0, p.TotalScore, null, 0, false, false, false, false, false, 0, 0, 0, 0, 0, 0, new HeldItemsDto(0, 0, false, false, false), new List<HeldDetailDto>()))
             .ToList();
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchEnd", new MatchEndDto(match.Id, finalScores));
 

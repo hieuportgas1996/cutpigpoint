@@ -162,6 +162,7 @@ public class MatchTimerService : BackgroundService
                     bd.ThreeOfSpades,
                     bd.Judge,
                     bd.WhiteWin,
+                    bd.HeldPenalty,
                     new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
                     heldDetails);
             })

@@ -171,6 +171,21 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 - Không áp dụng khi về trắng.
 - Cả 2 cộng/trừ vào điểm ván (sau base rank và sau chop-pig).
 
+### Phạt Chót còn "hàng" trên tay
+
+Khi ván **không có phán xử** (không ai bị xử) mà người về **Chót** kết ván còn **heo / tứ quý / 3 đôi thông / 4 đôi thông** trong tay → người Chót đền cho người về **kế trên** (hạng `n-1`):
+
+- **Chót -held**, **người kế trên +held**. Zero-sum giữa 2 người; Nhất/Nhì không liên quan.
+- `held` tính giống phán xử: heo đen (`2♠`/`2♣`) 1đ mỗi con, heo đỏ (`2♦`/`2♥`) 2đ mỗi con, tứ quý non-2 +4, 3 đôi thông +3, 4 đôi thông +5 (vừa 4-đôi vừa tứ quý → cộng cả 2).
+- Chỉ áp cho người về Chót — hạng Ba (trong 4 người) còn held **không** bị trừ.
+- **Không** áp khi về trắng. **Không** áp khi có phán xử (phán xử đã xử lý held theo cơ chế riêng).
+- Cộng/trừ vào điểm ván (sau base rank, chop-pig, 3♠). Stack với đui 3♠: nếu Chót vừa đui 3♠ vừa còn held → cộng cả 2 (3♠ không tính vào held, không double-count).
+
+**Ví dụ** (4 người, P4 về Chót còn 3 đôi thông Q-K-A, không có phán xử):
+- Base rank: P1 +2, P2 +1, P3 -1, P4 -2.
+- Phạt held: P4 -3 (3 đôi thông), P3 (hạng kế trên) +3.
+- Tổng ván: P1 +2, P2 +1, P3 +2, P4 -5.
+
 ## Trận đấu nhiều ván
 
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.

@@ -52,6 +52,10 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
       : '3♠';
     parts.push({ label, value: r.threeOfSpadesDelta });
   }
+  if (r.heldPenaltyDelta !== 0) {
+    const label = r.heldPenaltyDelta < 0 ? '🐷 Chót còn hàng' : '🐷 Ăn phạt Chót';
+    parts.push({ label, value: r.heldPenaltyDelta });
+  }
   return parts;
 }
 
@@ -77,10 +81,15 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
                       : h.label.startsWith('Tứ quý') ? '🃏'
                       : h.label.includes('đôi thông') ? '🔗'
                       : '•';
+                    const showPenalty = r.heldPenaltyDelta < 0 || r.judgeIsVictim;
                     return (
                       <div key={i} className="held-row">
                         <span className="held-chip">{icon} {h.label}</span>
-                        <span className="held-value">−{h.value}đ</span>
+                        {showPenalty ? (
+                          <span className="held-value">−{h.value}đ</span>
+                        ) : (
+                          <span className="held-value held-value-info">{h.value}đ</span>
+                        )}
                       </div>
                     );
                   })}

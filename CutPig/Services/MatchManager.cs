@@ -808,13 +808,32 @@ public class MatchManager
             }
         }
 
+        // Chót còn held: người Chót (FinalRank == n) còn heo / tứ quý / 3-đôi-thông / 4-đôi-thông trong tay
+        // → Chót -held, người về kế trên (FinalRank == n-1) +held. Zero-sum giữa 2 người.
+        var chot = match.Players.FirstOrDefault(p => p.FinalRank == n);
+        if (chot != null)
+        {
+            int held = TienLenComboEngine.ComputeHeldValue(chot.Hand);
+            if (held > 0)
+            {
+                var above = match.Players.FirstOrDefault(p => p.FinalRank == n - 1);
+                if (above != null)
+                {
+                    int chotIdx = match.Players.IndexOf(chot);
+                    int aboveIdx = match.Players.IndexOf(above);
+                    scores[chotIdx] -= held;
+                    scores[aboveIdx] += held;
+                }
+            }
+        }
+
         return scores;
     }
 
     /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
     public IReadOnlyDictionary<Guid, int> GetRoundChopExtras(Match match) => match.RoundChopExtra;
 
-    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int Total);
+    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total);
 
     /// <summary>Per-player breakdown of the round score by component (for UI display).</summary>
     public RoundScoreBreakdown[] ComputeRoundScoreBreakdowns(Match match)
@@ -831,7 +850,7 @@ public class MatchManager
             for (int i = 0; i < n; i++)
             {
                 int v = match.Players[i].WhiteWinReason != null ? perWinner : perLoser;
-                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, v, v);
+                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, v, 0, v);
             }
             return result;
         }
@@ -847,7 +866,7 @@ public class MatchManager
             {
                 int threeBonus = stack3s ? (i == winnerIdx ? (n - 1) : -1) : 0;
                 int judgePart = judgeScores[i] - threeBonus;
-                result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, judgeScores[i]);
+                result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, 0, judgeScores[i]);
             }
             return result;
         }
@@ -885,10 +904,28 @@ public class MatchManager
                 three[i] += (match.Players[i].UserId == loser.UserId) ? -3 : 1;
         }
 
+        var heldPenalty = new int[n];
+        var chot = match.Players.FirstOrDefault(p => p.FinalRank == n);
+        if (chot != null)
+        {
+            int held = TienLenComboEngine.ComputeHeldValue(chot.Hand);
+            if (held > 0)
+            {
+                var above = match.Players.FirstOrDefault(p => p.FinalRank == n - 1);
+                if (above != null)
+                {
+                    int chotIdx = match.Players.IndexOf(chot);
+                    int aboveIdx = match.Players.IndexOf(above);
+                    heldPenalty[chotIdx] -= held;
+                    heldPenalty[aboveIdx] += held;
+                }
+            }
+        }
+
         for (int i = 0; i < n; i++)
         {
-            int total = baseRank[i] + chop[i] + three[i];
-            result[i] = new RoundScoreBreakdown(baseRank[i], chop[i], three[i], 0, 0, total);
+            int total = baseRank[i] + chop[i] + three[i] + heldPenalty[i];
+            result[i] = new RoundScoreBreakdown(baseRank[i], chop[i], three[i], 0, 0, heldPenalty[i], total);
         }
         return result;
     }
