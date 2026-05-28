@@ -65,6 +65,9 @@ public class MatchManager
     private static void DealRound(Match match, bool isFirstRound)
     {
         match.RoundNumber = isFirstRound ? 1 : match.RoundNumber + 1;
+        // Round 1 luôn áp luật 3♠; round sau white-win cũng áp (carry-over qua flag).
+        match.EnforceThreeSpadesOpening = isFirstRound || match.NextRoundOpensWithThreeSpades;
+        match.NextRoundOpensWithThreeSpades = false;
         match.Status = MatchStatus.InProgress;
         match.CurrentTrick = null;
         match.CurrentTrickOwnerId = null;
@@ -123,16 +126,16 @@ public class MatchManager
             return;
         }
 
-        SetupFirstTurn(match, isFirstRound);
+        SetupFirstTurn(match);
     }
 
-    private static void SetupFirstTurn(Match match, bool isFirstRound)
+    private static void SetupFirstTurn(Match match)
     {
         // Determine first turn
         int firstSeat;
-        if (isFirstRound)
+        if (match.EnforceThreeSpadesOpening)
         {
-            // Player holding 3 of Spades
+            // Player holding 3 of Spades; nếu 3♠ rơi vào bài úp → seat 0
             firstSeat = match.Players.FindIndex(p => p.Hand.Any(c => c.Rank == 3 && c.Suit == Suit.Spades));
             if (firstSeat < 0) firstSeat = 0;
         }
@@ -208,7 +211,7 @@ public class MatchManager
                 p.WhiteWinReason = null;
                 p.WhiteWinAccepted = null;
             }
-            SetupFirstTurn(match, isFirstRound: match.RoundNumber == 1);
+            SetupFirstTurn(match);
             return;
         }
 
@@ -233,6 +236,8 @@ public class MatchManager
             match.FinishOrder.Add(p.UserId);
             match.FinishedCount++;
         }
+        // Round sau white-win áp luật 3♠ đi đầu giống round 1
+        match.NextRoundOpensWithThreeSpades = true;
         match.Status = MatchStatus.WaitingNextRound;
         match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
@@ -394,7 +399,7 @@ public class MatchManager
             var combo = TienLenComboEngine.Detect(cards)
                 ?? throw new InvalidOperationException("Bộ bài không hợp lệ.");
 
-            bool isMatchOpener = match.RoundNumber == 1
+            bool isMatchOpener = match.EnforceThreeSpadesOpening
                 && match.CurrentTrick == null
                 && match.Players.All(p => p.Hand.Count >= 12); // nobody has played yet
 

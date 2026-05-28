@@ -182,6 +182,7 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
   - Chia bài lại (13 lá/người, bài dư úp).
   - Detect về trắng lại; nếu lại có về trắng → ván tiếp đó kết thúc ngay, đếm tiếp 5s.
   - Người **Nhất ván trước** đi đầu (mở trick đầu).
+  - **Ngoại lệ**: nếu ván trước kết thúc bằng **về trắng** → ván tiếp áp luật 3♠ như ván đầu tiên: người cầm `3♠` đi đầu và nước đầu phải chứa `3♠`. Nếu `3♠` nằm trong bài úp (2-3 người chơi) → seat 0 (host) đi đầu, không bắt buộc nước đầu chứa lá nào.
 - Ván đầu tiên (round 1):
   - Nếu **3♠ được chia trong tay người chơi**: người giữ `3♠` đi đầu và **nước đầu phải chứa `3♠`**.
   - Nếu **3♠ nằm trong bài úp** (2-3 người chơi, 13 lá dư bị bỏ): seat 0 (host) đi đầu, **không bắt buộc** nước đầu chứa lá nào.

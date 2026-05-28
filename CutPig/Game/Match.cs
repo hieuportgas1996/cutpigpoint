@@ -48,6 +48,17 @@ public class Match
     public List<Guid> FinishOrder { get; init; } = new();
     public int RoundNumber { get; set; } = 1;
     public Guid? PreviousRoundWinnerId { get; set; }
+    /// <summary>
+    /// True ở round 1 và ở round ngay sau khi ván trước về trắng. Round có flag này
+    /// phải áp luật "ai cầm 3♠ đi đầu, nước đầu phải chứa 3♠" (giống round 1).
+    /// </summary>
+    public bool EnforceThreeSpadesOpening { get; set; }
+
+    /// <summary>
+    /// Được set khi ván vừa kết thúc bằng white-win, tiêu thụ ở DealRound kế tiếp để
+    /// ép `EnforceThreeSpadesOpening = true` cho round đó.
+    /// </summary>
+    public bool NextRoundOpensWithThreeSpades { get; set; }
     public DateTime? NextRoundAt { get; set; }
     public DateTime? WhiteWinDeadline { get; set; }
     public DateTime? TrickCutDeadline { get; set; }
