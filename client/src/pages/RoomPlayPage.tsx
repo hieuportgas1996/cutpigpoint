@@ -292,7 +292,6 @@ export default function RoomPlayPage() {
     if (lastCelebratedRoundRef.current === key) return;
     lastCelebratedRoundRef.current = key;
     setWinnerCelebration(winnerUserId);
-    playSound('victory', 0.8);
     const t = setTimeout(() => {
       setWinnerCelebration(prev => prev === winnerUserId ? null : prev);
     }, 3000);
