@@ -217,9 +217,11 @@ export default function RoomPlayPage() {
   const cardSize: 'sm' | 'md' = isMobile ? 'sm' : 'md';
   const cardWidth = isMobile ? 44 : 64;
 
+  // Clear selection chỉ khi sang ván mới — giữ nguyên lá đã tick khi đối phương đánh / pass / khi
+  // lượt chuyển qua chuyển lại, để người chơi không phải tick lại từ đầu mỗi turn.
   useEffect(() => {
     setSelected(new Set());
-  }, [matchState?.currentTurnSeatIndex, matchState?.roundNumber]);
+  }, [matchState?.roundNumber]);
 
   // Auto-clear roundEnd when next round begins (server auto-advances)
   useEffect(() => {
@@ -350,6 +352,7 @@ export default function RoomPlayPage() {
     if (!myCombo) return;
     try {
       await playCards(myCombo.cards.map(cardToDto));
+      setSelected(new Set());
     } catch (e) {
       toast.push('error', (e as Error).message);
     }

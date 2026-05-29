@@ -73,13 +73,26 @@
 }
 
 .tlmn-seat.is-turn {
-  animation: turn-pulse 1.4s ease-in-out infinite;
-  border-color: var(--gold-soft);
+  border-color: #ffe26b;
+  border-width: 3px;
+  animation: turn-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes turn-pulse {
-  0%, 100% { box-shadow: 0 8px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 0 rgba(212,164,69,0.6); }
-  50% { box-shadow: 0 8px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 12px rgba(212,164,69,0); }
+  0%, 100% {
+    box-shadow:
+      0 8px 24px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      0 0 0 0 rgba(255, 226, 107, 0.85),
+      0 0 18px 4px rgba(255, 220, 100, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 8px 24px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      0 0 0 14px rgba(255, 226, 107, 0),
+      0 0 32px 10px rgba(255, 220, 100, 0.9);
+  }
 }
 
 .tlmn-seat-top { top: 16px; left: 50%; transform: translateX(-50%); }
