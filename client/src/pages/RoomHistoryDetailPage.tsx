@@ -175,6 +175,13 @@ export default function RoomHistoryDetailPage() {
         onSaved={(h) => setHistory(h)}
       />
 
+      {history.luckyWheel && (
+        <MoneySummarySection
+          adjustedSorted={adjustedSorted}
+          multiplier={history.luckyWheel.result}
+        />
+      )}
+
       <div style={{ marginTop: 12 }}>
         <button className="sm ghost" onClick={() => navigate('/rooms')}>← Quay lại danh sách phòng</button>
       </div>
@@ -526,6 +533,51 @@ function LuckyWheelSection({ history, code, myUserId, baseSorted, onSaved }: Luc
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+interface MoneySummarySectionProps {
+  adjustedSorted: RoomHistory['finalScores'];
+  multiplier: number;
+}
+
+/** Format tiền viết tắt: 30 → "+30k", -30 → "-30k", 0 → "0k". */
+function formatMoney(value: number): string {
+  const sign = value < 0 ? '-' : value > 0 ? '+' : '';
+  return `${sign}${Math.abs(value)}k`;
+}
+
+function MoneySummarySection({ adjustedSorted, multiplier }: MoneySummarySectionProps) {
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="card-header">
+        <h3>💰 Tổng kết tiền</h3>
+        <div className="spacer" />
+        <div className="muted small">1 điểm = {multiplier}k · sau sponsor</div>
+      </div>
+      <div className="leaderboard">
+        {adjustedSorted.map((p, idx) => {
+          const money = p.totalScore * multiplier;
+          return (
+            <div key={p.userId} className={`leader-row ${idx === 0 ? 'top1' : ''}`}>
+              <div className={`rank-badge r${idx + 1}`}>{idx + 1}</div>
+              <div className="avatar sm" aria-label={p.displayName}>
+                {p.hasAvatar
+                  ? <img src={api.userAvatarUrl(p.userId)} alt={p.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                  : initials(p.displayName)}
+              </div>
+              <div className="name">{p.displayName}</div>
+              <span className={`score-pill ${scoreClass(p.totalScore)}`} style={{ marginRight: 8 }}>
+                {formatScore(p.totalScore)}
+              </span>
+              <span className={`score-pill ${scoreClass(money)}`} style={{ fontWeight: 800, fontSize: 14 }}>
+                {formatMoney(money)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
