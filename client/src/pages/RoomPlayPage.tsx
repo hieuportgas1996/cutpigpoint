@@ -255,22 +255,31 @@ export default function RoomPlayPage() {
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
 
-  // Pháo hoa + victory sound cho người Nhất khi vừa có roundEnd. Bỏ qua white-win (đã có Confetti riêng).
+  // Trì hoãn hiển thị modal kết quả ván 2s sau khi server gửi RoundEnd — cho pháo hoa của người Nhất
+  // bùng lên trước, modal không che màn hình ngay. White-win hiển thị ngay (không có pháo hoa Nhất).
+  const [delayedRoundEnd, setDelayedRoundEnd] = useState<RoundEnd | null>(null);
   useEffect(() => {
-    if (!roundEnd) return;
-    const key = `${roundEnd.matchId}|${roundEnd.roundNumber}`;
-    if (lastCelebratedRoundRef.current === key) return;
-    lastCelebratedRoundRef.current = key;
-    if (roundEnd.wasWhiteWin) return;
-    const winner = roundEnd.results.find(r => r.finalRank === 1);
-    if (!winner) return;
-    setWinnerCelebration(winner.userId);
-    playSound('victory', 0.8);
-    const t = setTimeout(() => {
-      setWinnerCelebration(prev => prev === winner.userId ? null : prev);
-    }, 3000);
+    if (!roundEnd) { setDelayedRoundEnd(null); return; }
+    if (roundEnd.wasWhiteWin) { setDelayedRoundEnd(roundEnd); return; }
+    const t = setTimeout(() => setDelayedRoundEnd(roundEnd), 2000);
     return () => clearTimeout(t);
   }, [roundEnd]);
+
+  // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
+  // không cần chờ roundEnd của cả ván. Dùng key (roundNumber + winnerId) để chỉ chạy 1 lần / ván.
+  const winnerUserId = matchState?.players.find(p => p.finalRank === 1)?.userId ?? null;
+  useEffect(() => {
+    if (!matchState || !winnerUserId) return;
+    const key = `${matchState.roundNumber}|${winnerUserId}`;
+    if (lastCelebratedRoundRef.current === key) return;
+    lastCelebratedRoundRef.current = key;
+    setWinnerCelebration(winnerUserId);
+    playSound('victory', 0.8);
+    const t = setTimeout(() => {
+      setWinnerCelebration(prev => prev === winnerUserId ? null : prev);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [matchState?.roundNumber, winnerUserId]);
 
   // Track previous trick combo signature/kind to detect "3-đôi-thông / tứ quý vừa bị thay bằng combo
   // lớn hơn" → play ahh.mp3 (mọi user nghe).
@@ -748,18 +757,18 @@ export default function RoomPlayPage() {
           </div>
         )}
 
-        {roundEnd && !matchEnd && !isWhiteWinChoicePhase && (
+        {delayedRoundEnd && !matchEnd && !isWhiteWinChoicePhase && (
           <div className="match-end-overlay">
-            {roundEnd.wasWhiteWin && <Confetti active={true} />}
+            {delayedRoundEnd.wasWhiteWin && <Confetti active={true} />}
             <div className="match-end-card">
               <h2>
-                {roundEnd.wasWhiteWin
+                {delayedRoundEnd.wasWhiteWin
                   ? '🌟 Có người về trắng!'
-                  : roundEnd.wasJudge
-                  ? `⚖️ Phán xử — Ván ${roundEnd.roundNumber}`
-                  : `🎉 Kết quả ván ${roundEnd.roundNumber}`}
+                  : delayedRoundEnd.wasJudge
+                  ? `⚖️ Phán xử — Ván ${delayedRoundEnd.roundNumber}`
+                  : `🎉 Kết quả ván ${delayedRoundEnd.roundNumber}`}
               </h2>
-              <RoundResultRows round={roundEnd} myUserId={myUserId} />
+              <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />
               <div className="match-end-actions">
                 <div className="next-round-countdown">
                   🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
