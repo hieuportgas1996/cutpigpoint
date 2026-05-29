@@ -377,6 +377,8 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
   const [min, setMin] = useState(1);
   const [max, setMax] = useState(5);
   const [doubled, setDoubled] = useState(false);
+  // Preview pool sau khi spinner bấm "Tạo vòng xoay" — hiện wheel + nút "Quay" ngay dưới.
+  const [previewPool, setPreviewPool] = useState<number[] | null>(null);
   const [requesting, setRequesting] = useState(false);
 
   // Animation state — kích hoạt khi nhận WheelSpinStarted (mọi viewer).
@@ -403,8 +405,11 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
         setAnimatedRotation(target);
       });
     });
-    const t = setTimeout(() => setAnimating(false), WHEEL_SPIN_DURATION_MS + 100);
-    return () => clearTimeout(t);
+    // Stop animating sau 3.5s, sau đó clear pool thêm 800ms (cho user nhìn số kết quả tĩnh trên wheel
+    // trước khi component chuyển sang block hiển thị result + tổng kết tiền).
+    const stop = setTimeout(() => setAnimating(false), WHEEL_SPIN_DURATION_MS + 100);
+    const clear = setTimeout(() => setAnimatedPool(null), WHEEL_SPIN_DURATION_MS + 900);
+    return () => { clearTimeout(stop); clearTimeout(clear); };
   }, [wheelSpin]);
 
   // Đã có kết quả persisted + không còn animate → hiển thị result tĩnh.
@@ -429,19 +434,32 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
 
   if (!spinner) return null;
 
-  async function handleSpin() {
+  function handleCreate() {
     if (min < 1 || max < min || max > 1000) {
       toast.push('error', 'Khoảng min/max không hợp lệ.');
       return;
     }
+    // Preview pool client-side (server sẽ shuffle lại khi spin thật) — chỉ để hiện wheel + label.
+    const base: number[] = [];
+    for (let n = min; n <= max; n++) base.push(n);
+    const pool = doubled ? [...base, ...base] : base;
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    setPreviewPool(pool);
+  }
+
+  async function handleSpin() {
+    if (!previewPool) return;
     setRequesting(true);
     try {
       await startSpin(min, max, doubled);
     } catch (e) {
       toast.push('error', (e as Error).message);
-    } finally {
       setRequesting(false);
     }
+    // Note: không reset `requesting` khi success — WheelSpinStarted sẽ tới và chuyển sang animation block.
   }
 
   // Đang animate (mọi viewer).
@@ -517,25 +535,70 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
         <div className="spacer" />
         <div className="muted small">Bạn (hạng bét) được quay 1 lần</div>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-        <label>
-          <div className="dim small">Min</div>
-          <input type="number" min={1} max={1000} value={min} onChange={e => setMin(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-            style={{ width: 80, padding: '6px 10px' }} disabled={requesting} />
-        </label>
-        <label>
-          <div className="dim small">Max</div>
-          <input type="number" min={1} max={1000} value={max} onChange={e => setMax(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-            style={{ width: 80, padding: '6px 10px' }} disabled={requesting} />
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={doubled} onChange={e => setDoubled(e.target.checked)} disabled={requesting} />
-          <span>Double (mỗi số 2 lần)</span>
-        </label>
-        <button className="primary" onClick={handleSpin} disabled={requesting}>
-          {requesting ? '⏳ Đang gửi…' : '🎯 Quay!'}
-        </button>
-      </div>
+
+      {/* Step 1: nhập min/max/double, bấm "Tạo vòng xoay" */}
+      {!previewPool && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+          <label>
+            <div className="dim small">Min</div>
+            <input type="number" min={1} max={1000} value={min} onChange={e => setMin(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+              style={{ width: 80, padding: '6px 10px' }} />
+          </label>
+          <label>
+            <div className="dim small">Max</div>
+            <input type="number" min={1} max={1000} value={max} onChange={e => setMax(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+              style={{ width: 80, padding: '6px 10px' }} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={doubled} onChange={e => setDoubled(e.target.checked)} />
+            <span>Double (mỗi số 2 lần)</span>
+          </label>
+          <button className="primary" onClick={handleCreate}>🎨 Tạo vòng xoay</button>
+        </div>
+      )}
+
+      {/* Step 2: preview wheel + nút Quay */}
+      {previewPool && (
+        <div className="lucky-wheel-container">
+          <div className="lucky-wheel-pointer">▼</div>
+          <div
+            className="lucky-wheel"
+            style={{
+              background: `conic-gradient(${previewPool.map((_, i) => {
+                const slice = 360 / previewPool.length;
+                const start = i * slice;
+                const end = start + slice;
+                return `${WHEEL_COLORS[i % WHEEL_COLORS.length]} ${start}deg ${end}deg`;
+              }).join(', ')})`,
+            }}
+          >
+            {previewPool.map((n, i) => {
+              const slice = 360 / previewPool.length;
+              const angle = i * slice + slice / 2;
+              return (
+                <div
+                  key={i}
+                  className="lucky-wheel-label"
+                  style={{ transform: `rotate(${angle}deg) translateY(-80%)` }}
+                >
+                  <span style={{ transform: 'rotate(90deg)', display: 'inline-block' }}>{n}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="primary" onClick={handleSpin} disabled={requesting}>
+              {requesting ? '⏳ Đang gửi…' : '🎯 Quay!'}
+            </button>
+            <button className="ghost" onClick={() => setPreviewPool(null)} disabled={requesting}>
+              Đổi khoảng
+            </button>
+          </div>
+          <div className="muted small" style={{ marginTop: 8, textAlign: 'center' }}>
+            Khoảng {min}–{max}{doubled ? ' (×2)' : ''} · {previewPool.length} ô
+          </div>
+        </div>
+      )}
     </div>
   );
 }

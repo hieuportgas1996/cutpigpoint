@@ -253,12 +253,20 @@ export default function RoomPlayPage() {
     playSound('countdown', 0.6);
   }, [now, matchState?.turnDeadline, matchState?.currentTurnSeatIndex, matchState?.status, matchState?.roundNumber, state]);
 
-  // Auto-direct mọi player sang trang lịch sử phòng sau khi MatchEnd (cho 4s xem confetti / bảng final).
+  // Auto-direct mọi player sang trang lịch sử phòng sau khi MatchEnd (10s, có nút "Đi ngay").
+  const [matchEndAt, setMatchEndAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!matchEnd) { setMatchEndAt(null); return; }
+    setMatchEndAt(Date.now());
+  }, [matchEnd]);
   useEffect(() => {
     if (!matchEnd || !code) return;
-    const t = setTimeout(() => navigate(`/rooms/${code.toUpperCase()}/history`), 4000);
+    const t = setTimeout(() => navigate(`/rooms/${code.toUpperCase()}/history`), 10000);
     return () => clearTimeout(t);
   }, [matchEnd, code, navigate]);
+  const matchEndLeftSec = matchEndAt
+    ? Math.max(0, 10 - Math.floor((now - matchEndAt) / 1000))
+    : 10;
 
   // Notify turn sound: play khi lượt vừa chuyển đến mình (transition false → true).
   const wasMyTurnRef = useRef(false);
@@ -827,8 +835,11 @@ export default function RoomPlayPage() {
                   </div>
                 ))}
               </div>
+              <div className="next-round-countdown">
+                📜 Tự chuyển sang bảng điểm sau <b>{matchEndLeftSec}s</b>…
+              </div>
               <button className="tlmn-btn primary" onClick={() => navigate(`/rooms/${(code ?? '').toUpperCase()}/history`)}>
-                📜 Xem lịch sử + sponsor + vòng quay
+                ▶ Đi ngay
               </button>
             </div>
           </div>
