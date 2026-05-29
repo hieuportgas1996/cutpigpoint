@@ -8,6 +8,7 @@ import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
+import { playSound, type SoundKey } from '../sounds';
 import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
@@ -23,6 +24,11 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'siuuu', emoji: '🐐', label: 'SIUUUU', hint: 'Ăn mừng' },
   { code: 'chop-it', emoji: '🪓', label: 'Chặt chết mẹ nó', hint: 'Khích chặt heo' },
 ];
+const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
+  'sos': 'sos',
+  'siuuu': 'siuu',
+  'go-away': 'begging',
+};
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
   (acc, s) => { acc[s.code] = s; return acc; },
   {} as Record<string, typeof STICKERS[number]>,
@@ -145,6 +151,9 @@ export default function RoomPlayPage() {
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string } | null>(null);
+  // ID người Nhất đang được hiển thị pháo hoa (chỉ khi roundEnd vừa bùng ra)
+  const [winnerCelebration, setWinnerCelebration] = useState<string | null>(null);
+  const lastCelebratedRoundRef = useRef<string | null>(null);
   const lastStickerSentAt = useRef<number>(0);
   const [stickerCooldownLeft, setStickerCooldownLeft] = useState(0);
 
@@ -184,6 +193,8 @@ export default function RoomPlayPage() {
     const sticker = parseSticker(latest.text);
     if (sticker) {
       setStickerOverlay({ id: latest.id, code: sticker.code, emoji: sticker.emoji, label: sticker.label, sender: latest.displayName });
+      const sndKey = STICKER_SOUND[sticker.code];
+      if (sndKey) playSound(sndKey);
       const t = setTimeout(() => {
         setStickerOverlay(prev => (prev?.id === latest.id ? null : prev));
       }, 3000);
@@ -223,6 +234,18 @@ export default function RoomPlayPage() {
     setSelected(new Set());
   }, [matchState?.roundNumber]);
 
+  // Notify turn sound: play khi lượt vừa chuyển đến mình (transition false → true).
+  const wasMyTurnRef = useRef(false);
+  useEffect(() => {
+    const myUid = state.status === 'authenticated' ? state.userId : '';
+    const isMine = matchState?.status === MatchStatus.InProgress
+      && matchState?.players[matchState.currentTurnSeatIndex]?.userId === myUid;
+    if (isMine && !wasMyTurnRef.current) {
+      playSound('notifyTurn', 0.7);
+    }
+    wasMyTurnRef.current = !!isMine;
+  }, [matchState?.currentTurnSeatIndex, matchState?.status, state]);
+
   // Auto-clear roundEnd when next round begins (server auto-advances)
   useEffect(() => {
     if (!roundEnd) return;
@@ -232,19 +255,58 @@ export default function RoomPlayPage() {
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
 
+  // Pháo hoa + victory sound cho người Nhất khi vừa có roundEnd. Bỏ qua white-win (đã có Confetti riêng).
+  useEffect(() => {
+    if (!roundEnd) return;
+    const key = `${roundEnd.matchId}|${roundEnd.roundNumber}`;
+    if (lastCelebratedRoundRef.current === key) return;
+    lastCelebratedRoundRef.current = key;
+    if (roundEnd.wasWhiteWin) return;
+    const winner = roundEnd.results.find(r => r.finalRank === 1);
+    if (!winner) return;
+    setWinnerCelebration(winner.userId);
+    playSound('victory', 0.8);
+    const t = setTimeout(() => {
+      setWinnerCelebration(prev => prev === winner.userId ? null : prev);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [roundEnd]);
+
+  // Track previous trick combo signature/kind to detect "3-đôi-thông / tứ quý vừa bị thay bằng combo
+  // lớn hơn" → play ahh.mp3 (mọi user nghe).
+  const prevTrickComboKindRef = useRef<{ kind: string; length: number } | null>(null);
+
   // Detect chặt heo (big cut combo): tứ quý / 3-đôi-thông / 4-đôi-thông vừa được đánh ra.
   useEffect(() => {
     const trickCards = matchState?.currentTrick;
     if (!trickCards || trickCards.length === 0) {
       lastCutSignature.current = null;
+      prevTrickComboKindRef.current = null;
       return;
     }
     const cards = trickCards.map(cardFromDto);
     const combo = detectCombo(cards);
-    if (!combo || !isBigCutCombo(combo)) return;
+    if (!combo) return;
+
+    // Detect: previous combo trên bàn là 3-đôi-thông hoặc tứ quý, vừa bị thay bằng combo lớn hơn
+    // (tứ quý ăn 3-đôi-thông, hoặc 4-đôi-thông ăn 3-đôi-thông/tứ quý). Play `ahh` cho mọi user.
+    const prev = prevTrickComboKindRef.current;
+    const prevWasBigDefender = prev && (
+      (prev.kind === 'runOfPairs' && prev.length === 6) || // 3 đôi thông
+      (prev.kind === 'four')                                // tứ quý
+    );
+    const nowIsBigCut = isBigCutCombo(combo);
+    if (prevWasBigDefender && nowIsBigCut && (prev!.kind !== combo.kind || prev!.length !== combo.cards.length)) {
+      playSound('ahh', 0.8);
+    }
+    prevTrickComboKindRef.current = { kind: combo.kind, length: combo.cards.length };
+
+    if (!nowIsBigCut) return;
     const signature = `${matchState!.roundNumber}|${cards.map(c => c.id).sort().join(',')}`;
     if (lastCutSignature.current === signature) return;
     lastCutSignature.current = signature;
+    // Sound chặt heo (mọi user nghe).
+    playSound('uhhhh', 0.8);
     const cutterId = matchState!.currentTrickOwnerId;
     const cutter = matchState!.players.find(p => p.userId === cutterId)?.displayName ?? 'Ai đó';
     const comboLabel = combo.kind === 'four' ? 'Tứ quý'
@@ -530,6 +592,15 @@ export default function RoomPlayPage() {
                     <div className="seat-sticker-emoji">{stickerOverlay.emoji}</div>
                     <div className="seat-sticker-label">{stickerOverlay.label}</div>
                     <div className="seat-sticker-sender">— {stickerOverlay.sender}</div>
+                  </div>
+                )}
+                {winnerCelebration === player.userId && (
+                  <div className="seat-fireworks" aria-hidden="true">
+                    <span className="fw fw-1">🎆</span>
+                    <span className="fw fw-2">🎇</span>
+                    <span className="fw fw-3">✨</span>
+                    <span className="fw fw-4">🎉</span>
+                    <span className="fw fw-5">🏆</span>
                   </div>
                 )}
               </div>

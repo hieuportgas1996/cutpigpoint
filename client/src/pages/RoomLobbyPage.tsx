@@ -8,6 +8,15 @@ import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
 import { MaiBranch } from '../game/effects/MaiBranch';
+import { playLoop } from '../sounds';
+
+const LOBBY_BGM_KEY = 'cutpig.lobbyBgmOn';
+function readLobbyBgmPref(): boolean {
+  try {
+    const v = localStorage.getItem(LOBBY_BGM_KEY);
+    return v === null ? true : v === '1';
+  } catch { return true; }
+}
 
 const SEAT_POSITIONS: Array<'bottom' | 'right' | 'top' | 'left'> = ['bottom', 'right', 'top', 'left'];
 
@@ -72,6 +81,17 @@ export default function RoomLobbyPage() {
     }
   }, [room?.status, code, navigate]);
 
+  const [bgmOn, setBgmOn] = useState<boolean>(readLobbyBgmPref);
+  useEffect(() => {
+    try { localStorage.setItem(LOBBY_BGM_KEY, bgmOn ? '1' : '0'); } catch { /* no-op */ }
+  }, [bgmOn]);
+  useEffect(() => {
+    if (!bgmOn) return;
+    if (room?.status !== RoomStatus.Waiting) return;
+    const stop = playLoop('backgroundLobby', 0.35);
+    return stop;
+  }, [bgmOn, room?.status]);
+
   if (state.status !== 'authenticated') return null;
 
   if (error) {
@@ -103,6 +123,14 @@ export default function RoomLobbyPage() {
             <span className="muted small">Mã phòng</span>
             <code>{room.code}</code>
           </div>
+          <button
+            type="button"
+            className="tlmn-btn ghost sm"
+            onClick={() => setBgmOn(v => !v)}
+            title={bgmOn ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+          >
+            {bgmOn ? '🔊 Nhạc' : '🔇 Nhạc'}
+          </button>
           <div className="muted small">
             {room.seats.length}/{room.maxSeats} người
           </div>
