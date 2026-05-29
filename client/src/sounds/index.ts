@@ -7,6 +7,8 @@ import siuuUrl from './siuu.mp3';
 import beggingUrl from './begging.mp3';
 import uhhhhUrl from './uhhhh.mp3';
 import ahhUrl from './ahh.mp3';
+import sorryUrl from './sorry.mp3';
+import countdownUrl from './countdown.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -17,6 +19,8 @@ export const SOUND_URLS = {
   begging: beggingUrl,
   uhhhh: uhhhhUrl,
   ahh: ahhUrl,
+  sorry: sorryUrl,
+  countdown: countdownUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;

@@ -23,12 +23,15 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'go-away', emoji: '👋', label: 'Bỏ đi nhỏ', hint: 'Pass đi nào' },
   { code: 'siuuu', emoji: '🐐', label: 'SIUUUU', hint: 'Ăn mừng' },
   { code: 'chop-it', emoji: '🪓', label: 'Chặt chết mẹ nó', hint: 'Khích chặt heo' },
+  { code: 'sorry', emoji: '🥲', label: 'Sorry', hint: 'Xin lỗi mất nết' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sos': 'sos',
   'siuuu': 'siuu',
   'go-away': 'begging',
+  'sorry': 'sorry',
 };
+const STICKER_VOLUME = 0.45;
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
   (acc, s) => { acc[s.code] = s; return acc; },
   {} as Record<string, typeof STICKERS[number]>,
@@ -194,7 +197,7 @@ export default function RoomPlayPage() {
     if (sticker) {
       setStickerOverlay({ id: latest.id, code: sticker.code, emoji: sticker.emoji, label: sticker.label, sender: latest.displayName });
       const sndKey = STICKER_SOUND[sticker.code];
-      if (sndKey) playSound(sndKey);
+      if (sndKey) playSound(sndKey, STICKER_VOLUME);
       const t = setTimeout(() => {
         setStickerOverlay(prev => (prev?.id === latest.id ? null : prev));
       }, 3000);
@@ -233,6 +236,21 @@ export default function RoomPlayPage() {
   useEffect(() => {
     setSelected(new Set());
   }, [matchState?.roundNumber]);
+
+  // Countdown beep khi còn 3s lượt của mình — play 1 lần (per turn) khi secLeft chạm 3.
+  const lastCountdownTurnRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!matchState || matchState.status !== MatchStatus.InProgress) return;
+    const myUid = state.status === 'authenticated' ? state.userId : '';
+    const isMine = matchState.players[matchState.currentTurnSeatIndex]?.userId === myUid;
+    if (!isMine) return;
+    const secLeft = Math.max(0, Math.ceil((new Date(matchState.turnDeadline).getTime() - now) / 1000));
+    if (secLeft !== 3) return;
+    const turnKey = `${matchState.roundNumber}|${matchState.turnDeadline}`;
+    if (lastCountdownTurnRef.current === turnKey) return;
+    lastCountdownTurnRef.current = turnKey;
+    playSound('countdown', 0.6);
+  }, [now, matchState?.turnDeadline, matchState?.currentTurnSeatIndex, matchState?.status, matchState?.roundNumber, state]);
 
   // Notify turn sound: play khi lượt vừa chuyển đến mình (transition false → true).
   const wasMyTurnRef = useRef(false);
