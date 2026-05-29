@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, RoomHistory, RoomSponsorEntry } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../ui/Toast';
 import { Icon } from '../ui/Icon';
 import { formatScore, scoreClass, formatDateTime, initials } from '../ui/helpers';
+import './lucky-wheel.css';
 
 /**
  * Compute final scores after applying the sponsor plan (Nhất/Nhì transfer điểm cho người âm).
@@ -166,6 +167,14 @@ export default function RoomHistoryDetailPage() {
         />
       )}
 
+      <LuckyWheelSection
+        history={history}
+        code={code!}
+        myUserId={myUserId}
+        baseSorted={baseSorted}
+        onSaved={(h) => setHistory(h)}
+      />
+
       <div style={{ marginTop: 12 }}>
         <button className="sm ghost" onClick={() => navigate('/rooms')}>← Quay lại danh sách phòng</button>
       </div>
@@ -318,6 +327,204 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
         </>
       ) : (
         <div className="muted small">Chỉ Nhất hoặc Nhì (điểm dương) mới được sponsor.</div>
+      )}
+    </div>
+  );
+}
+
+interface LuckyWheelSectionProps {
+  history: RoomHistory;
+  code: string;
+  myUserId: string;
+  baseSorted: RoomHistory['finalScores'];
+  onSaved: (h: RoomHistory) => void;
+}
+
+/** Build the wheel pool (mỗi số xuất hiện 1 hoặc 2 lần), random order. */
+function buildWheelPool(min: number, max: number, doubled: boolean): number[] {
+  const base: number[] = [];
+  for (let n = min; n <= max; n++) base.push(n);
+  const pool = doubled ? [...base, ...base] : base;
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+const WHEEL_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#118ab2', '#7c3aed', '#f59e0b', '#ec4899', '#10b981'];
+
+function LuckyWheelSection({ history, code, myUserId, baseSorted, onSaved }: LuckyWheelSectionProps) {
+  const toast = useToast();
+  // Người hạng bét theo điểm GỐC (như đã chốt với user).
+  const spinner = baseSorted[baseSorted.length - 1];
+  const iAmSpinner = spinner?.userId === myUserId;
+  const existing = history.luckyWheel;
+
+  const [min, setMin] = useState(1);
+  const [max, setMax] = useState(5);
+  const [doubled, setDoubled] = useState(false);
+  const [pool, setPool] = useState<number[] | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  const [resultIdx, setResultIdx] = useState<number | null>(null);
+  const saveRef = useRef(false);
+
+  // Nếu đã có kết quả persisted: dựng lại pool với seed cố định? Không cần — chỉ hiển thị result.
+  if (existing) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card-header">
+          <h3>🎡 Vòng quay may mắn</h3>
+          <div className="spacer" />
+          <div className="muted small">Đã có kết quả</div>
+        </div>
+        <div className="lucky-wheel-result">
+          <div className="lucky-wheel-number">{existing.result}</div>
+          <div className="muted small">
+            Khoảng {existing.min}–{existing.max}{existing.double ? ' (×2)' : ''} · Người quay:{' '}
+            <b>{history.finalScores.find(s => s.userId === existing.spinnerUserId)?.displayName ?? '?'}</b>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!spinner) return null;
+
+  function handleStart() {
+    if (min < 1 || max < min || max > 1000) {
+      toast.push('error', 'Khoảng min/max không hợp lệ.');
+      return;
+    }
+    setPool(buildWheelPool(min, max, doubled));
+    setRotation(0);
+    setResultIdx(null);
+  }
+
+  async function handleSpin() {
+    if (!pool || spinning || saveRef.current) return;
+    const idx = Math.floor(Math.random() * pool.length);
+    const slice = 360 / pool.length;
+    // Quay 5 vòng + tới vị trí target. Pointer ở trên (12h), slice i ở góc i*slice → muốn slice idx
+    // dừng dưới pointer → rotation = -(idx * slice + slice / 2) + 5*360.
+    const target = 360 * 5 - (idx * slice + slice / 2);
+    setSpinning(true);
+    setRotation(target);
+    setResultIdx(idx);
+    // Sau khi animation xong (~3.5s), save server.
+    setTimeout(async () => {
+      if (saveRef.current) return;
+      saveRef.current = true;
+      try {
+        const updated = await api.saveLuckyWheel(code, {
+          min,
+          max,
+          double: doubled,
+          result: pool[idx],
+        });
+        onSaved(updated);
+        toast.push('success', `Kết quả: ${pool[idx]}`);
+      } catch (e) {
+        toast.push('error', (e as Error).message);
+        saveRef.current = false;
+      } finally {
+        setSpinning(false);
+      }
+    }, 3600);
+  }
+
+  if (!iAmSpinner) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card-header">
+          <h3>🎡 Vòng quay may mắn</h3>
+          <div className="spacer" />
+          <div className="muted small">Đang chờ {spinner.displayName} quay</div>
+        </div>
+        <div className="muted small">
+          Chỉ người hạng bét (<b>{spinner.displayName}</b>) được quay vòng.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="card-header">
+        <h3>🎡 Vòng quay may mắn</h3>
+        <div className="spacer" />
+        <div className="muted small">Bạn (hạng bét) được quay 1 lần</div>
+      </div>
+
+      {!pool && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+          <label>
+            <div className="dim small">Min</div>
+            <input type="number" min={1} max={1000} value={min} onChange={e => setMin(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+              style={{ width: 80, padding: '6px 10px' }} />
+          </label>
+          <label>
+            <div className="dim small">Max</div>
+            <input type="number" min={1} max={1000} value={max} onChange={e => setMax(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+              style={{ width: 80, padding: '6px 10px' }} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={doubled} onChange={e => setDoubled(e.target.checked)} />
+            <span>Double (mỗi số 2 lần)</span>
+          </label>
+          <button className="primary" onClick={handleStart}>Tạo vòng quay</button>
+        </div>
+      )}
+
+      {pool && (
+        <div className="lucky-wheel-container">
+          <div className="lucky-wheel-pointer">▼</div>
+          <div
+            className="lucky-wheel"
+            style={{
+              background: `conic-gradient(${pool.map((_, i) => {
+                const slice = 360 / pool.length;
+                const start = i * slice;
+                const end = start + slice;
+                return `${WHEEL_COLORS[i % WHEEL_COLORS.length]} ${start}deg ${end}deg`;
+              }).join(', ')})`,
+              transform: `rotate(${rotation}deg)`,
+              transition: spinning ? 'transform 3.5s cubic-bezier(0.17, 0.67, 0.16, 0.99)' : 'none',
+            }}
+          >
+            {pool.map((n, i) => {
+              const slice = 360 / pool.length;
+              const angle = i * slice + slice / 2;
+              return (
+                <div
+                  key={i}
+                  className="lucky-wheel-label"
+                  style={{
+                    transform: `rotate(${angle}deg) translateY(-80%)`,
+                  }}
+                >
+                  <span style={{ transform: 'rotate(90deg)', display: 'inline-block' }}>{n}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="primary" onClick={handleSpin} disabled={spinning}>
+              {spinning ? '🌀 Đang quay…' : '🎯 Quay!'}
+            </button>
+            {!spinning && (
+              <button className="ghost" onClick={() => setPool(null)}>Đổi khoảng</button>
+            )}
+          </div>
+          {resultIdx !== null && !spinning && (
+            <div className="lucky-wheel-result" style={{ marginTop: 12 }}>
+              <div className="lucky-wheel-number">{pool[resultIdx]}</div>
+              <div className="muted small">Đang lưu…</div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

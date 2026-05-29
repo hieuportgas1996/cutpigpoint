@@ -78,6 +78,11 @@ public class RoomsController : ControllerBase
         {
             try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
         }
+        LuckyWheelDto? wheel = null;
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson))
+        {
+            try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(room.LuckyWheelJson); } catch { }
+        }
         return new RoomHistoryDto(
             room.Id,
             room.Code,
@@ -87,7 +92,8 @@ public class RoomsController : ControllerBase
             room.CreatedAt,
             room.FinishedAt,
             scores,
-            sponsor
+            sponsor,
+            wheel
         );
     }
 
@@ -153,6 +159,43 @@ public class RoomsController : ControllerBase
         return await HistoryDetail(code);
     }
 
+    /// <summary>Lưu kết quả vòng quay may mắn. Chỉ player hạng bét (điểm gốc thấp nhất) được lưu, và chỉ 1 lần / phòng.</summary>
+    [HttpPut("history/{code}/wheel")]
+    public async Task<ActionResult<RoomHistoryDto>> SaveLuckyWheel(string code, [FromBody] SaveLuckyWheelRequest req)
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == RoomStatus.Finished);
+        if (room == null) return NotFound();
+        if (!room.Seats.Any(s => s.UserId == userId.Value)) return StatusCode(403, "Không có quyền chỉnh phòng này.");
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson)) return BadRequest("Vòng quay đã có kết quả rồi.");
+
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        if (scores.Count == 0) return BadRequest("Phòng chưa có bảng điểm.");
+
+        // Người hạng bét theo điểm gốc (chưa áp sponsor).
+        var spinner = scores.OrderBy(s => s.TotalScore).First();
+        if (spinner.UserId != userId.Value) return StatusCode(403, "Chỉ người hạng bét được quay vòng.");
+
+        if (req.Min < 1) return BadRequest("Min phải ≥ 1.");
+        if (req.Max < req.Min) return BadRequest("Max phải ≥ Min.");
+        if (req.Max > 1000) return BadRequest("Max quá lớn (≤ 1000).");
+        if (req.Result < req.Min || req.Result > req.Max) return BadRequest("Kết quả ngoài khoảng cho phép.");
+
+        var dto = new LuckyWheelDto(req.Min, req.Max, req.Double, req.Result, userId.Value);
+        room.LuckyWheelJson = JsonSerializer.Serialize(dto);
+        await _db.SaveChangesAsync();
+        return await HistoryDetail(code);
+    }
+
     [HttpGet("history")]
     public async Task<ActionResult<List<RoomHistoryDto>>> History()
     {
@@ -188,6 +231,11 @@ public class RoomsController : ControllerBase
             {
                 try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(r.SponsorPlanJson); } catch { }
             }
+            LuckyWheelDto? wheel = null;
+            if (!string.IsNullOrEmpty(r.LuckyWheelJson))
+            {
+                try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(r.LuckyWheelJson); } catch { }
+            }
             return new RoomHistoryDto(
                 r.Id,
                 r.Code,
@@ -197,7 +245,8 @@ public class RoomsController : ControllerBase
                 r.CreatedAt,
                 r.FinishedAt,
                 scores,
-                sponsor
+                sponsor,
+                wheel
             );
         }).ToList();
     }
