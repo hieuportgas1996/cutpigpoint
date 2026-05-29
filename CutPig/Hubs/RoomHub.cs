@@ -305,6 +305,62 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    /// <summary>
+    /// Lucky wheel spin: spinner (last place by base score) invokes this from the history page.
+    /// Server picks pool + result index, persists final value, then broadcasts WheelSpinStarted so
+    /// every viewer in the room group animates the same wheel in lock-step.
+    /// </summary>
+    public async Task StartLuckyWheelSpin(string code, int min, int max, bool doubled)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == Domain.RoomStatus.Finished);
+        if (room == null) throw new HubException("Phòng không tồn tại.");
+        if (!room.Seats.Any(s => s.UserId == auth.Value.UserId)) throw new HubException("Không có quyền.");
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson)) throw new HubException("Vòng quay đã có kết quả rồi.");
+
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        if (scores.Count == 0) throw new HubException("Phòng chưa có bảng điểm.");
+        var spinner = scores.OrderBy(s => s.TotalScore).First();
+        if (spinner.UserId != auth.Value.UserId) throw new HubException("Chỉ người hạng bét được quay vòng.");
+
+        if (min < 1) throw new HubException("Min phải ≥ 1.");
+        if (max < min) throw new HubException("Max phải ≥ Min.");
+        if (max > 1000) throw new HubException("Max quá lớn (≤ 1000).");
+
+        // Build pool: [min..max] (×2 if doubled) shuffled.
+        var pool = new List<int>();
+        for (int n = min; n <= max; n++) pool.Add(n);
+        if (doubled) pool.AddRange(pool.ToList());
+        var rng = new Random();
+        for (int i = pool.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+        }
+        int resultIndex = rng.Next(pool.Count);
+        int result = pool[resultIndex];
+
+        // Persist final value before broadcast so anyone refreshing mid-animation sees the same number.
+        var wheel = new LuckyWheelDto(min, max, doubled, result, auth.Value.UserId);
+        room.LuckyWheelJson = JsonSerializer.Serialize(wheel);
+        await _db.SaveChangesAsync();
+
+        // Make sure caller is in the room group (history page joins via JoinRoom).
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
+
+        var dto = new WheelSpinStartedDto(pool, resultIndex, min, max, doubled, auth.Value.UserId);
+        await Clients.Group(GroupName(room.Id)).SendAsync("WheelSpinStarted", dto);
+    }
+
     public async Task EndMatch()
     {
         var auth = await AuthenticateAsync();

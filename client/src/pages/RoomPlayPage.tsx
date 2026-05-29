@@ -253,6 +253,13 @@ export default function RoomPlayPage() {
     playSound('countdown', 0.6);
   }, [now, matchState?.turnDeadline, matchState?.currentTurnSeatIndex, matchState?.status, matchState?.roundNumber, state]);
 
+  // Auto-direct mọi player sang trang lịch sử phòng sau khi MatchEnd (cho 4s xem confetti / bảng final).
+  useEffect(() => {
+    if (!matchEnd || !code) return;
+    const t = setTimeout(() => navigate(`/rooms/${code.toUpperCase()}/history`), 4000);
+    return () => clearTimeout(t);
+  }, [matchEnd, code, navigate]);
+
   // Notify turn sound: play khi lượt vừa chuyển đến mình (transition false → true).
   const wasMyTurnRef = useRef(false);
   useEffect(() => {
@@ -820,7 +827,9 @@ export default function RoomPlayPage() {
                   </div>
                 ))}
               </div>
-              <button className="tlmn-btn primary" onClick={() => navigate('/rooms')}>Về danh sách phòng</button>
+              <button className="tlmn-btn primary" onClick={() => navigate(`/rooms/${(code ?? '').toUpperCase()}/history`)}>
+                📜 Xem lịch sử + sponsor + vòng quay
+              </button>
             </div>
           </div>
         )}

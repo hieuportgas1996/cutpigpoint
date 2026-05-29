@@ -2,7 +2,9 @@ using System.Text.Json;
 using CutPig.Data;
 using CutPig.Domain;
 using CutPig.Dtos;
+using CutPig.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CutPig.Controllers;
@@ -12,13 +14,49 @@ namespace CutPig.Controllers;
 public class RoomsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<RoomHub> _hub;
 
-    public RoomsController(AppDbContext db)
+    public RoomsController(AppDbContext db, IHubContext<RoomHub> hub)
     {
         _db = db;
+        _hub = hub;
     }
 
     private Guid? CallerId() => (Guid?)HttpContext.Items["UserId"];
+
+    private static RoomHistoryDto BuildHistoryDto(Room room)
+    {
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        List<RoomSponsorEntryDto>? sponsor = null;
+        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
+        {
+            try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
+        }
+        LuckyWheelDto? wheel = null;
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson))
+        {
+            try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(room.LuckyWheelJson); } catch { }
+        }
+        return new RoomHistoryDto(
+            room.Id,
+            room.Code,
+            room.Name,
+            room.MaxSeats,
+            string.IsNullOrWhiteSpace(room.HostUser?.DisplayName) ? (room.HostUser?.Username ?? "") : room.HostUser!.DisplayName,
+            room.CreatedAt,
+            room.FinishedAt,
+            scores,
+            sponsor,
+            wheel
+        );
+    }
+
+    private Task BroadcastHistoryAsync(Room room)
+        => _hub.Clients.Group($"room:{room.Id}").SendAsync("HistoryUpdated", BuildHistoryDto(room));
 
     [HttpGet]
     public async Task<ActionResult<List<RoomSummaryDto>>> List()
@@ -64,37 +102,7 @@ public class RoomsController : ControllerBase
         if (!isAdmin && !room.Seats.Any(s => s.UserId == userId.Value))
             return StatusCode(403, "Không có quyền xem phòng này.");
 
-        List<RoomFinalScoreEntryDto> scores = new();
-        if (!string.IsNullOrEmpty(room.FinalScoresJson))
-        {
-            try
-            {
-                scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new();
-            }
-            catch { }
-        }
-        List<RoomSponsorEntryDto>? sponsor = null;
-        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
-        {
-            try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
-        }
-        LuckyWheelDto? wheel = null;
-        if (!string.IsNullOrEmpty(room.LuckyWheelJson))
-        {
-            try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(room.LuckyWheelJson); } catch { }
-        }
-        return new RoomHistoryDto(
-            room.Id,
-            room.Code,
-            room.Name,
-            room.MaxSeats,
-            string.IsNullOrWhiteSpace(room.HostUser?.DisplayName) ? (room.HostUser?.Username ?? "") : room.HostUser!.DisplayName,
-            room.CreatedAt,
-            room.FinishedAt,
-            scores,
-            sponsor,
-            wheel
-        );
+        return BuildHistoryDto(room);
     }
 
     /// <summary>Lưu sponsor plan: Nhất/Nhì (điểm > 0) chia điểm cho người điểm âm. Chỉ player từng ngồi trong phòng được lưu, và chỉ lưu được 1 lần.</summary>
@@ -156,7 +164,8 @@ public class RoomsController : ControllerBase
         room.SponsorPlanJson = JsonSerializer.Serialize(merged);
         await _db.SaveChangesAsync();
 
-        return await HistoryDetail(code);
+        await BroadcastHistoryAsync(room);
+        return BuildHistoryDto(room);
     }
 
     /// <summary>Lưu kết quả vòng quay may mắn. Chỉ player hạng bét (điểm gốc thấp nhất) được lưu, và chỉ 1 lần / phòng.</summary>
@@ -193,7 +202,9 @@ public class RoomsController : ControllerBase
         var dto = new LuckyWheelDto(req.Min, req.Max, req.Double, req.Result, userId.Value);
         room.LuckyWheelJson = JsonSerializer.Serialize(dto);
         await _db.SaveChangesAsync();
-        return await HistoryDetail(code);
+
+        await BroadcastHistoryAsync(room);
+        return BuildHistoryDto(room);
     }
 
     [HttpGet("history")]

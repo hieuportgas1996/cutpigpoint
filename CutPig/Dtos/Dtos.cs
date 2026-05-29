@@ -17,6 +17,7 @@ public record RoomSponsorEntryDto(Guid FromUserId, Guid ToUserId, int Amount);
 public record SaveSponsorPlanRequest(List<RoomSponsorEntryDto> Plan);
 public record LuckyWheelDto(int Min, int Max, bool Double, int Result, Guid SpinnerUserId);
 public record SaveLuckyWheelRequest(int Min, int Max, bool Double, int Result);
+public record WheelSpinStartedDto(List<int> Pool, int ResultIndex, int Min, int Max, bool Double, Guid SpinnerUserId);
 public record RoomHistoryDto(Guid Id, string Code, string? Name, int MaxSeats, string HostDisplayName, DateTime CreatedAt, DateTime? FinishedAt, List<RoomFinalScoreEntryDto> FinalScores, List<RoomSponsorEntryDto>? SponsorPlan = null, LuckyWheelDto? LuckyWheel = null);
 public record RoomSeatDto(int SeatIndex, Guid UserId, string Username, string DisplayName, bool IsHost, bool IsOnline, bool HasAvatar);
 public record RoomStateDto(
