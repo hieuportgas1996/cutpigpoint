@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { auth, HUB_BASE, RoomHistory } from '../api';
+import { auth, HUB_BASE, LuckyWheelPreview, RoomHistory } from '../api';
 
 export interface WheelSpinStartedPayload {
   pool: number[];
@@ -15,24 +15,26 @@ interface UseHistorySocketArgs {
   code: string | undefined;
   onHistoryUpdated?: (h: RoomHistory) => void;
   onWheelSpinStarted?: (payload: WheelSpinStartedPayload) => void;
+  onWheelPreview?: (payload: LuckyWheelPreview) => void;
 }
 
 interface UseHistorySocketResult {
-  startLuckyWheelSpin: (min: number, max: number, doubled: boolean) => Promise<void>;
+  createLuckyWheelPreview: (min: number, max: number, doubled: boolean) => Promise<void>;
+  startLuckyWheelSpin: () => Promise<void>;
 }
 
 /**
  * SignalR connection scoped to the room history page. Joins the room group via JoinRoom so the same
  * RoomHub broadcasts (HistoryUpdated, WheelSpinStarted) reach every viewer in lock-step.
  */
-export function useHistorySocket({ code, onHistoryUpdated, onWheelSpinStarted }: UseHistorySocketArgs): UseHistorySocketResult {
+export function useHistorySocket({ code, onHistoryUpdated, onWheelSpinStarted, onWheelPreview }: UseHistorySocketArgs): UseHistorySocketResult {
   const connectionRef = useRef<HubConnection | null>(null);
-  // Stash callbacks in refs so the connection effect doesn't tear down when the parent re-renders
-  // with fresh closures.
   const onHistoryUpdatedRef = useRef(onHistoryUpdated);
   const onWheelSpinStartedRef = useRef(onWheelSpinStarted);
+  const onWheelPreviewRef = useRef(onWheelPreview);
   useEffect(() => { onHistoryUpdatedRef.current = onHistoryUpdated; }, [onHistoryUpdated]);
   useEffect(() => { onWheelSpinStartedRef.current = onWheelSpinStarted; }, [onWheelSpinStarted]);
+  useEffect(() => { onWheelPreviewRef.current = onWheelPreview; }, [onWheelPreview]);
 
   useEffect(() => {
     if (!code) return;
@@ -53,6 +55,9 @@ export function useHistorySocket({ code, onHistoryUpdated, onWheelSpinStarted }:
     conn.on('WheelSpinStarted', (p: WheelSpinStartedPayload) => {
       onWheelSpinStartedRef.current?.(p);
     });
+    conn.on('WheelPreview', (p: LuckyWheelPreview) => {
+      onWheelPreviewRef.current?.(p);
+    });
 
     (async () => {
       try {
@@ -71,11 +76,17 @@ export function useHistorySocket({ code, onHistoryUpdated, onWheelSpinStarted }:
     };
   }, [code]);
 
-  const startLuckyWheelSpin = useCallback(async (min: number, max: number, doubled: boolean) => {
+  const createLuckyWheelPreview = useCallback(async (min: number, max: number, doubled: boolean) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối realtime.');
-    await conn.invoke('StartLuckyWheelSpin', code, min, max, doubled);
+    await conn.invoke('CreateLuckyWheelPreview', code, min, max, doubled);
   }, [code]);
 
-  return { startLuckyWheelSpin };
+  const startLuckyWheelSpin = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối realtime.');
+    await conn.invoke('StartLuckyWheelSpin', code);
+  }, [code]);
+
+  return { createLuckyWheelPreview, startLuckyWheelSpin };
 }

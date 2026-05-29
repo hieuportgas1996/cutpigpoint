@@ -207,6 +207,8 @@ export const api = {
   deleteRoomHistory: (id: string) => request<void>(`/rooms/history/${id}`, { method: 'DELETE' }),
   saveSponsorPlan: (code: string, plan: RoomSponsorEntry[]) =>
     request<RoomHistory>(`/rooms/history/${code.toUpperCase()}/sponsor`, { method: 'PUT', body: JSON.stringify({ plan }) }),
+  skipSponsor: (code: string) =>
+    request<RoomHistory>(`/rooms/history/${code.toUpperCase()}/sponsor/skip`, { method: 'POST' }),
   saveLuckyWheel: (code: string, body: { min: number; max: number; double: boolean; result: number }) =>
     request<RoomHistory>(`/rooms/history/${code.toUpperCase()}/wheel`, { method: 'PUT', body: JSON.stringify(body) }),
   createRoom: (gameType: number, maxSeats: number, name?: string) =>
@@ -267,6 +269,14 @@ export interface LuckyWheelResult {
   spinnerUserId: string;
 }
 
+export interface LuckyWheelPreview {
+  pool: number[];
+  min: number;
+  max: number;
+  double: boolean;
+  spinnerUserId: string;
+}
+
 export interface RoomHistory {
   id: string;
   code: string;
@@ -278,6 +288,8 @@ export interface RoomHistory {
   finalScores: RoomFinalScoreEntry[];
   sponsorPlan: RoomSponsorEntry[] | null;
   luckyWheel: LuckyWheelResult | null;
+  sponsorDecidedDonors: string[] | null;
+  luckyWheelPreview: LuckyWheelPreview | null;
 }
 
 export interface RoomSeat {

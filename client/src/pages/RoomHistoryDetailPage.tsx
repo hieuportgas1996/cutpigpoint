@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, RoomHistory, RoomSponsorEntry } from '../api';
+import { api, LuckyWheelPreview, RoomHistory, RoomSponsorEntry } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../ui/Toast';
 import { Icon } from '../ui/Icon';
@@ -41,7 +41,10 @@ export default function RoomHistoryDetailPage() {
     (async () => {
       try {
         const h = await api.getRoomHistory(code);
-        if (!cancelled) setHistory(h);
+        if (!cancelled) {
+          setHistory(h);
+          if (h.luckyWheelPreview) setLivePreview(h.luckyWheelPreview);
+        }
       } catch (e) {
         if (!cancelled) {
           setError((e as Error).message);
@@ -57,16 +60,24 @@ export default function RoomHistoryDetailPage() {
   // Wheel spin payload broadcast tới mọi viewer khi spinner bấm "Quay". Component LuckyWheelSection
   // dùng để animate lock-step.
   const [wheelSpin, setWheelSpin] = useState<WheelSpinStartedPayload | null>(null);
+  // Preview pool broadcast bởi server sau khi spinner bấm "Tạo vòng xoay".
+  const [livePreview, setLivePreview] = useState<LuckyWheelPreview | null>(null);
   const handleHistoryUpdated = useCallback((h: RoomHistory) => {
     setHistory(h);
+    // Server gửi preview qua history.luckyWheelPreview sau khi tạo — đồng bộ vào livePreview.
+    if (h.luckyWheelPreview) setLivePreview(h.luckyWheelPreview);
   }, []);
   const handleWheelSpinStarted = useCallback((payload: WheelSpinStartedPayload) => {
     setWheelSpin(payload);
   }, []);
-  const { startLuckyWheelSpin } = useHistorySocket({
+  const handleWheelPreview = useCallback((payload: LuckyWheelPreview) => {
+    setLivePreview(payload);
+  }, []);
+  const { createLuckyWheelPreview, startLuckyWheelSpin } = useHistorySocket({
     code,
     onHistoryUpdated: handleHistoryUpdated,
     onWheelSpinStarted: handleWheelSpinStarted,
+    onWheelPreview: handleWheelPreview,
   });
 
   // Base scores (gốc, trước sponsor) sorted desc — dùng để biết ai Nhất/Nhì + ai âm.
@@ -111,6 +122,17 @@ export default function RoomHistoryDetailPage() {
   const iAmDonor = !!myBaseScore && myBaseScore.totalScore > 0
     && (myBaseScore.userId === top1Base?.userId || myBaseScore.userId === top2Base?.userId);
   const recipients = baseSorted.filter(s => s.totalScore < 0);
+
+  // Tất cả donor đã quyết định (lưu hoặc bỏ qua) → spinner mới được tạo vòng quay.
+  // Không có donor / không có người âm → coi như xong luôn.
+  const allDonors = baseSorted
+    .filter((_, i) => i < 2)
+    .filter(s => s.totalScore > 0)
+    .map(s => s.userId);
+  const decidedSet = new Set(history.sponsorDecidedDonors ?? []);
+  const sponsorReady = recipients.length === 0 || allDonors.length === 0 || allDonors.every(id => decidedSet.has(id));
+  const pendingDonors = allDonors.filter(id => !decidedSet.has(id))
+    .map(id => baseSorted.find(s => s.userId === id)?.displayName ?? '?');
 
   return (
     <div>
@@ -188,6 +210,10 @@ export default function RoomHistoryDetailPage() {
         myUserId={myUserId}
         baseSorted={baseSorted}
         wheelSpin={wheelSpin}
+        livePreview={livePreview}
+        sponsorReady={sponsorReady}
+        pendingDonors={pendingDonors}
+        createPreview={createLuckyWheelPreview}
         startSpin={startLuckyWheelSpin}
       />
 
@@ -271,6 +297,21 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
     }
   }
 
+  async function handleSkip() {
+    setSaving(true);
+    try {
+      const updated = await api.skipSponsor(code);
+      onSaved(updated);
+      toast.push('success', 'Đã bỏ qua sponsor.');
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const iAlreadyDecided = (history.sponsorDecidedDonors ?? []).includes(myUserId);
+
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="card-header">
@@ -327,13 +368,21 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               className="primary"
               onClick={handleSave}
               disabled={saving || remaining < 0}
             >
               💾 Lưu sponsor
+            </button>
+            <button
+              className="ghost"
+              onClick={handleSkip}
+              disabled={saving}
+              title="Đánh dấu bạn không sponsor — vòng quay sẽ mở cho người hạng bét"
+            >
+              ⏭ Bỏ qua sponsor
             </button>
             <button
               className="ghost"
@@ -346,6 +395,11 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
             >
               Reset
             </button>
+            {iAlreadyDecided && (
+              <span className="muted small" style={{ alignSelf: 'center' }}>
+                ✓ Bạn đã quyết định (có thể chỉnh lại trước khi quay)
+              </span>
+            )}
           </div>
         </>
       ) : (
@@ -360,13 +414,17 @@ interface LuckyWheelSectionProps {
   myUserId: string;
   baseSorted: RoomHistory['finalScores'];
   wheelSpin: WheelSpinStartedPayload | null;
-  startSpin: (min: number, max: number, doubled: boolean) => Promise<void>;
+  livePreview: LuckyWheelPreview | null;
+  sponsorReady: boolean;
+  pendingDonors: string[];
+  createPreview: (min: number, max: number, doubled: boolean) => Promise<void>;
+  startSpin: () => Promise<void>;
 }
 
 const WHEEL_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#118ab2', '#7c3aed', '#f59e0b', '#ec4899', '#10b981'];
 const WHEEL_SPIN_DURATION_MS = 3500;
 
-function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin }: LuckyWheelSectionProps) {
+function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePreview, sponsorReady, pendingDonors, createPreview, startSpin }: LuckyWheelSectionProps) {
   const toast = useToast();
   // Người hạng bét theo điểm GỐC.
   const spinner = baseSorted[baseSorted.length - 1];
@@ -377,8 +435,6 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
   const [min, setMin] = useState(1);
   const [max, setMax] = useState(5);
   const [doubled, setDoubled] = useState(false);
-  // Preview pool sau khi spinner bấm "Tạo vòng xoay" — hiện wheel + nút "Quay" ngay dưới.
-  const [previewPool, setPreviewPool] = useState<number[] | null>(null);
   const [requesting, setRequesting] = useState(false);
 
   // Animation state — kích hoạt khi nhận WheelSpinStarted (mọi viewer).
@@ -434,27 +490,27 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
 
   if (!spinner) return null;
 
-  function handleCreate() {
+  async function handleCreate() {
     if (min < 1 || max < min || max > 1000) {
       toast.push('error', 'Khoảng min/max không hợp lệ.');
       return;
     }
-    // Preview pool client-side (server sẽ shuffle lại khi spin thật) — chỉ để hiện wheel + label.
-    const base: number[] = [];
-    for (let n = min; n <= max; n++) base.push(n);
-    const pool = doubled ? [...base, ...base] : base;
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+    setRequesting(true);
+    try {
+      // Server tạo pool + broadcast WheelPreview → parent set livePreview cho mọi viewer.
+      await createPreview(min, max, doubled);
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    } finally {
+      setRequesting(false);
     }
-    setPreviewPool(pool);
   }
 
   async function handleSpin() {
-    if (!previewPool) return;
+    if (!livePreview) return;
     setRequesting(true);
     try {
-      await startSpin(min, max, doubled);
+      await startSpin();
     } catch (e) {
       toast.push('error', (e as Error).message);
       setRequesting(false);
@@ -512,68 +568,72 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
     );
   }
 
-  // Chưa quay — chỉ spinner thấy form, người khác thấy thông báo chờ.
-  if (!iAmSpinner) {
-    return (
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-header">
-          <h3>🎡 Vòng quay may mắn</h3>
-          <div className="spacer" />
-          <div className="muted small">Đang chờ {spinner.displayName} quay</div>
-        </div>
-        <div className="muted small">
-          Chỉ người hạng bét (<b>{spinner.displayName}</b>) được quay vòng.
-        </div>
-      </div>
-    );
-  }
-
+  // Chưa quay — preview broadcast tới mọi viewer khi có; spinner thấy thêm nút điều khiển.
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="card-header">
         <h3>🎡 Vòng quay may mắn</h3>
         <div className="spacer" />
-        <div className="muted small">Bạn (hạng bét) được quay 1 lần</div>
+        <div className="muted small">
+          {iAmSpinner
+            ? (sponsorReady ? 'Bạn (hạng bét) được quay 1 lần' : 'Chờ sponsor xong')
+            : `Đang chờ ${spinner.displayName} quay`}
+        </div>
       </div>
 
-      {/* Step 1: nhập min/max/double, bấm "Tạo vòng xoay" */}
-      {!previewPool && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+      {!sponsorReady && (
+        <div className="muted small" style={{ marginBottom: 8 }}>
+          ⏳ Đợi Nhất/Nhì quyết định sponsor: <b>{pendingDonors.join(', ')}</b>
+        </div>
+      )}
+
+      {/* Step 1: nhập min/max/double, bấm "Tạo vòng xoay" — chỉ spinner. */}
+      {!livePreview && iAmSpinner && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', opacity: sponsorReady ? 1 : 0.5 }}>
           <label>
             <div className="dim small">Min</div>
             <input type="number" min={1} max={1000} value={min} onChange={e => setMin(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-              style={{ width: 80, padding: '6px 10px' }} />
+              style={{ width: 80, padding: '6px 10px' }} disabled={!sponsorReady || requesting} />
           </label>
           <label>
             <div className="dim small">Max</div>
             <input type="number" min={1} max={1000} value={max} onChange={e => setMax(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-              style={{ width: 80, padding: '6px 10px' }} />
+              style={{ width: 80, padding: '6px 10px' }} disabled={!sponsorReady || requesting} />
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <input type="checkbox" checked={doubled} onChange={e => setDoubled(e.target.checked)} />
+            <input type="checkbox" checked={doubled} onChange={e => setDoubled(e.target.checked)} disabled={!sponsorReady || requesting} />
             <span>Double (mỗi số 2 lần)</span>
           </label>
-          <button className="primary" onClick={handleCreate}>🎨 Tạo vòng xoay</button>
+          <button className="primary" onClick={handleCreate} disabled={!sponsorReady || requesting}>
+            {requesting ? '⏳ Đang tạo…' : '🎨 Tạo vòng xoay'}
+          </button>
         </div>
       )}
 
-      {/* Step 2: preview wheel + nút Quay */}
-      {previewPool && (
+      {/* Trước khi tạo: viewer khác thấy thông báo. */}
+      {!livePreview && !iAmSpinner && sponsorReady && (
+        <div className="muted small">
+          Chỉ người hạng bét (<b>{spinner.displayName}</b>) được tạo vòng quay.
+        </div>
+      )}
+
+      {/* Step 2: preview wheel (tất cả viewer) + nút Quay (chỉ spinner) */}
+      {livePreview && (
         <div className="lucky-wheel-container">
           <div className="lucky-wheel-pointer">▼</div>
           <div
             className="lucky-wheel"
             style={{
-              background: `conic-gradient(${previewPool.map((_, i) => {
-                const slice = 360 / previewPool.length;
+              background: `conic-gradient(${livePreview.pool.map((_, i) => {
+                const slice = 360 / livePreview.pool.length;
                 const start = i * slice;
                 const end = start + slice;
                 return `${WHEEL_COLORS[i % WHEEL_COLORS.length]} ${start}deg ${end}deg`;
               }).join(', ')})`,
             }}
           >
-            {previewPool.map((n, i) => {
-              const slice = 360 / previewPool.length;
+            {livePreview.pool.map((n, i) => {
+              const slice = 360 / livePreview.pool.length;
               const angle = i * slice + slice / 2;
               return (
                 <div
@@ -586,16 +646,19 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
               );
             })}
           </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
-            <button className="primary" onClick={handleSpin} disabled={requesting}>
-              {requesting ? '⏳ Đang gửi…' : '🎯 Quay!'}
-            </button>
-            <button className="ghost" onClick={() => setPreviewPool(null)} disabled={requesting}>
-              Đổi khoảng
-            </button>
-          </div>
+          {iAmSpinner ? (
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button className="primary" onClick={handleSpin} disabled={requesting}>
+                {requesting ? '⏳ Đang gửi…' : '🎯 Quay!'}
+              </button>
+            </div>
+          ) : (
+            <div className="muted small" style={{ marginTop: 12, textAlign: 'center' }}>
+              Đang chờ <b>{spinner.displayName}</b> bấm Quay…
+            </div>
+          )}
           <div className="muted small" style={{ marginTop: 8, textAlign: 'center' }}>
-            Khoảng {min}–{max}{doubled ? ' (×2)' : ''} · {previewPool.length} ô
+            Khoảng {livePreview.min}–{livePreview.max}{livePreview.double ? ' (×2)' : ''} · {livePreview.pool.length} ô
           </div>
         </div>
       )}

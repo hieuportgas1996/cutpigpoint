@@ -23,8 +23,12 @@ public class Room
     public string? FinalScoresJson { get; set; }
     /// <summary>JSON list of `{fromUserId, toUserId, amount}` — đã chốt sau khi Nhất/Nhì quyết định sponsor.</summary>
     public string? SponsorPlanJson { get; set; }
+    /// <summary>JSON list of donor userIds đã đưa ra quyết định (gồm cả những ai bấm "Bỏ qua").</summary>
+    public string? SponsorDecisionsJson { get; set; }
     /// <summary>JSON `{min, max, double, result, spinnerUserId}` — kết quả vòng quay may mắn (1 lần / phòng).</summary>
     public string? LuckyWheelJson { get; set; }
+    /// <summary>JSON `{pool, min, max, double, spinnerUserId}` — preview pool đã tạo, chưa quay.</summary>
+    public string? LuckyWheelPreviewJson { get; set; }
     public bool IsHidden { get; set; }
     public List<RoomSeat> Seats { get; set; } = new();
 }

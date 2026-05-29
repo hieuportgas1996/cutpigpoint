@@ -305,12 +305,8 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
-    /// <summary>
-    /// Lucky wheel spin: spinner (last place by base score) invokes this from the history page.
-    /// Server picks pool + result index, persists final value, then broadcasts WheelSpinStarted so
-    /// every viewer in the room group animates the same wheel in lock-step.
-    /// </summary>
-    public async Task StartLuckyWheelSpin(string code, int min, int max, bool doubled)
+    /// <summary>Spinner creates a wheel pool (preview) — visible to every viewer before the actual spin.</summary>
+    public async Task CreateLuckyWheelPreview(string code, int min, int max, bool doubled)
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
@@ -323,20 +319,62 @@ public class RoomHub : Hub
         if (!room.Seats.Any(s => s.UserId == auth.Value.UserId)) throw new HubException("Không có quyền.");
         if (!string.IsNullOrEmpty(room.LuckyWheelJson)) throw new HubException("Vòng quay đã có kết quả rồi.");
 
-        List<RoomFinalScoreEntryDto> scores = new();
-        if (!string.IsNullOrEmpty(room.FinalScoresJson))
-        {
-            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
-        }
-        if (scores.Count == 0) throw new HubException("Phòng chưa có bảng điểm.");
-        var spinner = scores.OrderBy(s => s.TotalScore).First();
-        if (spinner.UserId != auth.Value.UserId) throw new HubException("Chỉ người hạng bét được quay vòng.");
+        var (spinner, _) = await GetSpinnerAndDonors(room);
+        if (spinner.UserId != auth.Value.UserId) throw new HubException("Chỉ người hạng bét được tạo vòng quay.");
+        if (!AreAllDonorsDecided(room)) throw new HubException("Chờ Nhất/Nhì quyết định sponsor xong đã.");
 
         if (min < 1) throw new HubException("Min phải ≥ 1.");
         if (max < min) throw new HubException("Max phải ≥ Min.");
         if (max > 1000) throw new HubException("Max quá lớn (≤ 1000).");
 
-        // Build pool: [min..max] (×2 if doubled) shuffled.
+        var pool = BuildShuffledPool(min, max, doubled);
+        var preview = new LuckyWheelPreviewDto(pool, min, max, doubled, auth.Value.UserId);
+        room.LuckyWheelPreviewJson = JsonSerializer.Serialize(preview);
+        await _db.SaveChangesAsync();
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
+        await Clients.Group(GroupName(room.Id)).SendAsync("WheelPreview", preview);
+    }
+
+    /// <summary>
+    /// Lucky wheel spin: dùng preview pool đã tạo, server pick result index, broadcast WheelSpinStarted.
+    /// </summary>
+    public async Task StartLuckyWheelSpin(string code)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == Domain.RoomStatus.Finished);
+        if (room == null) throw new HubException("Phòng không tồn tại.");
+        if (!room.Seats.Any(s => s.UserId == auth.Value.UserId)) throw new HubException("Không có quyền.");
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson)) throw new HubException("Vòng quay đã có kết quả rồi.");
+        if (string.IsNullOrEmpty(room.LuckyWheelPreviewJson)) throw new HubException("Chưa tạo vòng quay.");
+
+        var (spinner, _) = await GetSpinnerAndDonors(room);
+        if (spinner.UserId != auth.Value.UserId) throw new HubException("Chỉ người hạng bét được quay vòng.");
+
+        LuckyWheelPreviewDto? preview = null;
+        try { preview = JsonSerializer.Deserialize<LuckyWheelPreviewDto>(room.LuckyWheelPreviewJson); } catch { }
+        if (preview == null) throw new HubException("Preview lỗi, vui lòng tạo lại.");
+
+        var rng = new Random();
+        int resultIndex = rng.Next(preview.Pool.Count);
+        int result = preview.Pool[resultIndex];
+
+        var wheel = new LuckyWheelDto(preview.Min, preview.Max, preview.Double, result, auth.Value.UserId);
+        room.LuckyWheelJson = JsonSerializer.Serialize(wheel);
+        await _db.SaveChangesAsync();
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
+        var dto = new WheelSpinStartedDto(preview.Pool, resultIndex, preview.Min, preview.Max, preview.Double, auth.Value.UserId);
+        await Clients.Group(GroupName(room.Id)).SendAsync("WheelSpinStarted", dto);
+    }
+
+    private static List<int> BuildShuffledPool(int min, int max, bool doubled)
+    {
         var pool = new List<int>();
         for (int n = min; n <= max; n++) pool.Add(n);
         if (doubled) pool.AddRange(pool.ToList());
@@ -346,19 +384,49 @@ public class RoomHub : Hub
             int j = rng.Next(i + 1);
             (pool[i], pool[j]) = (pool[j], pool[i]);
         }
-        int resultIndex = rng.Next(pool.Count);
-        int result = pool[resultIndex];
+        return pool;
+    }
 
-        // Persist final value before broadcast so anyone refreshing mid-animation sees the same number.
-        var wheel = new LuckyWheelDto(min, max, doubled, result, auth.Value.UserId);
-        room.LuckyWheelJson = JsonSerializer.Serialize(wheel);
-        await _db.SaveChangesAsync();
+    private async Task<(RoomFinalScoreEntryDto Spinner, HashSet<Guid> AllowedDonors)> GetSpinnerAndDonors(Domain.Room room)
+    {
+        await Task.CompletedTask;
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        if (scores.Count == 0) throw new HubException("Phòng chưa có bảng điểm.");
+        var spinner = scores.OrderBy(s => s.TotalScore).First();
+        var orderedDesc = scores.OrderByDescending(s => s.TotalScore).ToList();
+        var donors = new HashSet<Guid>();
+        if (orderedDesc.Count > 0 && orderedDesc[0].TotalScore > 0) donors.Add(orderedDesc[0].UserId);
+        if (orderedDesc.Count > 1 && orderedDesc[1].TotalScore > 0) donors.Add(orderedDesc[1].UserId);
+        return (spinner, donors);
+    }
 
-        // Make sure caller is in the room group (history page joins via JoinRoom).
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
+    private static bool AreAllDonorsDecided(Domain.Room room)
+    {
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        var orderedDesc = scores.OrderByDescending(s => s.TotalScore).ToList();
+        var donors = new HashSet<Guid>();
+        if (orderedDesc.Count > 0 && orderedDesc[0].TotalScore > 0) donors.Add(orderedDesc[0].UserId);
+        if (orderedDesc.Count > 1 && orderedDesc[1].TotalScore > 0) donors.Add(orderedDesc[1].UserId);
+        if (donors.Count == 0) return true; // không có donor → ok luôn
 
-        var dto = new WheelSpinStartedDto(pool, resultIndex, min, max, doubled, auth.Value.UserId);
-        await Clients.Group(GroupName(room.Id)).SendAsync("WheelSpinStarted", dto);
+        // Nếu không có ai âm điểm thì sponsor cũng vô nghĩa → coi như xong.
+        bool anyNeg = scores.Any(s => s.TotalScore < 0);
+        if (!anyNeg) return true;
+
+        List<Guid> decided = new();
+        if (!string.IsNullOrEmpty(room.SponsorDecisionsJson))
+        {
+            try { decided = JsonSerializer.Deserialize<List<Guid>>(room.SponsorDecisionsJson) ?? new(); } catch { }
+        }
+        return donors.All(d => decided.Contains(d));
     }
 
     public async Task EndMatch()

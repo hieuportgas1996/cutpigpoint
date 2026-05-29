@@ -36,10 +36,20 @@ public class RoomsController : ControllerBase
         {
             try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
         }
+        List<Guid>? decided = null;
+        if (!string.IsNullOrEmpty(room.SponsorDecisionsJson))
+        {
+            try { decided = JsonSerializer.Deserialize<List<Guid>>(room.SponsorDecisionsJson); } catch { }
+        }
         LuckyWheelDto? wheel = null;
         if (!string.IsNullOrEmpty(room.LuckyWheelJson))
         {
             try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(room.LuckyWheelJson); } catch { }
+        }
+        LuckyWheelPreviewDto? preview = null;
+        if (!string.IsNullOrEmpty(room.LuckyWheelPreviewJson))
+        {
+            try { preview = JsonSerializer.Deserialize<LuckyWheelPreviewDto>(room.LuckyWheelPreviewJson); } catch { }
         }
         return new RoomHistoryDto(
             room.Id,
@@ -51,7 +61,9 @@ public class RoomsController : ControllerBase
             room.FinishedAt,
             scores,
             sponsor,
-            wheel
+            wheel,
+            decided,
+            preview
         );
     }
 
@@ -162,8 +174,66 @@ public class RoomsController : ControllerBase
         // Replace caller's entries (cho phép sửa lại nếu chưa ai quay vòng — đơn giản: ghi đè phần của mình).
         var merged = existing.Where(e => e.FromUserId != userId.Value).Concat(plan).ToList();
         room.SponsorPlanJson = JsonSerializer.Serialize(merged);
+
+        // Track that this donor has decided (gồm cả khi plan rỗng cho lần sau bấm Skip).
+        var decided = new HashSet<Guid>();
+        if (!string.IsNullOrEmpty(room.SponsorDecisionsJson))
+        {
+            try { decided = (JsonSerializer.Deserialize<List<Guid>>(room.SponsorDecisionsJson) ?? new()).ToHashSet(); } catch { }
+        }
+        decided.Add(userId.Value);
+        room.SponsorDecisionsJson = JsonSerializer.Serialize(decided.ToList());
+
         await _db.SaveChangesAsync();
 
+        await BroadcastHistoryAsync(room);
+        return BuildHistoryDto(room);
+    }
+
+    /// <summary>Bỏ qua sponsor cho donor hiện tại (xoá plan đã có của họ + đánh dấu đã quyết định).</summary>
+    [HttpPost("history/{code}/sponsor/skip")]
+    public async Task<ActionResult<RoomHistoryDto>> SkipSponsor(string code)
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == RoomStatus.Finished);
+        if (room == null) return NotFound();
+        if (!room.Seats.Any(s => s.UserId == userId.Value)) return StatusCode(403, "Không có quyền chỉnh phòng này.");
+
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        var orderedDesc = scores.OrderByDescending(s => s.TotalScore).ToList();
+        var top1 = orderedDesc.ElementAtOrDefault(0);
+        var top2 = orderedDesc.ElementAtOrDefault(1);
+        var allowedDonors = new HashSet<Guid>();
+        if (top1 != null && top1.TotalScore > 0) allowedDonors.Add(top1.UserId);
+        if (top2 != null && top2.TotalScore > 0) allowedDonors.Add(top2.UserId);
+        if (!allowedDonors.Contains(userId.Value)) return StatusCode(403, "Chỉ Nhất hoặc Nhì có điểm dương mới được bỏ qua sponsor.");
+
+        // Clear caller's plan + mark decided.
+        List<RoomSponsorEntryDto> existing = new();
+        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
+        {
+            try { existing = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson) ?? new(); } catch { }
+        }
+        room.SponsorPlanJson = JsonSerializer.Serialize(existing.Where(e => e.FromUserId != userId.Value).ToList());
+
+        var decided = new HashSet<Guid>();
+        if (!string.IsNullOrEmpty(room.SponsorDecisionsJson))
+        {
+            try { decided = (JsonSerializer.Deserialize<List<Guid>>(room.SponsorDecisionsJson) ?? new()).ToHashSet(); } catch { }
+        }
+        decided.Add(userId.Value);
+        room.SponsorDecisionsJson = JsonSerializer.Serialize(decided.ToList());
+
+        await _db.SaveChangesAsync();
         await BroadcastHistoryAsync(room);
         return BuildHistoryDto(room);
     }
