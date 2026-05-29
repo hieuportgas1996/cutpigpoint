@@ -154,7 +154,7 @@ export default function RoomPlayPage() {
   const lastBubbledChatId = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
-  const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string } | null>(null);
+  const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
   // ID người Nhất đang được hiển thị pháo hoa (chỉ khi roundEnd vừa bùng ra)
   const [winnerCelebration, setWinnerCelebration] = useState<string | null>(null);
   const lastCelebratedRoundRef = useRef<string | null>(null);
@@ -196,7 +196,7 @@ export default function RoomPlayPage() {
     lastBubbledChatId.current = latest.id;
     const sticker = parseSticker(latest.text);
     if (sticker) {
-      setStickerOverlay({ id: latest.id, code: sticker.code, emoji: sticker.emoji, label: sticker.label, sender: latest.displayName });
+      setStickerOverlay({ id: latest.id, code: sticker.code, emoji: sticker.emoji, label: sticker.label, sender: latest.displayName, senderUserId: latest.userId });
       const sndKey = STICKER_SOUND[sticker.code];
       if (sndKey) playSound(sndKey, STICKER_VOLUME);
       const t = setTimeout(() => {
@@ -624,7 +624,7 @@ export default function RoomPlayPage() {
                     <div className="seat-cut-pig-sub">{cutPigBanner.cutter} · {cutPigBanner.comboLabel}</div>
                   </div>
                 )}
-                {isMe && stickerOverlay && (
+                {stickerOverlay?.senderUserId === player.userId && (
                   <div className={`seat-sticker sticker-${stickerOverlay.code}`} key={stickerOverlay.id}>
                     <div className="seat-sticker-emoji">{stickerOverlay.emoji}</div>
                     <div className="seat-sticker-label">{stickerOverlay.label}</div>
