@@ -23,7 +23,7 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'go-away', emoji: '👋', label: 'Bỏ đi nhỏ', hint: 'Pass đi nào' },
   { code: 'siuuu', emoji: '🐐', label: 'SIUUUU', hint: 'Ăn mừng' },
   { code: 'chop-it', emoji: '🪓', label: 'Chặt chết mẹ nó', hint: 'Khích chặt heo' },
-  { code: 'sorry', emoji: '🥲', label: 'Sorry', hint: 'Xin lỗi mất nết' },
+  { code: 'sorry', emoji: '😢', label: 'Sorry', hint: 'Xin lỗi mất nết' },
   { code: 'beg', emoji: '🛐', label: 'Tao lạy mày', hint: 'Năn nỉ' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {

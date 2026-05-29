@@ -49,6 +49,9 @@ public class MatchTimerService : BackgroundService
                     {
                         var result = _matches.Pass(match.RoomId, current.UserId, isAutoPass: true);
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(result.Match), stoppingToken);
+                        // Auto-pass khi mở nước = server tự đánh lá nhỏ nhất → tay người đó giảm 1 lá;
+                        // gửi lại PrivateHand để client không giữ tay cũ và click vào lá đã rời tay.
+                        await SendPrivateHandsAsync(result.Match, stoppingToken);
                         if (result.RoundEnded)
                         {
                             await EmitRoundEndAsync(result.Match, stoppingToken);
