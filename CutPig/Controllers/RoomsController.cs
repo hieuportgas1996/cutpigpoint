@@ -3,6 +3,7 @@ using CutPig.Data;
 using CutPig.Domain;
 using CutPig.Dtos;
 using CutPig.Hubs;
+using CutPig.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -24,48 +25,7 @@ public class RoomsController : ControllerBase
 
     private Guid? CallerId() => (Guid?)HttpContext.Items["UserId"];
 
-    private static RoomHistoryDto BuildHistoryDto(Room room)
-    {
-        List<RoomFinalScoreEntryDto> scores = new();
-        if (!string.IsNullOrEmpty(room.FinalScoresJson))
-        {
-            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
-        }
-        List<RoomSponsorEntryDto>? sponsor = null;
-        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
-        {
-            try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
-        }
-        List<Guid>? decided = null;
-        if (!string.IsNullOrEmpty(room.SponsorDecisionsJson))
-        {
-            try { decided = JsonSerializer.Deserialize<List<Guid>>(room.SponsorDecisionsJson); } catch { }
-        }
-        LuckyWheelDto? wheel = null;
-        if (!string.IsNullOrEmpty(room.LuckyWheelJson))
-        {
-            try { wheel = JsonSerializer.Deserialize<LuckyWheelDto>(room.LuckyWheelJson); } catch { }
-        }
-        LuckyWheelPreviewDto? preview = null;
-        if (!string.IsNullOrEmpty(room.LuckyWheelPreviewJson))
-        {
-            try { preview = JsonSerializer.Deserialize<LuckyWheelPreviewDto>(room.LuckyWheelPreviewJson); } catch { }
-        }
-        return new RoomHistoryDto(
-            room.Id,
-            room.Code,
-            room.Name,
-            room.MaxSeats,
-            string.IsNullOrWhiteSpace(room.HostUser?.DisplayName) ? (room.HostUser?.Username ?? "") : room.HostUser!.DisplayName,
-            room.CreatedAt,
-            room.FinishedAt,
-            scores,
-            sponsor,
-            wheel,
-            decided,
-            preview
-        );
-    }
+    private static RoomHistoryDto BuildHistoryDto(Room room) => RoomHistoryBuilder.Build(room);
 
     private Task BroadcastHistoryAsync(Room room)
         => _hub.Clients.Group($"room:{room.Id}").SendAsync("HistoryUpdated", BuildHistoryDto(room));

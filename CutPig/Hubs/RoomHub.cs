@@ -334,6 +334,7 @@ public class RoomHub : Hub
 
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
         await Clients.Group(GroupName(room.Id)).SendAsync("WheelPreview", preview);
+        await Clients.Group(GroupName(room.Id)).SendAsync("HistoryUpdated", Services.RoomHistoryBuilder.Build(room));
     }
 
     /// <summary>
@@ -371,6 +372,9 @@ public class RoomHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
         var dto = new WheelSpinStartedDto(preview.Pool, resultIndex, preview.Min, preview.Max, preview.Double, auth.Value.UserId);
         await Clients.Group(GroupName(room.Id)).SendAsync("WheelSpinStarted", dto);
+        // Broadcast HistoryUpdated để mọi client thấy luckyWheel đã chốt → khi animation kết thúc,
+        // section rơi vào nhánh `existing` và bảng tổng kết tiền tự hiện ra.
+        await Clients.Group(GroupName(room.Id)).SendAsync("HistoryUpdated", Services.RoomHistoryBuilder.Build(room));
     }
 
     private static List<int> BuildShuffledPool(int min, int max, bool doubled)

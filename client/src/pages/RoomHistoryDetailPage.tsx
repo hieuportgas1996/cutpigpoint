@@ -513,9 +513,11 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePrevi
       await startSpin();
     } catch (e) {
       toast.push('error', (e as Error).message);
+    } finally {
+      // Reset luôn — WheelSpinStarted đến sẽ kích hoạt animation block tách biệt; nếu vì lý do gì
+      // animation chưa kick (server không broadcast), spinner không bị stuck ở 'Đang gửi…'.
       setRequesting(false);
     }
-    // Note: không reset `requesting` khi success — WheelSpinStarted sẽ tới và chuyển sang animation block.
   }
 
   // Đang animate (mọi viewer).
