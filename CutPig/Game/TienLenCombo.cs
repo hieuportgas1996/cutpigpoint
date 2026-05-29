@@ -84,12 +84,16 @@ public static class TienLenComboEngine
         if (current.Kind == ComboKind.Triple && current.Cards[0].Rank == 15)
             return false;
 
-        // 4-pair-run: beats single 2 and pair of 2 only (NOT triple/four 2).
+        // 4-pair-run beats: con 2, đôi 2, 3 đôi thông, tứ quý (any rank), và 4 đôi thông nhỏ hơn.
+        // KHÔNG chặt sám 2 / tứ quý 2 (đã chặn ở Sám 2 block ở trên cho sám; tứ quý 2 không có rule
+        // bảo vệ riêng nhưng theo rule game được coi unbeatable bởi 4-đôi-thông — giữ y RULE.md).
         if (next.Kind == ComboKind.RunOfPairs && next.Cards.Count == 8)
         {
             if (current.Kind == ComboKind.Single && current.Cards[0].Rank == 15) return true;
             if (current.Kind == ComboKind.Pair && current.Cards[0].Rank == 15) return true;
-            // Same kind + length + higher top still applies below
+            if (current.Kind == ComboKind.RunOfPairs && current.Cards.Count == 6) return true; // 3 đôi thông
+            if (current.Kind == ComboKind.Four && current.Cards[0].Rank != 15) return true;     // tứ quý non-2
+            // Same kind + length + higher top vẫn áp dụng (4 đôi thông cao hơn) ở khối dưới.
         }
 
         // Tứ quý beats: con 2, đôi 2, 3 đôi thông

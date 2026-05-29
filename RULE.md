@@ -43,7 +43,7 @@ Các bộ đặc biệt **vượt loại** để chặt **con 2** hoặc đôi/s
 |---|---|
 | **3 đôi thông** | 1 con 2 |
 | **Tứ quý** | 1 con 2, đôi 2, 3 đôi thông |
-| **4 đôi thông** | Tối đa **2 con 2** (1 con 2, hoặc đôi 2). **Không** chặt được sám 2 và tứ quý 2 (sám 2 là bộ mạnh nhất, không thể chặt). |
+| **4 đôi thông** | 1 con 2, đôi 2, 3 đôi thông, tứ quý non-2, và 4 đôi thông nhỏ hơn. **Không** chặt được sám 2 và tứ quý 2 (sám 2 là bộ mạnh nhất, không thể chặt). |
 
 **Lưu ý**: **Sám 2** là bộ mạnh nhất trong game, **không có bộ nào chặt được**.
 

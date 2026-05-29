@@ -133,10 +133,12 @@ export function comboBeats(current: ComboInfo, next: ComboInfo): boolean {
   // Sám 2 (triple of 2s) is unbeatable.
   if (current.kind === 'triple' && current.cards[0].rank === 15) return false;
 
-  // 4-pair-run: beats only 1 con 2 / đôi 2 (NOT triple/four 2)
+  // 4-pair-run beats: con 2, đôi 2, 3 đôi thông, tứ quý non-2, và 4 đôi thông nhỏ hơn (xử ở khối cuối).
   if (next.kind === 'runOfPairs' && next.cards.length === 8) {
     if (current.kind === 'single' && current.cards[0].rank === 15) return true;
     if (current.kind === 'pair' && current.cards[0].rank === 15) return true;
+    if (current.kind === 'runOfPairs' && current.cards.length === 6) return true; // 3 đôi thông
+    if (current.kind === 'four' && current.cards[0].rank !== 15) return true;       // tứ quý non-2
   }
 
   // Tứ quý beats: 1 con 2, đôi 2, 3 đôi thông
