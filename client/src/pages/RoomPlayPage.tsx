@@ -752,25 +752,17 @@ export default function RoomPlayPage() {
           </div>
         )}
 
-        {isPendingTrickCut && (
-          <div className="match-end-overlay" style={{ pointerEvents: canCutTrick ? 'auto' : 'none', background: 'rgba(0,0,0,0.35)' }}>
-            <div className="match-end-card" style={{ pointerEvents: 'auto' }}>
+        {isPendingTrickCut && canCutTrick && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.35)' }}>
+            <div className="match-end-card">
               <h2>⚡ {trickWinnerName} sắp mở trick mới</h2>
-              {canCutTrick ? (
-                <>
-                  <div className="next-round-countdown">
-                    Bạn có 4 đôi thông — chặn để giành lượt? <b>{trickCutLeftSec}s</b>
-                  </div>
-                  <div className="match-end-actions">
-                    <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
-                    <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
-                  </div>
-                </>
-              ) : (
-                <div className="next-round-countdown">
-                  Đang chờ người có 4 đôi thông quyết định… <b>{trickCutLeftSec}s</b>
-                </div>
-              )}
+              <div className="next-round-countdown">
+                Bạn có 4 đôi thông — chặn để giành lượt? <b>{trickCutLeftSec}s</b>
+              </div>
+              <div className="match-end-actions">
+                <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
+                <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
+              </div>
             </div>
           </div>
         )}
