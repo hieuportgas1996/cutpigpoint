@@ -8,6 +8,10 @@ import { formatScore, scoreClass, formatDateTime, initials } from '../ui/helpers
 import { useHistorySocket, WheelSpinStartedPayload } from '../hooks/useHistorySocket';
 import './lucky-wheel.css';
 
+const WHEEL_SPIN_DURATION_MS = 5000;
+// Tổng thời gian section giữ ở chế độ "đang quay" trước khi parent unlock MoneySummary.
+const WHEEL_REVEAL_BUFFER_MS = WHEEL_SPIN_DURATION_MS + 900;
+
 /**
  * Compute final scores after applying the sponsor plan (Nhất/Nhì transfer điểm cho người âm).
  * Donor mất `amount` per entry; recipient nhận `amount` per entry.
@@ -67,17 +71,29 @@ export default function RoomHistoryDetailPage() {
     // Server gửi preview qua history.luckyWheelPreview sau khi tạo — đồng bộ vào livePreview.
     if (h.luckyWheelPreview) setLivePreview(h.luckyWheelPreview);
   }, []);
+  // True khi animation đang chạy → block MoneySummary để không lộ kết quả trước khi wheel dừng.
+  const [wheelAnimating, setWheelAnimating] = useState(false);
   const handleWheelSpinStarted = useCallback((payload: WheelSpinStartedPayload) => {
     setWheelSpin(payload);
+    setWheelAnimating(true);
   }, []);
+  useEffect(() => {
+    if (!wheelAnimating) return;
+    const t = setTimeout(() => setWheelAnimating(false), WHEEL_REVEAL_BUFFER_MS);
+    return () => clearTimeout(t);
+  }, [wheelAnimating, wheelSpin]);
   const handleWheelPreview = useCallback((payload: LuckyWheelPreview) => {
     setLivePreview(payload);
   }, []);
-  const { createLuckyWheelPreview, startLuckyWheelSpin } = useHistorySocket({
+  const handleWheelPreviewCleared = useCallback(() => {
+    setLivePreview(null);
+  }, []);
+  const { createLuckyWheelPreview, resetLuckyWheelPreview, startLuckyWheelSpin } = useHistorySocket({
     code,
     onHistoryUpdated: handleHistoryUpdated,
     onWheelSpinStarted: handleWheelSpinStarted,
     onWheelPreview: handleWheelPreview,
+    onWheelPreviewCleared: handleWheelPreviewCleared,
   });
 
   // Base scores (gốc, trước sponsor) sorted desc — dùng để biết ai Nhất/Nhì + ai âm.
@@ -214,10 +230,11 @@ export default function RoomHistoryDetailPage() {
         sponsorReady={sponsorReady}
         pendingDonors={pendingDonors}
         createPreview={createLuckyWheelPreview}
+        resetPreview={resetLuckyWheelPreview}
         startSpin={startLuckyWheelSpin}
       />
 
-      {history.luckyWheel && (
+      {history.luckyWheel && !wheelAnimating && (
         <MoneySummarySection
           adjustedSorted={adjustedSorted}
           multiplier={history.luckyWheel.result}
@@ -418,13 +435,12 @@ interface LuckyWheelSectionProps {
   sponsorReady: boolean;
   pendingDonors: string[];
   createPreview: (min: number, max: number, doubled: boolean) => Promise<void>;
+  resetPreview: () => Promise<void>;
   startSpin: () => Promise<void>;
 }
 
 const WHEEL_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#118ab2', '#7c3aed', '#f59e0b', '#ec4899', '#10b981'];
-const WHEEL_SPIN_DURATION_MS = 3500;
-
-function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePreview, sponsorReady, pendingDonors, createPreview, startSpin }: LuckyWheelSectionProps) {
+function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePreview, sponsorReady, pendingDonors, createPreview, resetPreview, startSpin }: LuckyWheelSectionProps) {
   const toast = useToast();
   // Người hạng bét theo điểm GỐC.
   const spinner = baseSorted[baseSorted.length - 1];
@@ -516,6 +532,17 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePrevi
     } finally {
       // Reset luôn — WheelSpinStarted đến sẽ kích hoạt animation block tách biệt; nếu vì lý do gì
       // animation chưa kick (server không broadcast), spinner không bị stuck ở 'Đang gửi…'.
+      setRequesting(false);
+    }
+  }
+
+  async function handleReset() {
+    setRequesting(true);
+    try {
+      await resetPreview();
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    } finally {
       setRequesting(false);
     }
   }
@@ -649,9 +676,12 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePrevi
             })}
           </div>
           {iAmSpinner ? (
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="primary" onClick={handleSpin} disabled={requesting}>
                 {requesting ? '⏳ Đang gửi…' : '🎯 Quay!'}
+              </button>
+              <button className="ghost" onClick={handleReset} disabled={requesting}>
+                ↺ Đổi khoảng
               </button>
             </div>
           ) : (

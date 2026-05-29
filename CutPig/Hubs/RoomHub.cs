@@ -337,6 +337,31 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(room.Id)).SendAsync("HistoryUpdated", Services.RoomHistoryBuilder.Build(room));
     }
 
+    /// <summary>Spinner clears the current preview before spin (allow re-entering min/max).</summary>
+    public async Task ResetLuckyWheelPreview(string code)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == Domain.RoomStatus.Finished);
+        if (room == null) throw new HubException("Phòng không tồn tại.");
+        if (!room.Seats.Any(s => s.UserId == auth.Value.UserId)) throw new HubException("Không có quyền.");
+        if (!string.IsNullOrEmpty(room.LuckyWheelJson)) throw new HubException("Vòng quay đã có kết quả rồi.");
+
+        var (spinner, _) = await GetSpinnerAndDonors(room);
+        if (spinner.UserId != auth.Value.UserId) throw new HubException("Chỉ người hạng bét được đổi vòng quay.");
+
+        room.LuckyWheelPreviewJson = null;
+        await _db.SaveChangesAsync();
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(room.Id));
+        await Clients.Group(GroupName(room.Id)).SendAsync("WheelPreviewCleared");
+        await Clients.Group(GroupName(room.Id)).SendAsync("HistoryUpdated", Services.RoomHistoryBuilder.Build(room));
+    }
+
     /// <summary>
     /// Lucky wheel spin: dùng preview pool đã tạo, server pick result index, broadcast WheelSpinStarted.
     /// </summary>
