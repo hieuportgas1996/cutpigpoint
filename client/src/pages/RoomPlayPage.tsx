@@ -24,12 +24,13 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'siuuu', emoji: '🐐', label: 'SIUUUU', hint: 'Ăn mừng' },
   { code: 'chop-it', emoji: '🪓', label: 'Chặt chết mẹ nó', hint: 'Khích chặt heo' },
   { code: 'sorry', emoji: '🥲', label: 'Sorry', hint: 'Xin lỗi mất nết' },
+  { code: 'beg', emoji: '🛐', label: 'Tao lạy mày', hint: 'Năn nỉ' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sos': 'sos',
-  'siuuu': 'siuu',
-  'go-away': 'begging',
+  'siuuu': 'ronaldoSiuuuu',
   'sorry': 'sorry',
+  'beg': 'begging',
 };
 const STICKER_VOLUME = 0.45;
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
@@ -282,6 +283,16 @@ export default function RoomPlayPage() {
     const t = setTimeout(() => setDelayedRoundEnd(roundEnd), 2000);
     return () => clearTimeout(t);
   }, [roundEnd]);
+
+  // Victory sound khi modal tổng kết ván vừa hiện ra. Dedup theo round.
+  const lastVictoryRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!delayedRoundEnd) return;
+    const key = `${delayedRoundEnd.matchId}|${delayedRoundEnd.roundNumber}`;
+    if (lastVictoryRoundRef.current === key) return;
+    lastVictoryRoundRef.current = key;
+    playSound('victory', 0.7);
+  }, [delayedRoundEnd]);
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
   // không cần chờ roundEnd của cả ván. Dùng key (roundNumber + winnerId) để chỉ chạy 1 lần / ván.

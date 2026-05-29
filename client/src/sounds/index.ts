@@ -9,6 +9,7 @@ import uhhhhUrl from './uhhhh.mp3';
 import ahhUrl from './ahh.mp3';
 import sorryUrl from './sorry.mp3';
 import countdownUrl from './countdown.mp3';
+import ronaldoSiuuuuUrl from './ronaldo-siuuuu.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -21,9 +22,15 @@ export const SOUND_URLS = {
   ahh: ahhUrl,
   sorry: sorryUrl,
   countdown: countdownUrl,
+  ronaldoSiuuuu: ronaldoSiuuuuUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;
+
+/** Sounds that should start at a non-zero offset (seconds) instead of position 0. */
+const SOUND_START_OFFSET: Partial<Record<SoundKey, number>> = {
+  ronaldoSiuuuu: 4,
+};
 
 // Cache one HTMLAudioElement per key so we don't re-decode the file on every play.
 const cache = new Map<SoundKey, HTMLAudioElement>();
@@ -38,13 +45,13 @@ function get(key: SoundKey): HTMLAudioElement {
   return el;
 }
 
-/** Play a one-shot sound. Restarts from the beginning if it's already playing. */
+/** Play a one-shot sound. Restarts from the configured start offset if it's already playing. */
 export function playSound(key: SoundKey, volume = 1) {
   try {
     const el = get(key);
     el.loop = false;
     el.volume = volume;
-    el.currentTime = 0;
+    el.currentTime = SOUND_START_OFFSET[key] ?? 0;
     void el.play().catch(() => undefined); // ignore autoplay-blocked rejections
   } catch {
     /* no-op */
