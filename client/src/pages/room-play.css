@@ -612,173 +612,134 @@
 }
 
 /* === Chặt heo banner === */
-.cut-pig-banner {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* === Chặt-heo badge + sticker hiển thị trên avatar của user (isMe seat) === */
+.tlmn-root .tlmn-seat .seat-cut-pig,
+.tlmn-root .tlmn-seat .seat-sticker {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 12;
   pointer-events: none;
-  z-index: 9999;
-  animation: cutPigOverlayFade 3.2s ease-out forwards;
-}
-
-.cut-pig-banner-inner {
   text-align: center;
-  padding: 26px 44px;
-  border-radius: 22px;
-  background: radial-gradient(circle at 50% 30%, rgba(255,72,72,0.95), rgba(140,20,20,0.92) 70%, rgba(60,0,0,0.95));
-  border: 3px solid #ffd166;
-  box-shadow:
-    0 0 60px 12px rgba(255, 100, 100, 0.55),
-    0 20px 60px rgba(0,0,0,0.6),
-    inset 0 0 30px rgba(255,255,255,0.08);
-  animation: cutPigPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
-             cutPigShake 0.45s ease-in-out 0.5s 3;
-  transform-origin: center;
+  border-radius: 14px;
+  padding: 8px 14px;
+  white-space: nowrap;
+  animation: seatBadgeFade 3s ease-out forwards;
 }
 
-.cut-pig-pigs {
-  font-size: 56px;
+.tlmn-root .tlmn-seat .seat-cut-pig {
+  background: radial-gradient(circle at 50% 30%, rgba(255,72,72,0.96), rgba(140,20,20,0.94) 70%, rgba(60,0,0,0.96));
+  border: 2px solid #ffd166;
+  box-shadow: 0 0 28px rgba(255,100,100,0.5), 0 10px 24px rgba(0,0,0,0.5);
+  animation: seatBadgePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+             seatBadgeFade 3s ease-out forwards;
+}
+.tlmn-root .tlmn-seat .seat-cut-pig-pigs {
+  font-size: 28px;
   line-height: 1;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
-  animation: cutPigBounce 0.6s ease-in-out infinite alternate;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));
 }
-
-.cut-pig-text {
-  font-size: clamp(22px, 4vw, 38px);
+.tlmn-root .tlmn-seat .seat-cut-pig-text {
+  font-size: 14px;
   font-weight: 900;
   color: #fff8d6;
-  letter-spacing: 1px;
-  text-shadow:
-    0 2px 0 #5a0000,
-    0 4px 14px rgba(255, 80, 80, 0.9),
-    0 0 30px rgba(255, 200, 80, 0.7);
-  font-family: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
-}
-
-.cut-pig-sub {
-  margin-top: 8px;
-  font-size: 14px;
-  color: #ffe9a8;
   letter-spacing: 0.5px;
+  text-shadow: 0 1px 0 #5a0000, 0 0 14px rgba(255,200,80,0.7);
+  margin-top: 2px;
+}
+.tlmn-root .tlmn-seat .seat-cut-pig-sub {
+  font-size: 10px;
+  color: #ffe9a8;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
   font-weight: 600;
-  opacity: 0.9;
+  margin-top: 2px;
 }
 
-@keyframes cutPigOverlayFade {
-  0%   { opacity: 1; }
-  82%  { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-@keyframes cutPigPop {
-  0%   { transform: scale(0.3) rotate(-12deg); opacity: 0; }
-  60%  { transform: scale(1.15) rotate(3deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes cutPigShake {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  25%      { transform: translateX(-6px) rotate(-1.5deg); }
-  75%      { transform: translateX(6px) rotate(1.5deg); }
-}
-
-@keyframes cutPigBounce {
-  0%   { transform: translateY(0) scale(1); }
-  100% { transform: translateY(-8px) scale(1.06); }
-}
-
-@media (max-width: 720px) {
-  .cut-pig-banner-inner { padding: 18px 24px; border-radius: 16px; }
-  .cut-pig-pigs { font-size: 40px; }
-  .cut-pig-sub { font-size: 12px; }
-}
-
-/* === Sticker overlay (center stage) === */
-.sticker-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 9998;
-  animation: stickerFade 3s ease-out forwards;
-}
-
-.sticker-overlay-inner {
-  text-align: center;
-  padding: 22px 38px;
-  border-radius: 24px;
+.tlmn-root .tlmn-seat .seat-sticker {
   background: linear-gradient(160deg, rgba(60,40,20,0.96), rgba(35,20,10,0.96));
-  border: 3px solid #d4a445;
-  box-shadow:
-    0 0 40px rgba(212, 164, 69, 0.5),
-    0 18px 40px rgba(0,0,0,0.6);
-  animation: stickerPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
-             stickerWiggle 0.5s ease-in-out 0.45s 2;
+  border: 2px solid #d4a445;
+  box-shadow: 0 0 24px rgba(212,164,69,0.4), 0 10px 24px rgba(0,0,0,0.5);
+  animation: seatBadgePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+             seatBadgeFade 3s ease-out forwards;
 }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-sos { border-color: #ff5252; box-shadow: 0 0 24px rgba(255,80,80,0.5), 0 10px 24px rgba(0,0,0,0.5); }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-no-kill { border-color: #7dd3a8; box-shadow: 0 0 24px rgba(125,211,168,0.45), 0 10px 24px rgba(0,0,0,0.5); }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-go-away { border-color: #ffb84d; box-shadow: 0 0 24px rgba(255,184,77,0.5), 0 10px 24px rgba(0,0,0,0.5); }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-siuuu { border-color: #facc15; box-shadow: 0 0 24px rgba(250,204,21,0.55), 0 10px 24px rgba(0,0,0,0.5); }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-chop-it { border-color: #ef4444; box-shadow: 0 0 24px rgba(239,68,68,0.55), 0 10px 24px rgba(0,0,0,0.5); }
 
-.sticker-emoji {
-  font-size: 84px;
+.tlmn-root .tlmn-seat .seat-sticker-emoji {
+  font-size: 42px;
   line-height: 1;
-  filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5));
-  animation: stickerBounce 0.7s ease-in-out infinite alternate;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
 }
-
-.sticker-label {
-  margin-top: 6px;
-  font-size: clamp(20px, 3.5vw, 30px);
+.tlmn-root .tlmn-seat .seat-sticker-label {
+  font-size: 14px;
   font-weight: 800;
   color: #fff4d0;
-  letter-spacing: 1px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-}
-
-.sticker-sender {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #d4b88a;
   letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.tlmn-root .tlmn-seat .seat-sticker-sender {
+  font-size: 10px;
+  color: #d4b88a;
+  letter-spacing: 0.3px;
+  margin-top: 1px;
 }
 
-/* Per-code accents */
-.sticker-overlay-inner.sticker-sos { border-color: #ff5252; box-shadow: 0 0 40px rgba(255,80,80,0.55), 0 18px 40px rgba(0,0,0,0.6); }
-.sticker-overlay-inner.sticker-no-kill { border-color: #7dd3a8; box-shadow: 0 0 40px rgba(125,211,168,0.45), 0 18px 40px rgba(0,0,0,0.6); }
-.sticker-overlay-inner.sticker-go-away { border-color: #ffb84d; box-shadow: 0 0 40px rgba(255,184,77,0.5), 0 18px 40px rgba(0,0,0,0.6); }
-.sticker-overlay-inner.sticker-siuuu { border-color: #facc15; box-shadow: 0 0 40px rgba(250,204,21,0.6), 0 18px 40px rgba(0,0,0,0.6); }
-.sticker-overlay-inner.sticker-chop-it { border-color: #ef4444; box-shadow: 0 0 40px rgba(239,68,68,0.6), 0 18px 40px rgba(0,0,0,0.6); }
-
-@keyframes stickerFade {
-  0%   { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { opacity: 0; }
+@keyframes seatBadgePop {
+  0%   { transform: translate(-50%, 20%) scale(0.4); opacity: 0; }
+  60%  { transform: translate(-50%, -4%) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
 }
-
-@keyframes stickerPop {
-  0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; }
-  60%  { transform: scale(1.18) rotate(4deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes stickerWiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25%      { transform: rotate(-3deg); }
-  75%      { transform: rotate(3deg); }
-}
-
-@keyframes stickerBounce {
-  0%   { transform: translateY(0) scale(1); }
-  100% { transform: translateY(-6px) scale(1.05); }
+@keyframes seatBadgeFade {
+  0%, 82% { opacity: 1; }
+  100%    { opacity: 0; }
 }
 
 @media (max-width: 720px) {
-  .sticker-overlay-inner { padding: 16px 22px; border-radius: 18px; }
-  .sticker-emoji { font-size: 60px; }
-  .sticker-sender { font-size: 11px; }
+  .tlmn-root .tlmn-seat .seat-cut-pig,
+  .tlmn-root .tlmn-seat .seat-sticker { padding: 6px 10px; border-radius: 12px; }
+  .tlmn-root .tlmn-seat .seat-cut-pig-pigs { font-size: 22px; }
+  .tlmn-root .tlmn-seat .seat-cut-pig-text { font-size: 12px; }
+  .tlmn-root .tlmn-seat .seat-cut-pig-sub { font-size: 9px; }
+  .tlmn-root .tlmn-seat .seat-sticker-emoji { font-size: 32px; }
+  .tlmn-root .tlmn-seat .seat-sticker-label { font-size: 12px; }
+}
+
+/* === Card fly-in animation: combo mới bay từ avatar của owner vào PlayArea === */
+.room-play .play-card-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.room-play .play-card-row.fly-from-bottom { animation: cardFlyBottom 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.room-play .play-card-row.fly-from-top    { animation: cardFlyTop    0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.room-play .play-card-row.fly-from-left   { animation: cardFlyLeft   0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.room-play .play-card-row.fly-from-right  { animation: cardFlyRight  0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes cardFlyBottom {
+  0%   { transform: translate3d(0, 120%, 0) rotate(-8deg) scale(0.6); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(0) scale(1); opacity: 1; }
+}
+@keyframes cardFlyTop {
+  0%   { transform: translate3d(0, -120%, 0) rotate(8deg) scale(0.6); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(0) scale(1); opacity: 1; }
+}
+@keyframes cardFlyLeft {
+  0%   { transform: translate3d(-140%, 0, 0) rotate(-12deg) scale(0.6); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(0) scale(1); opacity: 1; }
+}
+@keyframes cardFlyRight {
+  0%   { transform: translate3d(140%, 0, 0) rotate(12deg) scale(0.6); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(0) scale(1); opacity: 1; }
 }
 
 /* === Sticker quick-react bar (in chat panel) === */

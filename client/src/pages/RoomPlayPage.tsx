@@ -329,6 +329,14 @@ export default function RoomPlayPage() {
     position: SEAT_POSITIONS[(p.seatIndex - myIdx + matchState.players.length) % matchState.players.length],
   }));
 
+  // Direction để animate lá bài bay từ avatar của trick-owner vào giữa bàn.
+  const trickOwnerSeat = matchState.currentTrickOwnerId
+    ? seatLayout.find(s => s.player.userId === matchState.currentTrickOwnerId)
+    : null;
+  const flyDirection: 'bottom' | 'top' | 'left' | 'right' = trickOwnerSeat?.position ?? 'bottom';
+  // Key = owner + cards → khi combo đổi, key đổi → React unmount+remount → animation chạy lại.
+  const flyKey = `${matchState.currentTrickOwnerId ?? ''}|${trick.map(c => c.id).join(',')}`;
+
   const toggle = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -430,24 +438,6 @@ export default function RoomPlayPage() {
 
   return (
     <div className="tlmn-root room-play">
-      {cutPigBanner && (
-        <div className="cut-pig-banner" key={cutPigBanner.id}>
-          <div className="cut-pig-banner-inner">
-            <div className="cut-pig-pigs">🐷💥🐷</div>
-            <div className="cut-pig-text">Siuuu chặt heo chết mẹ mày nè</div>
-            <div className="cut-pig-sub">{cutPigBanner.cutter} · {cutPigBanner.comboLabel}</div>
-          </div>
-        </div>
-      )}
-      {stickerOverlay && (
-        <div className="sticker-overlay" key={stickerOverlay.id}>
-          <div className={`sticker-overlay-inner sticker-${stickerOverlay.code}`}>
-            <div className="sticker-emoji">{stickerOverlay.emoji}</div>
-            <div className="sticker-label">{stickerOverlay.label}</div>
-            <div className="sticker-sender">— {stickerOverlay.sender}</div>
-          </div>
-        </div>
-      )}
       <div className="tlmn-stage">
         <div className="play-header">
           <button className="tlmn-btn ghost" onClick={() => navigate('/rooms')}>← Thoát</button>
@@ -508,7 +498,7 @@ export default function RoomPlayPage() {
                     {player.userId === matchState.hostUserId && <span className="host-badge">CHỦ</span>}
                   </div>
                   <div className="tlmn-seat-meta">
-                    <span>🂠 {isMe ? player.cardsLeft : ''}</span>
+                    <span>🂠 {player.cardsLeft}</span>
                     <span className={`score-pill ${player.totalScore > 0 ? 'pos' : player.totalScore < 0 ? 'neg' : ''}`}>
                       {player.totalScore > 0 ? `+${player.totalScore}` : player.totalScore}
                     </span>
@@ -525,6 +515,20 @@ export default function RoomPlayPage() {
                 {player.passedThisTrick && !player.finalRank && (
                   <div className="tlmn-seat-pass">BỎ LƯỢT</div>
                 )}
+                {isMe && cutPigBanner && (
+                  <div className="seat-cut-pig" key={cutPigBanner.id}>
+                    <div className="seat-cut-pig-pigs">🐷💥🐷</div>
+                    <div className="seat-cut-pig-text">Chặt heo!</div>
+                    <div className="seat-cut-pig-sub">{cutPigBanner.cutter} · {cutPigBanner.comboLabel}</div>
+                  </div>
+                )}
+                {isMe && stickerOverlay && (
+                  <div className={`seat-sticker sticker-${stickerOverlay.code}`} key={stickerOverlay.id}>
+                    <div className="seat-sticker-emoji">{stickerOverlay.emoji}</div>
+                    <div className="seat-sticker-label">{stickerOverlay.label}</div>
+                    <div className="seat-sticker-sender">— {stickerOverlay.sender}</div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -533,11 +537,13 @@ export default function RoomPlayPage() {
             {trick.length === 0 ? (
               <div className="play-empty muted">Mở nước mới</div>
             ) : (
-              trick.map(c => (
-                <div key={c.id} className="play-card-slot">
-                  <CardSvg card={c} size={cardSize} />
-                </div>
-              ))
+              <div key={flyKey} className={`play-card-row fly-from-${flyDirection}`}>
+                {trick.map(c => (
+                  <div key={c.id} className="play-card-slot">
+                    <CardSvg card={c} size={cardSize} />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
