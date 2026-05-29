@@ -121,6 +121,24 @@ public static class TienLenComboEngine
     public static bool IsFourPairRun(Combo c) => c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8;
 
     /// <summary>
+    /// True if a 4-pair-run can legally beat this combo. Mirrors the `Beats` rules:
+    ///   - single 2, đôi 2
+    ///   - 3 đôi thông
+    ///   - tứ quý non-2
+    ///   - 4 đôi thông nhỏ hơn (top-value)
+    /// Dùng để biết có nên mở window "Chặn?" cho người giữ 4-đôi-thông hay không.
+    /// </summary>
+    public static bool IsBeatableByFourPairRun(Combo c)
+    {
+        if (c.Kind == ComboKind.Single && c.Cards[0].Rank == 15) return true;
+        if (c.Kind == ComboKind.Pair && c.Cards[0].Rank == 15) return true;
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 6) return true;
+        if (c.Kind == ComboKind.Four && c.Cards[0].Rank != 15) return true;
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8) return true;
+        return false;
+    }
+
+    /// <summary>
     /// "Chop pig" points contributed by this combo when played. Used by chain settlement:
     /// the last cutter in a trick collects the cumulative chop value of all previous combos
     /// in the chain from the second-to-last player.

@@ -559,14 +559,19 @@ public class MatchManager
             bool pendingCut = false;
             if (allOthersPassed && match.CurrentTrickOwnerId.HasValue)
             {
-                // Check if any non-owner, non-finished player still holds 4-pair-run → offer trick-cut window
+                // Chỉ mở window "Chặn?" nếu combo thắng trick là thứ 4-đôi-thông có thể chặt
+                // (con 2, đôi 2, 3 đôi thông, tứ quý non-2, 4 đôi thông nhỏ hơn). Nếu trick thắng
+                // bằng combo khác (vd sảnh, đôi thường) → 4-đôi-thông không làm gì được, skip popup.
                 var ownerId = match.CurrentTrickOwnerId.Value;
-                var cutCandidates = match.Players
-                    .Where(p => p.UserId != ownerId
-                        && !p.FinalRank.HasValue
-                        && TienLenComboEngine.HasFourPairRunInHand(p.Hand))
-                    .Select(p => p.UserId)
-                    .ToList();
+                var cutCandidates = match.CurrentTrick != null
+                    && TienLenComboEngine.IsBeatableByFourPairRun(match.CurrentTrick)
+                    ? match.Players
+                        .Where(p => p.UserId != ownerId
+                            && !p.FinalRank.HasValue
+                            && TienLenComboEngine.HasFourPairRunInHand(p.Hand))
+                        .Select(p => p.UserId)
+                        .ToList()
+                    : new List<Guid>();
 
                 if (cutCandidates.Count > 0)
                 {
