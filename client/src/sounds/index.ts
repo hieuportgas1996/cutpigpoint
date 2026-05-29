@@ -29,7 +29,7 @@ export type SoundKey = keyof typeof SOUND_URLS;
 
 /** Sounds that should start at a non-zero offset (seconds) instead of position 0. */
 const SOUND_START_OFFSET: Partial<Record<SoundKey, number>> = {
-  ronaldoSiuuuu: 4,
+  ronaldoSiuuuu: 5,
 };
 
 // Cache one HTMLAudioElement per key so we don't re-decode the file on every play.
