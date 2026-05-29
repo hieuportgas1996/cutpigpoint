@@ -967,6 +967,15 @@ public class MatchManager
 
         var pardoned = match.Players.Where(p => p.JudgeIsPardoned).ToList();
 
+        // Áp chop-pig settlements cho mọi case (A/B/C). Chain đã zero-sum theo cặp nên cộng tất cả
+        // entries (winner / pardoned / victim) giữ tổng zero-sum xuyên suốt.
+        for (int i = 0; i < n; i++)
+        {
+            var pid = match.Players[i].UserId;
+            if (match.RoundChopExtra.TryGetValue(pid, out var chop))
+                scores[i] += chop;
+        }
+
         if (pardoned.Count == 1)
         {
             // Case B: pardoned -1, winner +1
@@ -992,13 +1001,7 @@ public class MatchManager
                 scores[idx] += subTable[k];
             }
 
-            // Chop-pig settlements only count for pardoned (their plays were tracked in chain).
-            foreach (var p in pardoned)
-            {
-                int idx = match.Players.IndexOf(p);
-                if (match.RoundChopExtra.TryGetValue(p.UserId, out var chop))
-                    scores[idx] += chop;
-            }
+            // (Chop-pig đã được apply ở khối chung trên, không lặp lại.)
 
             // Pardoned chót còn held (heo / 3-đôi / tứ quý / 4-đôi) → -held, mỗi pardoned khác chia đều +held
             // (zero-sum trong nhóm pardoned). Held=0 không phạt thêm.

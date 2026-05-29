@@ -147,7 +147,7 @@ Khi **người về Nhất** vừa hết bài, server check các player còn l�
 |---|---|---|---|---|
 | A | tất cả còn lại | 0 | Kết thúc ván ngay | Mỗi victim -(4+held), Nhất +∑ |
 | B | còn 1 người đã ra bài | 1 | Kết thúc ván ngay | Mỗi victim -(4+held), pardoned **-1**, Nhất +∑+1 |
-| C | còn ≥2 người đã ra bài | ≥2 | Victim được set rank chót; pardoned **tiếp tục chơi** xác định Nhì/Ba | Victim -(4+held), Nhất +(4+held). Sau khi pardoned đánh xong: áp base rank +1/-1 (2 người) hoặc +2/0/-2 (3 người); chop-pig vẫn tính giữa các pardoned. **Pardoned hạng chót sub-round còn held** (heo/3-đôi/tứ quý/4-đôi) → -held cho ng đó, chia đều +held cho các pardoned khác (zero-sum trong nhóm pardoned, không cộng base +4). Held=0 → không phạt thêm. **Đui 3♠ bỏ qua** trong Case C. |
+| C | còn ≥2 người đã ra bài | ≥2 | Victim được set rank chót; pardoned **tiếp tục chơi** xác định Nhì/Ba | Victim -(4+held), Nhất +(4+held). Sau khi pardoned đánh xong: áp base rank +1/-1 (2 người) hoặc +2/0/-2 (3 người); chop-pig tính cho mọi player có entry trong chain (kể cả Nhất / victim — chain đã zero-sum theo cặp nên giữ tổng zero). **Pardoned hạng chót sub-round còn held** (heo/3-đôi/tứ quý/4-đôi) → -held cho ng đó, chia đều +held cho các pardoned khác (zero-sum trong nhóm pardoned, không cộng base +4). Held=0 → không phạt thêm. **Đui 3♠ bỏ qua** trong Case C. |
 
 **Áp dụng với mọi n ≥ 2**. Không áp khi về trắng.
 
