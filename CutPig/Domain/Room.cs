@@ -21,6 +21,8 @@ public class Room
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
     public string? FinalScoresJson { get; set; }
+    /// <summary>JSON list of `{fromUserId, toUserId, amount}` — đã chốt sau khi Nhất/Nhì quyết định sponsor.</summary>
+    public string? SponsorPlanJson { get; set; }
     public bool IsHidden { get; set; }
     public List<RoomSeat> Seats { get; set; } = new();
 }

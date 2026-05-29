@@ -73,6 +73,11 @@ public class RoomsController : ControllerBase
             }
             catch { }
         }
+        List<RoomSponsorEntryDto>? sponsor = null;
+        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
+        {
+            try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson); } catch { }
+        }
         return new RoomHistoryDto(
             room.Id,
             room.Code,
@@ -81,8 +86,71 @@ public class RoomsController : ControllerBase
             string.IsNullOrWhiteSpace(room.HostUser?.DisplayName) ? (room.HostUser?.Username ?? "") : room.HostUser!.DisplayName,
             room.CreatedAt,
             room.FinishedAt,
-            scores
+            scores,
+            sponsor
         );
+    }
+
+    /// <summary>Lưu sponsor plan: Nhất/Nhì (điểm > 0) chia điểm cho người điểm âm. Chỉ player từng ngồi trong phòng được lưu, và chỉ lưu được 1 lần.</summary>
+    [HttpPut("history/{code}/sponsor")]
+    public async Task<ActionResult<RoomHistoryDto>> SaveSponsorPlan(string code, [FromBody] SaveSponsorPlanRequest req)
+    {
+        var userId = CallerId();
+        if (userId == null) return Unauthorized();
+
+        var room = await _db.Rooms
+            .Include(r => r.HostUser)
+            .Include(r => r.Seats)
+            .FirstOrDefaultAsync(r => r.Code == code.ToUpperInvariant() && r.Status == RoomStatus.Finished);
+        if (room == null) return NotFound();
+        if (!room.Seats.Any(s => s.UserId == userId.Value)) return StatusCode(403, "Không có quyền chỉnh phòng này.");
+
+        List<RoomFinalScoreEntryDto> scores = new();
+        if (!string.IsNullOrEmpty(room.FinalScoresJson))
+        {
+            try { scores = JsonSerializer.Deserialize<List<RoomFinalScoreEntryDto>>(room.FinalScoresJson) ?? new(); } catch { }
+        }
+        if (scores.Count == 0) return BadRequest("Phòng chưa có bảng điểm.");
+        var orderedDesc = scores.OrderByDescending(s => s.TotalScore).ToList();
+        var top1 = orderedDesc.ElementAtOrDefault(0);
+        var top2 = orderedDesc.ElementAtOrDefault(1);
+        var allowedDonors = new HashSet<Guid>();
+        if (top1 != null && top1.TotalScore > 0) allowedDonors.Add(top1.UserId);
+        if (top2 != null && top2.TotalScore > 0) allowedDonors.Add(top2.UserId);
+        var allowedRecipients = scores.Where(s => s.TotalScore < 0).Select(s => s.UserId).ToHashSet();
+
+        var plan = req.Plan ?? new();
+        // Validate
+        var donorTotals = new Dictionary<Guid, int>();
+        foreach (var e in plan)
+        {
+            if (e.Amount <= 0) return BadRequest("Số điểm phải > 0.");
+            if (!allowedDonors.Contains(e.FromUserId)) return BadRequest("Chỉ Nhất/Nhì có điểm dương được sponsor.");
+            if (!allowedRecipients.Contains(e.ToUserId)) return BadRequest("Chỉ chuyển được cho người điểm âm.");
+            if (e.FromUserId == e.ToUserId) return BadRequest("Không thể chuyển cho chính mình.");
+            donorTotals.TryGetValue(e.FromUserId, out var cur);
+            donorTotals[e.FromUserId] = cur + e.Amount;
+        }
+        foreach (var (donorId, total) in donorTotals)
+        {
+            var donor = scores.First(s => s.UserId == donorId);
+            if (total > donor.TotalScore) return BadRequest($"{donor.DisplayName} chỉ có {donor.TotalScore} điểm để sponsor.");
+        }
+        // Chỉ donor được phép tự lưu plan của chính mình. Cộng vào plan hiện có (mỗi donor lưu phần của mình).
+        if (!allowedDonors.Contains(userId.Value)) return StatusCode(403, "Chỉ Nhất hoặc Nhì có điểm dương mới được sponsor.");
+        if (plan.Any(e => e.FromUserId != userId.Value)) return BadRequest("Chỉ được lưu phần sponsor của chính mình.");
+
+        List<RoomSponsorEntryDto> existing = new();
+        if (!string.IsNullOrEmpty(room.SponsorPlanJson))
+        {
+            try { existing = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(room.SponsorPlanJson) ?? new(); } catch { }
+        }
+        // Replace caller's entries (cho phép sửa lại nếu chưa ai quay vòng — đơn giản: ghi đè phần của mình).
+        var merged = existing.Where(e => e.FromUserId != userId.Value).Concat(plan).ToList();
+        room.SponsorPlanJson = JsonSerializer.Serialize(merged);
+        await _db.SaveChangesAsync();
+
+        return await HistoryDetail(code);
     }
 
     [HttpGet("history")]
@@ -115,6 +183,11 @@ public class RoomsController : ControllerBase
                 }
                 catch { }
             }
+            List<RoomSponsorEntryDto>? sponsor = null;
+            if (!string.IsNullOrEmpty(r.SponsorPlanJson))
+            {
+                try { sponsor = JsonSerializer.Deserialize<List<RoomSponsorEntryDto>>(r.SponsorPlanJson); } catch { }
+            }
             return new RoomHistoryDto(
                 r.Id,
                 r.Code,
@@ -123,7 +196,8 @@ public class RoomsController : ControllerBase
                 string.IsNullOrWhiteSpace(r.HostUser?.DisplayName) ? (r.HostUser?.Username ?? "") : r.HostUser!.DisplayName,
                 r.CreatedAt,
                 r.FinishedAt,
-                scores
+                scores,
+                sponsor
             );
         }).ToList();
     }

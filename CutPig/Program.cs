@@ -119,6 +119,7 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""Name"" text");
         db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""FinalScoresJson"" text");
         db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""IsHidden"" boolean NOT NULL DEFAULT false");
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""SponsorPlanJson"" text");
         db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS ""RoomSeats"" (
                 ""Id"" uuid NOT NULL PRIMARY KEY,
