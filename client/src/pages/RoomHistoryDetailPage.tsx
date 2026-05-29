@@ -495,7 +495,7 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
                 <div
                   key={i}
                   className="lucky-wheel-label"
-                  style={{ transform: `rotate(${angle}deg) translateY(-80%)` }}
+                  style={{ transform: `rotate(${angle}deg) translateY(calc(-1 * var(--wheel-label-radius)))` }}
                 >
                   <span style={{ transform: 'rotate(90deg)', display: 'inline-block' }}>{n}</span>
                 </div>
@@ -579,7 +579,7 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, startSpin
                 <div
                   key={i}
                   className="lucky-wheel-label"
-                  style={{ transform: `rotate(${angle}deg) translateY(-80%)` }}
+                  style={{ transform: `rotate(${angle}deg) translateY(calc(-1 * var(--wheel-label-radius)))` }}
                 >
                   <span style={{ transform: 'rotate(90deg)', display: 'inline-block' }}>{n}</span>
                 </div>

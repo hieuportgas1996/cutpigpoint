@@ -22,14 +22,19 @@
   border: 4px solid #ffd166;
   box-shadow: 0 8px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.3);
   transform-origin: 50% 50%;
+  --wheel-label-radius: 100px;
 }
 
 .lucky-wheel-label {
   position: absolute;
+  /* Each label is a fixed-size box anchored at the wheel center. Its transform first rotates around
+   * the wheel center to its slice, then translateY(-X%) pushes it outward toward the rim. */
   left: 50%;
   top: 50%;
-  width: 0;
-  height: 0;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  margin-top: -18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,7 +43,7 @@
   color: #fff;
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
   pointer-events: none;
-  transform-origin: 0 0;
+  transform-origin: center center;
 }
 
 .lucky-wheel-result {
@@ -59,7 +64,7 @@
 }
 
 @media (max-width: 720px) {
-  .lucky-wheel { width: 220px; height: 220px; }
-  .lucky-wheel-label { font-size: 14px; }
+  .lucky-wheel { width: 220px; height: 220px; --wheel-label-radius: 78px; }
+  .lucky-wheel-label { font-size: 14px; width: 30px; height: 30px; margin-left: -15px; margin-top: -15px; }
   .lucky-wheel-number { font-size: 44px; }
 }
