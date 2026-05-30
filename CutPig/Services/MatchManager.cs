@@ -471,29 +471,32 @@ public class MatchManager
                 return new PlayResult(combo, justFinished, true, match);
             }
 
-            // Nếu cutter là active player duy nhất chưa pass → trick về cutter ngay (mọi đối thủ active khác đã pass).
-            // Reset trick + clear pass flags để họ vào lại trick mới (đúng rule pass-tracking per-trick).
-            // Bỏ qua nếu cutter vừa finish (FinalRank đã set) — case đó để turn advance bình thường.
-            if (!justFinished)
+            // Nếu không còn active player nào chưa pass (mọi đối thủ active khác đã pass) → trick kết thúc ngay,
+            // reset trick + clear pass flags để mọi người vào lại trick mới (đúng rule pass-tracking per-trick).
+            // - Cutter chưa finish → lượt mở nước mới về cutter.
+            // - Cutter vừa finish (đánh lá cuối) → lượt về active player kế tiếp theo seat order (không kẹt ở người đã hết bài).
+            bool anyOtherActiveNotPassed = match.Players.Any(p =>
+                p.UserId != userId
+                && !p.FinalRank.HasValue
+                && !p.PassedThisTrick);
+            if (!anyOtherActiveNotPassed)
             {
-                bool anyOtherActiveNotPassed = match.Players.Any(p =>
-                    p.UserId != userId
-                    && !p.FinalRank.HasValue
-                    && !p.PassedThisTrick);
-                if (!anyOtherActiveNotPassed)
+                SettleTrickChopChain(match);
+                // Lưu lá thắng trick để client báo "ai thắng vòng bằng gì" trước khi mở nước mới.
+                match.LastWonTrickCards = match.CurrentTrick?.Cards.ToList();
+                match.LastWonTrickWinnerId = userId;
+                match.CurrentTrick = null;
+                match.CurrentTrickOwnerId = null;
+                foreach (var p in match.Players) p.PassedThisTrick = false;
+                var cutterSeat = match.Players.FindIndex(p => p.UserId == userId);
+                match.CurrentTurnSeatIndex = cutterSeat;
+                if (justFinished)
                 {
-                    SettleTrickChopChain(match);
-                    // Lưu lá thắng trick để client báo "ai thắng vòng bằng gì" trước khi mở nước mới.
-                    match.LastWonTrickCards = match.CurrentTrick?.Cards.ToList();
-                    match.LastWonTrickWinnerId = userId;
-                    match.CurrentTrick = null;
-                    match.CurrentTrickOwnerId = null;
-                    foreach (var p in match.Players) p.PassedThisTrick = false;
-                    var cutterSeat = match.Players.FindIndex(p => p.UserId == userId);
-                    match.CurrentTurnSeatIndex = cutterSeat;
-                    match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
-                    return new PlayResult(combo, justFinished, false, match);
+                    // Cutter đã hết bài → trao lượt cho active player kế tiếp.
+                    AdvanceTurnSkippingPassed(match);
                 }
+                match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+                return new PlayResult(combo, justFinished, false, match);
             }
 
             AdvanceTurnSkippingPassed(match);
