@@ -334,7 +334,7 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
       <div className="card-header">
         <h3>💝 Sponsor</h3>
         <div className="spacer" />
-        <div className="muted small">Nhất/Nhì có thể chia điểm cho người điểm âm</div>
+        <div className="muted small">Sponsor cho người điểm</div>
       </div>
 
       {/* Hiển thị plan hiện có của mọi người để xem */}
@@ -420,7 +420,7 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
           </div>
         </>
       ) : (
-        <div className="muted small">Chỉ Nhất hoặc Nhì (điểm dương) mới được sponsor.</div>
+        <div className="muted small">Chỉ người (điểm dương) mới được sponsor.</div>
       )}
     </div>
   );
@@ -612,7 +612,7 @@ function LuckyWheelSection({ history, myUserId, baseSorted, wheelSpin, livePrevi
 
       {!sponsorReady && (
         <div className="muted small" style={{ marginBottom: 8 }}>
-          ⏳ Đợi Nhất/Nhì quyết định sponsor: <b>{pendingDonors.join(', ')}</b>
+          ⏳ Đợi quyết định sponsor: <b>{pendingDonors.join(', ')}</b>
         </div>
       )}
 
