@@ -11,6 +11,7 @@ import sorryUrl from './sorry.mp3';
 import countdownUrl from './countdown.mp3';
 import ronaldoSiuuuuUrl from './ronaldo-siuuuu.mp3';
 import chiuroiUrl from './chiuroi.mp3';
+import lotteryUrl from './lottery.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -25,6 +26,7 @@ export const SOUND_URLS = {
   countdown: countdownUrl,
   ronaldoSiuuuu: ronaldoSiuuuuUrl,
   chiuroi: chiuroiUrl,
+  lottery: lotteryUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;

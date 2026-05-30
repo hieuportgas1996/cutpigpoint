@@ -6,6 +6,7 @@ import { useToast } from '../ui/Toast';
 import { Icon } from '../ui/Icon';
 import { formatScore, scoreClass, formatDateTime, initials } from '../ui/helpers';
 import { useHistorySocket, WheelSpinStartedPayload } from '../hooks/useHistorySocket';
+import { playSound } from '../sounds';
 import './lucky-wheel.css';
 
 const WHEEL_SPIN_DURATION_MS = 5000;
@@ -84,6 +85,8 @@ export default function RoomHistoryDetailPage() {
   }, [wheelAnimating, wheelSpin]);
   const handleWheelPreview = useCallback((payload: LuckyWheelPreview) => {
     setLivePreview(payload);
+    // Vòng xoay vừa được tạo (broadcast tới mọi viewer) → phát sound lottery.
+    playSound('lottery', 0.6);
   }, []);
   const handleWheelPreviewCleared = useCallback(() => {
     setLivePreview(null);
