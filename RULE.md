@@ -53,10 +53,8 @@ Các bộ đặc biệt **vượt loại** để chặt **con 2** hoặc đôi/s
 - Ví dụ 4 người:
   - P1 đánh `3` → P2 bỏ → P3 đánh `4` → P4 đánh `5` → P1 đánh `6` → **P3 đánh tiếp** (P2 đã bỏ, skip).
 - Khi tất cả người khác đều pass → người đánh lá mạnh nhất thắng trick → **trick reset** → mọi người tham gia lại trick mới (bao gồm cả người đã pass).
-- **Thông báo thắng vòng**: khi một người thắng trick rồi mở nước mới ngay (không có popup "Chặn"), các người khác cần biết *tại sao* người đó được mở nước mới. Server giữ lại **lá thắng trick + tên người thắng** và gửi cho mọi client tới khi có nước đánh mới:
-  - Hiện **toast** tiếng Việt cho mọi người (vd `P3 thắng vòng với 2♥ → mở nước mới`).
-  - Giữ combo thắng đó **hiển thị mờ** ở giữa bàn cho tới khi người thắng đánh nước đầu tiên của trick mới (lúc đó lá mờ biến mất, lá mới hiện lên).
-  - Ví dụ: P4 đánh `2♦` về Nhất → P1, P2 pass → P3 đánh `2♥` thắng trick → mọi người thấy toast "P3 thắng vòng với 2♥" và lá `2♥` mờ trên bàn, rồi P3 mở nước mới.
+- **Thông báo thắng vòng**: khi một người thắng trick rồi mở nước mới ngay (không có popup "Chặn"), các người khác cần biết *tại sao* người đó được mở nước mới. Server giữ lại **lá thắng trick + tên người thắng** và gửi cho mọi client tới khi có nước đánh mới: combo thắng đó **hiển thị mờ** ở giữa bàn (kèm label "X thắng vòng · mở nước mới") cho tới khi người thắng đánh nước đầu tiên của trick mới (lúc đó lá mờ biến mất, lá mới hiện lên).
+  - Ví dụ: P4 đánh `2♦` về Nhất → P1, P2 pass → P3 đánh `2♥` thắng trick → mọi người thấy lá `2♥` mờ trên bàn với label "P3 thắng vòng", rồi P3 mở nước mới.
 
 ### Ngoại lệ "4 đôi thông"
 - 4 đôi thông có thể đánh ra **bất kỳ lúc nào** trong lượt của mình, kể cả nếu đã pass trick này hoặc đối thủ đang đánh con 2 / đôi 2.
