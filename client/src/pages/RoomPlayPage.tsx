@@ -8,7 +8,7 @@ import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
-import { playSound, type SoundKey } from '../sounds';
+import { playSound, stopSound, type SoundKey } from '../sounds';
 import '../game/demo.css';
 import './room-lobby.css';
 import './room-play.css';
@@ -266,7 +266,11 @@ export default function RoomPlayPage() {
   useEffect(() => {
     if (!matchEnd || !code) return;
     const t = setTimeout(() => navigate(`/rooms/${code.toUpperCase()}/history`), 10000);
-    return () => clearTimeout(t);
+    // Tắt sound pháo hoa khi rời trang (chuyển sang bảng điểm) — tránh phát tiếp sau khi đã sang.
+    return () => {
+      clearTimeout(t);
+      stopSound('fireworkNew');
+    };
   }, [matchEnd, code, navigate]);
   const matchEndLeftSec = matchEndAt
     ? Math.max(0, 10 - Math.floor((now - matchEndAt) / 1000))

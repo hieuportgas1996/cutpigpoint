@@ -64,6 +64,14 @@ export function playSound(key: SoundKey, volume = 1) {
   }
 }
 
+/** Stop a sound if it's currently playing (and rewind to start). No-op if never played. */
+export function stopSound(key: SoundKey) {
+  const el = cache.get(key);
+  if (!el) return;
+  el.pause();
+  el.currentTime = 0;
+}
+
 /** Start (or restart) a looping sound. Returns a stop function. */
 export function playLoop(key: SoundKey, volume = 0.5): () => void {
   const el = get(key);
