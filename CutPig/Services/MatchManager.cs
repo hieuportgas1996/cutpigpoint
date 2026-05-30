@@ -372,12 +372,15 @@ public class MatchManager
         match.Status = MatchStatus.InProgress;
         foreach (var p in match.Players) p.PassedThisTrick = false;
         var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+        // Người mở nước mới = người thắng trick (owner). Nếu owner đã hết bài → người active KẾ TIẾP
+        // owner theo seat order (anchor vào ownerSeat trước khi advance, không phải từ lượt hiện tại).
         if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
         {
             match.CurrentTurnSeatIndex = ownerSeat;
         }
         else
         {
+            match.CurrentTurnSeatIndex = ownerSeat;
             AdvanceTurnSkippingPassed(match);
         }
         match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
@@ -612,12 +615,15 @@ public class MatchManager
                     match.CurrentTrickOwnerId = null;
                     foreach (var p in match.Players) p.PassedThisTrick = false;
                     var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+                    // Người mở nước mới = người thắng trick (owner). Nếu owner đã hết bài → người
+                    // active KẾ TIẾP owner theo seat order (KHÔNG phải kế tiếp người vừa pass cuối cùng).
                     if (ownerSeat >= 0 && !match.Players[ownerSeat].FinalRank.HasValue)
                     {
                         match.CurrentTurnSeatIndex = ownerSeat;
                     }
                     else
                     {
+                        match.CurrentTurnSeatIndex = ownerSeat;
                         AdvanceTurnSkippingPassed(match);
                     }
                     newTrick = true;
