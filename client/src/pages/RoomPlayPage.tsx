@@ -260,6 +260,8 @@ export default function RoomPlayPage() {
   useEffect(() => {
     if (!matchEnd) { setMatchEndAt(null); return; }
     setMatchEndAt(Date.now());
+    // Sound pháo hoa khi modal tổng kết trận hiện ra.
+    playSound('fireworkNew', 0.7);
   }, [matchEnd]);
   useEffect(() => {
     if (!matchEnd || !code) return;
