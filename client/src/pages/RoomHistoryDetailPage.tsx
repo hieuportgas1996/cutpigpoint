@@ -334,7 +334,7 @@ function SponsorSection({ history, code, iAmDonor, myBaseScore, recipients, onSa
       <div className="card-header">
         <h3>💝 Sponsor</h3>
         <div className="spacer" />
-        <div className="muted small">Sponsor cho người điểm</div>
+        <div className="muted small">Vòng sponsor cấp vốn </div>
       </div>
 
       {/* Hiển thị plan hiện có của mọi người để xem */}
