@@ -71,6 +71,8 @@ public class MatchManager
         match.Status = MatchStatus.InProgress;
         match.CurrentTrick = null;
         match.CurrentTrickOwnerId = null;
+        match.LastWonTrickCards = null;
+        match.LastWonTrickWinnerId = null;
         match.FinishedCount = 0;
         match.FinishOrder.Clear();
         match.WhiteWinDeadline = null;
@@ -270,6 +272,9 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            // Có nước đánh mới → ẩn thông báo "thắng vòng trước".
+            match.LastWonTrickCards = null;
+            match.LastWonTrickWinnerId = null;
             player.HasPlayedThisRound = true;
             RecordChopPlay(match, userId, combo);
             match.Status = MatchStatus.InProgress;
@@ -356,6 +361,9 @@ public class MatchManager
         if (!match.PendingTrickWinnerId.HasValue) return;
         var ownerId = match.PendingTrickWinnerId.Value;
         SettleTrickChopChain(match);
+        // Lưu lá thắng trick để client báo "ai thắng vòng bằng gì" trước khi mở nước mới.
+        match.LastWonTrickCards = match.CurrentTrick?.Cards.ToList();
+        match.LastWonTrickWinnerId = ownerId;
         match.CurrentTrick = null;
         match.CurrentTrickOwnerId = null;
         match.TrickCutDeadline = null;
@@ -418,6 +426,9 @@ public class MatchManager
             foreach (var c in cards) player.Hand.Remove(c);
             match.CurrentTrick = combo;
             match.CurrentTrickOwnerId = userId;
+            // Có nước đánh mới → ẩn thông báo "thắng vòng trước".
+            match.LastWonTrickCards = null;
+            match.LastWonTrickWinnerId = null;
             player.HasPlayedThisRound = true;
             RecordChopPlay(match, userId, combo);
             // If player was previously passed in this trick but used 4-pair-run, clear pass flag (they're back in)
@@ -472,6 +483,9 @@ public class MatchManager
                 if (!anyOtherActiveNotPassed)
                 {
                     SettleTrickChopChain(match);
+                    // Lưu lá thắng trick để client báo "ai thắng vòng bằng gì" trước khi mở nước mới.
+                    match.LastWonTrickCards = match.CurrentTrick?.Cards.ToList();
+                    match.LastWonTrickWinnerId = userId;
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
                     foreach (var p in match.Players) p.PassedThisTrick = false;
@@ -509,6 +523,9 @@ public class MatchManager
                     current.Hand.Remove(smallest);
                     match.CurrentTrick = combo;
                     match.CurrentTrickOwnerId = userId;
+                    // Có nước đánh mới → ẩn thông báo "thắng vòng trước".
+                    match.LastWonTrickCards = null;
+                    match.LastWonTrickWinnerId = null;
                     current.HasPlayedThisRound = true;
                     RecordChopPlay(match, userId, combo);
 
@@ -585,6 +602,9 @@ public class MatchManager
                 else
                 {
                     SettleTrickChopChain(match);
+                    // Lưu lá thắng trick để client báo "ai thắng vòng bằng gì" trước khi mở nước mới.
+                    match.LastWonTrickCards = match.CurrentTrick?.Cards.ToList();
+                    match.LastWonTrickWinnerId = ownerId;
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
                     foreach (var p in match.Players) p.PassedThisTrick = false;

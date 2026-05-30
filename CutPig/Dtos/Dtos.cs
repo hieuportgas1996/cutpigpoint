@@ -62,7 +62,9 @@ public record MatchPublicStateDto(
     DateTime? WhiteWinDeadline,
     DateTime? TrickCutDeadline,
     Guid? PendingTrickWinnerId,
-    List<Guid>? TrickCutCandidates);
+    List<Guid>? TrickCutCandidates,
+    List<CardDto>? LastWonTrick,
+    Guid? LastWonTrickWinnerId);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

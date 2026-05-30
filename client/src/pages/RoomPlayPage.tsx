@@ -6,7 +6,7 @@ import { useToast } from '../ui/Toast';
 import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
-import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
+import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun, rankLabel, SUIT_GLYPH } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import { playSound, type SoundKey } from '../sounds';
 import '../game/demo.css';
@@ -154,6 +154,7 @@ export default function RoomPlayPage() {
   const lastBubbledChatId = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
+  const lastWonTrickSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
   // ID người Nhất đang được hiển thị pháo hoa (chỉ khi roundEnd vừa bùng ra)
   const [winnerCelebration, setWinnerCelebration] = useState<string | null>(null);
@@ -372,6 +373,28 @@ export default function RoomPlayPage() {
     return () => clearTimeout(t);
   }, [matchState?.currentTrick, matchState?.roundNumber, matchState?.currentTrickOwnerId]);
 
+  // Khi 1 người thắng vòng (mọi người pass) → mở nước mới ngay, người khác không kịp thấy lá thắng.
+  // Server gửi lastWonTrick + người thắng → hiện toast giải thích "ai thắng vòng bằng lá gì".
+  useEffect(() => {
+    const won = matchState?.lastWonTrick;
+    const winnerId = matchState?.lastWonTrickWinnerId;
+    if (!won || won.length === 0 || !winnerId) {
+      lastWonTrickSignature.current = null;
+      return;
+    }
+    const cards = won.map(cardFromDto);
+    const signature = `${matchState!.roundNumber}|${winnerId}|${cards.map(c => c.id).sort().join(',')}`;
+    if (lastWonTrickSignature.current === signature) return;
+    lastWonTrickSignature.current = signature;
+    const winnerName = matchState!.players.find(p => p.userId === winnerId)?.displayName ?? 'Ai đó';
+    const cardsText = cards
+      .slice()
+      .sort(compareCard)
+      .map(c => `${rankLabel(c.rank)}${SUIT_GLYPH[c.suit]}`)
+      .join(' ');
+    toast.push('info', `${winnerName} thắng vòng với ${cardsText} → mở nước mới`);
+  }, [matchState?.lastWonTrick, matchState?.lastWonTrickWinnerId, matchState?.roundNumber]);
+
   const myUserId = state.status === 'authenticated' ? state.userId : '';
   const me = matchState?.players.find(p => p.userId === myUserId) ?? null;
   const isHost = matchState?.hostUserId === myUserId;
@@ -380,6 +403,11 @@ export default function RoomPlayPage() {
   const myHand: Card[] = (privateHand?.hand ?? []).map(cardFromDto).sort(compareCard);
   const trick: Card[] = (matchState?.currentTrick ?? []).map(cardFromDto);
   const trickCombo = trick.length > 0 ? detectCombo(trick) : null;
+  // Lá vừa thắng vòng trước (hiển thị mờ khi chưa ai mở nước mới).
+  const lastWonTrick: Card[] = (matchState?.lastWonTrick ?? []).map(cardFromDto);
+  const lastWonTrickWinnerName = matchState?.lastWonTrickWinnerId
+    ? matchState.players.find(p => p.userId === matchState.lastWonTrickWinnerId)?.displayName ?? null
+    : null;
 
   const selectedCards = myHand.filter(c => selected.has(c.id));
   const selectedKey = selectedCards.map(c => c.id).join(',');
@@ -661,7 +689,22 @@ export default function RoomPlayPage() {
 
           <div className="play-area-cards">
             {trick.length === 0 ? (
-              <div className="play-empty muted">Mở nước mới</div>
+              lastWonTrick.length > 0 ? (
+                <div className="play-won-trick">
+                  <div className="play-card-row play-card-row-faded">
+                    {lastWonTrick.map(c => (
+                      <div key={c.id} className="play-card-slot">
+                        <CardSvg card={c} size={cardSize} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="play-won-trick-label muted">
+                    {lastWonTrickWinnerName ? `${lastWonTrickWinnerName} thắng vòng` : 'Thắng vòng'} · mở nước mới
+                  </div>
+                </div>
+              ) : (
+                <div className="play-empty muted">Mở nước mới</div>
+              )
             ) : (
               <div key={flyKey} className={`play-card-row fly-from-${flyDirection}`}>
                 {trick.map(c => (

@@ -359,6 +359,8 @@ export interface MatchPublicState {
   trickCutDeadline: string | null;
   pendingTrickWinnerId: string | null;
   trickCutCandidates: string[] | null;
+  lastWonTrick: CardDto[] | null;
+  lastWonTrickWinnerId: string | null;
 }
 
 export interface PrivateHand {

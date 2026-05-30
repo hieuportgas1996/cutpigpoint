@@ -204,6 +204,8 @@ public class MatchTimerService : BackgroundService
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
-            m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null);
+            m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null,
+            m.LastWonTrickCards?.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
+            m.LastWonTrickWinnerId);
     }
 }

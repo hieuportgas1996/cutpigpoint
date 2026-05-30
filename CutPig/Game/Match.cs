@@ -66,6 +66,14 @@ public class Match
     public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
 
     /// <summary>
+    /// Lá thắng trick vừa rồi (combo cuối cùng khi mọi người pass → trick reset). Giữ lại để client
+    /// hiển thị "ai thắng vòng bằng lá gì" trong khoảng người thắng mở nước mới (lúc CurrentTrick = null).
+    /// Bị xoá ngay khi có nước đánh mới của trick kế tiếp.
+    /// </summary>
+    public List<Card>? LastWonTrickCards { get; set; }
+    public Guid? LastWonTrickWinnerId { get; set; }
+
+    /// <summary>
     /// Chop-pig chain for the current trick: sequence of (playerId, chopValue, kind) for each play in this trick.
     /// Cleared on trick reset. On settle: if chain.Count >= 2 AND last play is NOT a Single (single 2 chặt single 2
     /// is "same-kind đơn", không tính điểm theo rule), the second-to-last player pays the sum of chopValue of
