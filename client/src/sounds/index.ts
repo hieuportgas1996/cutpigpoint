@@ -1,7 +1,7 @@
 // Sound effect registry + helpers. Vite resolves these imports to hashed URLs in the final bundle.
 import backgroundLobbyUrl from './background_lobby.mp3';
 import notifyTurnUrl from './notify_turn.mp3';
-import victoryUrl from './victory.mp3';
+import clapHandUrl from './clap-hand.mp3';
 import sosUrl from './sos.mp3';
 import siuuUrl from './siuu.mp3';
 import beggingUrl from './begging.mp3';
@@ -17,7 +17,7 @@ import fireworkNewUrl from './firework-new.mp3';
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
   notifyTurn: notifyTurnUrl,
-  victory: victoryUrl,
+  clapHand: clapHandUrl,
   sos: sosUrl,
   siuu: siuuUrl,
   begging: beggingUrl,

@@ -303,14 +303,14 @@ export default function RoomPlayPage() {
     return () => clearTimeout(t);
   }, [roundEnd]);
 
-  // Victory sound khi modal tổng kết ván vừa hiện ra. Dedup theo round.
+  // Sound vỗ tay khi modal tổng kết ván vừa hiện ra. Dedup theo round.
   const lastVictoryRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (!delayedRoundEnd) return;
     const key = `${delayedRoundEnd.matchId}|${delayedRoundEnd.roundNumber}`;
     if (lastVictoryRoundRef.current === key) return;
     lastVictoryRoundRef.current = key;
-    playSound('victory', 0.7);
+    playSound('clapHand', 0.7);
   }, [delayedRoundEnd]);
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
