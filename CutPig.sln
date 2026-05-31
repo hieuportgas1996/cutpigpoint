@@ -5,6 +5,8 @@ VisualStudioVersion = 17.11.35312.102
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CutPig", "CutPig\CutPig.csproj", "{9056CDD6-92EF-49A0-AD50-6BC8A678FE59}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CutPig.Tests", "CutPig.Tests\CutPig.Tests.csproj", "{EB684353-64C2-4EF7-8CFF-641932BA8FCB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{9056CDD6-92EF-49A0-AD50-6BC8A678FE59}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9056CDD6-92EF-49A0-AD50-6BC8A678FE59}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9056CDD6-92EF-49A0-AD50-6BC8A678FE59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB684353-64C2-4EF7-8CFF-641932BA8FCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB684353-64C2-4EF7-8CFF-641932BA8FCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB684353-64C2-4EF7-8CFF-641932BA8FCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB684353-64C2-4EF7-8CFF-641932BA8FCB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

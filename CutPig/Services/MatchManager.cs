@@ -213,6 +213,9 @@ public class MatchManager
                 p.WhiteWinReason = null;
                 p.WhiteWinAccepted = null;
             }
+            // Chuyển sang InProgress: thiếu dòng này thì status kẹt ở WhiteWinChoice
+            // → Play/Pass throw "Ván chưa bắt đầu" → game treo sau khi từ chối về trắng.
+            match.Status = MatchStatus.InProgress;
             SetupFirstTurn(match);
             return;
         }
@@ -722,6 +725,16 @@ public class MatchManager
             // Rule: chặt heo bằng "đơn thuần" (single 2 chặn single 2) không tính điểm.
             // Chỉ tính khi cutter cuối dùng combo lớn (đôi 2, sám 2, tứ quý, 3-đôi-thông, 4-đôi-thông).
             if (last.Kind == ComboKind.Single)
+            {
+                chain.Clear();
+                return;
+            }
+            // Rule: người bị chặt cuối (second-to-last) đã HẾT BÀI (đã có thứ hạng — Nhất/Nhì/Ba bất kỳ)
+            // thì không phải trả tiền chặt — không còn ai để đòi pot. Vd P1 đánh 2♠ rồi hết bài, P2 pass,
+            // P3 chặt 2♠ bằng 3-đôi-thông → P3 không ăn gì (second-to-last = P1 đã về). Nhưng nếu second-to-last
+            // còn bài (chưa về) thì vẫn gánh toàn bộ pot chain[0..^1], kể cả phần heo của người đã hết bài.
+            var secondLastPlayer = match.Players.FirstOrDefault(p => p.UserId == secondLast.PlayerId);
+            if (secondLastPlayer != null && secondLastPlayer.FinalRank.HasValue)
             {
                 chain.Clear();
                 return;

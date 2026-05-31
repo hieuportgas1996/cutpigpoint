@@ -126,6 +126,9 @@ Mỗi combo "có chop value" đánh ra trong 1 trick được tích lại. Khi t
 
 **Lưu ý**:
 - **Same-kind đơn (single 2 chặn single 2) KHÔNG tính**: chain reset = 0. Vd P1=`2♠`, P2=`2♥` → P1, P2 đều net 0. Chỉ khi last cutter dùng đôi 2 / sám 2 / tứ quý / 3-đôi-thông / 4-đôi-thông mới settle pot.
+- **Người bị chặt cuối đã HẾT BÀI → KHÔNG settle**: nếu second-to-last (người bị chặt cuối trong chain) đã về bài (có thứ hạng Nhất/Nhì/Ba bất kỳ tại thời điểm settle), thì last cutter **không ăn điểm gì** — không còn ai để đòi pot.
+  - Vd: P1 đánh `2♠` rồi hết bài (về Nhất) → P2 pass → P3 chặt `2♠` bằng 3-đôi-thông → P3 **net 0** (second-to-last = P1 đã về bài).
+  - Nhưng nếu second-to-last vẫn **còn bài**: vẫn gánh toàn bộ pot `chain[0..^1]`, **kể cả phần heo của người đã hết bài** ở giữa chain. Vd: P1 đánh `2♠` rồi hết bài (1đ) → P2 đánh `2♥` còn bài (2đ) → P3 chặt 3-đôi-thông → P3 **+3**, P2 **-3** (gánh cả heo P1).
 - Đôi 2 chặn đôi 2 (same-kind đôi) **vẫn tính**.
 - Sám 2 và tứ quý 2 unbeatable theo luật chặt heo → không bao giờ kích hoạt chop chain, không ai bị trừ.
 - Tứ quý không chặt được sám 2 / tứ quý 2 (nhưng chặt 3-đôi-thông, đôi 2, lá 2).
