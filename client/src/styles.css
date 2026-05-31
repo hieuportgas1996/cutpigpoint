@@ -93,6 +93,12 @@ h4 { font-size: 1rem; margin-bottom: 0.4em; }
   padding: 1.25rem 1rem 5rem;
 }
 
+.app-footer {
+  text-align: center;
+  padding: 1rem 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
 /* ---------- Nav ---------- */
 
 .nav {

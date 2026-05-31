@@ -39,7 +39,7 @@ export default function LoginPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <span className="brand-icon"><Icon name="cards" size={18} /></span>
-          <h2 style={{ margin: 0 }}>Cut Pig Point</h2>
+          <h2 style={{ margin: 0 }}>Cut Pig</h2>
         </div>
         <div>
           <label htmlFor="username">Tên đăng nhập</label>
@@ -91,6 +91,10 @@ export default function LoginPage() {
           <Icon name="check" size={14} />
           {submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </button>
+
+        <div className="muted small" style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+          HieuDo holds the copyright to the content on this website.
+        </div>
       </form>
     </div>
   );

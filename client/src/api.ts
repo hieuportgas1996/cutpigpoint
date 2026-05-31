@@ -189,6 +189,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword })
     }),
+  changeDisplayName: (displayName: string) =>
+    request<{ userId: string; username: string; displayName: string; isAdmin: boolean; hasAvatar: boolean }>('/auth/change-display-name', {
+      method: 'POST',
+      body: JSON.stringify({ displayName })
+    }),
   setMyAvatar: (dataUrl: string) =>
     request<void>('/auth/avatar', { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
   deleteMyAvatar: () => request<void>('/auth/avatar', { method: 'DELETE' }),

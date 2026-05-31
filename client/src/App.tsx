@@ -107,6 +107,9 @@ function AppShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <footer className="app-footer muted small">
+        HieuDo holds the copyright to the content on this website.
+      </footer>
     </>
   );
 }

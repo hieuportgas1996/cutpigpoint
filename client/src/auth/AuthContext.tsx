@@ -11,6 +11,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAvatar: (hasAvatar: boolean) => void;
+  updateDisplayName: (displayName: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -69,6 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : prev);
   }, []);
 
+  const updateDisplayName = useCallback((displayName: string) => {
+    setState(prev => prev.status === 'authenticated'
+      ? { ...prev, displayName }
+      : prev);
+  }, []);
+
   const logout = useCallback(async () => {
     try { await api.logout(); } catch { /* ignore */ }
     auth.setToken(null);
@@ -76,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ state, login, logout, refreshAvatar }}>
+    <AuthContext.Provider value={{ state, login, logout, refreshAvatar, updateDisplayName }}>
       {children}
     </AuthContext.Provider>
   );

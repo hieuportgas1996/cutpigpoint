@@ -6,7 +6,7 @@ import { Icon } from '../ui/Icon';
 import { fileToAvatarDataUrl } from '../ui/image';
 
 export default function ProfilePage() {
-  const { state, refreshAvatar } = useAuth();
+  const { state, refreshAvatar, updateDisplayName } = useAuth();
   const toast = useToast();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -15,8 +15,45 @@ export default function ProfilePage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [nameBusy, setNameBusy] = useState(false);
+
   if (state.status !== 'authenticated') {
     return <div className="muted">Chưa đăng nhập.</div>;
+  }
+
+  function startEditName() {
+    if (state.status !== 'authenticated') return;
+    setNameValue(state.displayName);
+    setEditingName(true);
+  }
+
+  async function handleSaveName() {
+    const trimmed = nameValue.trim();
+    if (!trimmed) {
+      toast.push('error', 'Tên hiển thị không được để trống.');
+      return;
+    }
+    if (trimmed.length > 40) {
+      toast.push('error', 'Tên hiển thị tối đa 40 ký tự.');
+      return;
+    }
+    if (state.status === 'authenticated' && trimmed === state.displayName) {
+      setEditingName(false);
+      return;
+    }
+    setNameBusy(true);
+    try {
+      const res = await api.changeDisplayName(trimmed);
+      updateDisplayName(res.displayName);
+      setEditingName(false);
+      toast.push('success', 'Đã đổi tên hiển thị.');
+    } catch (e) {
+      toast.push('error', (e as Error).message);
+    } finally {
+      setNameBusy(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -91,7 +128,26 @@ export default function ProfilePage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
             <div><span className="muted small">Tên đăng nhập:</span> <b>{state.username}</b></div>
-            <div><span className="muted small">Tên hiển thị:</span> <b>{state.displayName}</b></div>
+            {editingName ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span className="muted small">Tên hiển thị:</span>
+                <input
+                  value={nameValue}
+                  onChange={e => setNameValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
+                  maxLength={40}
+                  autoFocus
+                  style={{ width: 160 }}
+                />
+                <button className="sm" disabled={nameBusy} onClick={handleSaveName}>{nameBusy ? 'Đang lưu…' : 'Lưu'}</button>
+                <button className="sm ghost" disabled={nameBusy} onClick={() => setEditingName(false)}>Huỷ</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="muted small">Tên hiển thị:</span> <b>{state.displayName}</b>
+                <button className="sm ghost" onClick={startEditName}>Đổi tên</button>
+              </div>
+            )}
             {state.isAdmin && <div><span className="score-pill pos">ADMIN</span></div>}
           </div>
         </div>

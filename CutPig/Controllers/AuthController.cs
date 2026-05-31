@@ -73,6 +73,28 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("change-display-name")]
+    public async Task<ActionResult<MeResponse>> ChangeDisplayName([FromBody] ChangeDisplayNameRequest req)
+    {
+        var userId = (Guid?)HttpContext.Items["UserId"];
+        if (userId == null) return Unauthorized();
+
+        var displayName = req?.DisplayName?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(displayName))
+            return BadRequest("Tên hiển thị không được để trống.");
+        if (displayName.Length > 40)
+            return BadRequest("Tên hiển thị tối đa 40 ký tự.");
+
+        var user = await _db.AppUsers.FindAsync(userId.Value);
+        if (user == null) return Unauthorized();
+
+        user.DisplayName = displayName;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return new MeResponse(user.Id, user.Username, user.DisplayName, user.IsAdmin, !string.IsNullOrEmpty(user.AvatarData));
+    }
+
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
