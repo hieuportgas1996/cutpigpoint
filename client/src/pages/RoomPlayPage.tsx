@@ -26,6 +26,7 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'sorry', emoji: '😢', label: 'Sorry', hint: 'Xin lỗi mất nết' },
   { code: 'beg', emoji: '🛐', label: 'Tao lạy mày', hint: 'Năn nỉ' },
   { code: 'chiuroi', emoji: '🤷', label: 'Thế thì chịu', hint: 'Thế thì chịu rồi' },
+  { code: 'so-qua', emoji: '😱', label: 'Sợ quá sợ quá', hint: 'Sợ quá sợ quá' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sos': 'sos',
@@ -33,6 +34,7 @@ const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sorry': 'sorry',
   'beg': 'begging',
   'chiuroi': 'chiuroi',
+  'so-qua': 'soQua',
 };
 const STICKER_VOLUME = 0.45;
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
