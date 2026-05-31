@@ -108,7 +108,7 @@ function AppShell() {
         </Routes>
       </main>
       <footer className="app-footer muted small">
-        HieuDo holds the copyright to the content on this website.
+        © 2026 Cut Pig by HieuDo. All rights reserved.
       </footer>
     </>
   );

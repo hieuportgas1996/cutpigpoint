@@ -93,7 +93,7 @@ export default function LoginPage() {
         </button>
 
         <div className="muted small" style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-          HieuDo holds the copyright to the content on this website.
+          © 2026 Cut Pig by HieuDo. All rights reserved.
         </div>
       </form>
     </div>
