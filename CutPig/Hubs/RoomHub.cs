@@ -148,6 +148,25 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId)).SendAsync("RoomState", BuildState(fresh));
     }
 
+    public async Task SetShowOpponentCardCount(bool show)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        var room = await _db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room == null) throw new HubException("Phòng không tồn tại.");
+        if (room.HostUserId != auth.Value.UserId) throw new HubException("Chỉ chủ phòng được đổi cài đặt.");
+        if (room.Status != RoomStatus.Waiting) throw new HubException("Chỉ đổi được khi chưa bắt đầu chơi.");
+
+        room.ShowOpponentCardCount = show;
+        await _db.SaveChangesAsync();
+
+        var fresh = await _db.Rooms.Include(r => r.Seats).ThenInclude(s => s.User).FirstAsync(r => r.Id == roomId);
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("RoomState", BuildState(fresh));
+    }
+
     public async Task StartGame()
     {
         var auth = await AuthenticateAsync();
@@ -177,7 +196,7 @@ public class RoomHub : Hub
                 s.SeatIndex,
                 HasAvatar: !string.IsNullOrEmpty(s.User?.AvatarData)))
             .ToList();
-        var match = _matches.Create(room.Id, fresh.HostUserId, matchPlayers);
+        var match = _matches.Create(room.Id, fresh.HostUserId, matchPlayers, fresh.ShowOpponentCardCount);
 
         await Clients.Group(GroupName(room.Id)).SendAsync("GameStarted", room.Id);
         await Clients.Group(GroupName(room.Id)).SendAsync("MatchState", BuildMatchPublic(match));
@@ -675,7 +694,8 @@ public class RoomHub : Hub
             m.PendingTrickWinnerId,
             m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null,
             m.LastWonTrickCards?.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
-            m.LastWonTrickWinnerId);
+            m.LastWonTrickWinnerId,
+            m.ShowOpponentCardCount);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -716,6 +736,7 @@ public class RoomHub : Hub
             room.HostUserId,
             room.CreatedAt,
             room.StartedAt,
-            seats);
+            seats,
+            room.ShowOpponentCardCount);
     }
 }

@@ -628,7 +628,7 @@ export default function RoomPlayPage() {
                     {player.userId === matchState.hostUserId && <span className="host-badge">CHỦ</span>}
                   </div>
                   <div className="tlmn-seat-meta">
-                    <span>🂠 {player.cardsLeft}</span>
+                    <span>🂠 {(isMe || matchState.showOpponentCardCount) ? player.cardsLeft : ''}</span>
                     <span className={`score-pill ${player.totalScore > 0 ? 'pos' : player.totalScore < 0 ? 'neg' : ''}`}>
                       {player.totalScore > 0 ? `+${player.totalScore}` : player.totalScore}
                     </span>

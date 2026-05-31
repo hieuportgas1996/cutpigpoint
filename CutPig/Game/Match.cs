@@ -37,6 +37,8 @@ public class Match
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid RoomId { get; init; }
     public Guid HostUserId { get; init; }
+    /// <summary>Copy của Room.ShowOpponentCardCount lúc tạo trận — quyết định client có hiện số lá đối thủ hay úp lá.</summary>
+    public bool ShowOpponentCardCount { get; init; } = true;
     public List<MatchPlayer> Players { get; init; } = new();
     public int CurrentTurnSeatIndex { get; set; }
     public Combo? CurrentTrick { get; set; }

@@ -30,6 +30,8 @@ public class Room
     /// <summary>JSON `{pool, min, max, double, spinnerUserId}` — preview pool đã tạo, chưa quay.</summary>
     public string? LuckyWheelPreviewJson { get; set; }
     public bool IsHidden { get; set; }
+    /// <summary>Host setting (chỉ chỉnh được khi Waiting): có hiện số lá bài của đối thủ hay không.</summary>
+    public bool ShowOpponentCardCount { get; set; } = true;
     public List<RoomSeat> Seats { get; set; } = new();
 }
 

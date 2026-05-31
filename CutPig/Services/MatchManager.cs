@@ -21,14 +21,14 @@ public class MatchManager
         return m;
     }
 
-    public Match Create(Guid roomId, Guid hostUserId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex, bool HasAvatar)> players)
+    public Match Create(Guid roomId, Guid hostUserId, IReadOnlyList<(Guid UserId, string DisplayName, int SeatIndex, bool HasAvatar)> players, bool showOpponentCardCount = true)
     {
         lock (LockFor(roomId))
         {
             if (_matchesByRoom.TryGetValue(roomId, out var existing) && existing.Status != MatchStatus.Finished)
                 return existing;
 
-            var match = new Match { RoomId = roomId, HostUserId = hostUserId };
+            var match = new Match { RoomId = roomId, HostUserId = hostUserId, ShowOpponentCardCount = showOpponentCardCount };
             foreach (var p in players.OrderBy(p => p.SeatIndex))
             {
                 match.Players.Add(new MatchPlayer

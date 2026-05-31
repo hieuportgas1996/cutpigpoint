@@ -25,7 +25,7 @@ export default function RoomLobbyPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { state } = useAuth();
-  const { status, state: room, error, takeSeat, leaveSeat, startGame, onGameStarted, chatMessages, sendChat } =
+  const { status, state: room, error, takeSeat, leaveSeat, startGame, onGameStarted, chatMessages, sendChat, setShowOpponentCardCount } =
     useRoomConnection(code);
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -172,6 +172,23 @@ export default function RoomLobbyPage() {
                 ? 'Sẵn sàng — bấm Bắt đầu'
                 : 'Đang chờ chủ phòng bắt đầu'}
             </div>
+            <label className="lobby-setting-row">
+              <input
+                type="checkbox"
+                checked={room.showOpponentCardCount}
+                disabled={!isHost}
+                onChange={async (e) => {
+                  try { await setShowOpponentCardCount(e.target.checked); }
+                  catch (err) { toast.push('error', (err as Error).message); }
+                }}
+              />
+              <span>Hiện số lá bài của đối thủ</span>
+            </label>
+            {!isHost && (
+              <div className="muted small" style={{ marginTop: 2 }}>
+                {room.showOpponentCardCount ? 'Sẽ hiện số lá đối thủ' : 'Sẽ úp lá đối thủ'} (chủ phòng cài đặt)
+              </div>
+            )}
           </div>
         </div>
 

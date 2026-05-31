@@ -32,7 +32,8 @@ public record RoomStateDto(
     Guid HostUserId,
     DateTime CreatedAt,
     DateTime? StartedAt,
-    List<RoomSeatDto> Seats);
+    List<RoomSeatDto> Seats,
+    bool ShowOpponentCardCount = true);
 
 public record CardDto(int Rank, int Suit);
 
@@ -65,7 +66,8 @@ public record MatchPublicStateDto(
     Guid? PendingTrickWinnerId,
     List<Guid>? TrickCutCandidates,
     List<CardDto>? LastWonTrick,
-    Guid? LastWonTrickWinnerId);
+    Guid? LastWonTrickWinnerId,
+    bool ShowOpponentCardCount = true);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

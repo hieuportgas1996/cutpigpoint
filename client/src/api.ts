@@ -318,6 +318,7 @@ export interface RoomState {
   createdAt: string;
   startedAt: string | null;
   seats: RoomSeat[];
+  showOpponentCardCount: boolean;
 }
 
 export const HUB_BASE = RAW_BASE;
@@ -366,6 +367,7 @@ export interface MatchPublicState {
   trickCutCandidates: string[] | null;
   lastWonTrick: CardDto[] | null;
   lastWonTrickWinnerId: string | null;
+  showOpponentCardCount: boolean;
 }
 
 export interface PrivateHand {

@@ -50,6 +50,21 @@
   color: var(--cream);
 }
 
+.room-lobby .lobby-setting-row {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cream);
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.room-lobby .lobby-setting-row input[disabled] {
+  cursor: default;
+}
+
 .room-lobby .seat-empty {
   cursor: pointer;
   background: linear-gradient(145deg, rgba(212,164,69,0.15), rgba(59,33,20,0.6));

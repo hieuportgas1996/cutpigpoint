@@ -111,6 +111,7 @@ AuthToken (Id, Token unique, UserId FK→AppUser cascade, CreatedAt, ExpiresAt)
 ```
 Room (Id, Code 6char unique, HostUserId FK→AppUser restrict, GameType=1, MaxSeats 2..4,
       Status: Waiting=0/Playing=1/Finished=2, CreatedAt, StartedAt?, FinishedAt?,
+      ShowOpponentCardCount (host toggle, chỉ chỉnh khi Waiting; copy vào Match lúc StartGame),
       Seats: RoomSeat[])
 RoomSeat (Id, RoomId FK→Room cascade, SeatIndex 0..MaxSeats-1, UserId FK→AppUser restrict, JoinedAt)
   -- unique (RoomId, SeatIndex) và unique (RoomId, UserId)
