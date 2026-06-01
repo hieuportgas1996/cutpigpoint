@@ -1045,35 +1045,6 @@ export default function RoomPlayPage() {
           </div>
         )}
 
-        {isWhiteWinChoicePhase && !myWhiteWinReason && (
-          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.4)' }}>
-            <div className="match-end-card">
-              <h2>🌟 Có người có bộ về trắng</h2>
-              <div className="match-end-list">
-                {matchState.players.filter(p => p.whiteWinReason).map(p => (
-                  <div key={p.userId} className="match-end-row">
-                    <span className="rank-tag">★</span>
-                    <div className="match-end-name">
-                      <div>{p.displayName}</div>
-                      <div className="white-win-reason">{p.whiteWinReason}</div>
-                    </div>
-                    <span className="muted small">
-                      {p.whiteWinAccepted === true ? '✓ Về trắng'
-                        : p.whiteWinAccepted === false ? '✗ Từ chối'
-                        : '… đang chọn'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="match-end-actions">
-                <div className="next-round-countdown">
-                  Đang chờ họ quyết định về trắng… <b>{whiteWinLeftSec}s</b>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {isPendingTrickCut && canCutTrick && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.35)' }}>
             <div className="match-end-card">
