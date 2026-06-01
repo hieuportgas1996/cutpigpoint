@@ -869,7 +869,18 @@ export default function RoomPlayPage() {
           })}
 
           <div className="play-area-cards">
-            {trick.length === 0 ? (
+            {isFestivalReveal ? (
+              <div className="festival-reveal-center" aria-hidden="true">
+                <div className="festival-reveal-title">🎉 Lễ hội của {festivalOrganizerName || '?'}</div>
+                <div className="festival-reveal-status">
+                  {myAllRevealed
+                    ? (festivalRevealLeftSec > 0
+                        ? <>Mọi người đang lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
+                        : <>Chờ mọi người lật hết…</>)
+                    : <>Nhấn từng lá bài của bạn để nặn ({myFestivalRevealed}/3)<br/>tự lật sau <b>{festivalAutoFlipLeftSec}s</b></>}
+                </div>
+              </div>
+            ) : trick.length === 0 ? (
               lastWonTrick.length > 0 ? (
                 <div className="play-won-trick">
                   <div className="play-card-row play-card-row-faded">
@@ -899,7 +910,9 @@ export default function RoomPlayPage() {
         </div>
 
         <div className="my-hand-area" ref={handAreaRef}>
-          {myHand.length === 0 ? (
+          {isFestivalReveal ? (
+            <div className="muted">🎉 Nặn bài Cào Rùa tại chỗ ngồi của bạn phía trên</div>
+          ) : myHand.length === 0 ? (
             <div className="muted">Bạn đã hết bài 🎉</div>
           ) : (
             <div className="my-hand-fan">
@@ -1041,19 +1054,6 @@ export default function RoomPlayPage() {
                 <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
                 <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {isFestivalReveal && (
-          <div className="festival-reveal-banner" aria-hidden="true">
-            <div className="festival-reveal-title">🎉 Lễ hội của {festivalOrganizerName || '?'}</div>
-            <div className="festival-reveal-status">
-              {myAllRevealed
-                ? (festivalRevealLeftSec > 0
-                    ? <>Mọi người đang lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
-                    : <>Chờ mọi người lật hết…</>)
-                : <>Nhấn từng lá bài của bạn để nặn ({myFestivalRevealed}/3) · tự lật sau <b>{festivalAutoFlipLeftSec}s</b></>}
             </div>
           </div>
         )}
