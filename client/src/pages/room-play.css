@@ -897,3 +897,25 @@
   .tlmn-root .tlmn-seat .seat-champion .europa-trophy-svg { width: 48px; height: 67px; }
   .tlmn-root .tlmn-seat .seat-champion-caption { font-size: 11px; }
 }
+
+/* Nút điều khiển mới */
+.tlmn-root .tlmn-btn.auto-pass-on {
+  background: linear-gradient(145deg, #2f6b3a, #1d4527);
+  border-color: #7fdc95;
+  color: #eafff0;
+}
+.tlmn-root .tlmn-btn.danger {
+  border-color: #e7a3a3;
+  color: #ffe1e1;
+}
+.tlmn-root .tlmn-btn.danger:hover {
+  background: linear-gradient(145deg, #7a2b2b, #4a1717);
+}
+
+/* Cờ "ĐẦU HÀNG" ở seat — dùng lại layout tlmn-seat-pass nhưng đổi màu */
+.tlmn-root .tlmn-seat-pass.surrendered {
+  background: #4a1717;
+  border-color: #e7a3a3;
+  color: #ffe1e1;
+  white-space: nowrap;
+}

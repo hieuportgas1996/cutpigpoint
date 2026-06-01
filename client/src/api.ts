@@ -334,6 +334,7 @@ export const MatchStatus = {
   WaitingNextRound: 2,
   WhiteWinChoice: 3,
   PendingTrickCut: 4,
+  VoteReset: 5,
 } as const;
 
 export interface MatchPlayerPublic {
@@ -347,6 +348,9 @@ export interface MatchPlayerPublic {
   whiteWinReason: string | null;
   whiteWinAccepted: boolean | null;
   hasAvatar: boolean;
+  surrendered: boolean;
+  voteResetChoice: boolean | null;
+  hasUsedVoteReset: boolean;
 }
 
 export interface MatchPublicState {
@@ -368,6 +372,9 @@ export interface MatchPublicState {
   lastWonTrick: CardDto[] | null;
   lastWonTrickWinnerId: string | null;
   showOpponentCardCount: boolean;
+  voteResetDeadline: string | null;
+  voteResetInitiatorId: string | null;
+  pastFirstTrick: boolean;
 }
 
 export interface PrivateHand {

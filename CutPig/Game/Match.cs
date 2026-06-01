@@ -7,6 +7,7 @@ public enum MatchStatus
     WaitingNextRound = 2,        // round ended, waiting for host to start next
     WhiteWinChoice = 3,          // round just dealt, white-win candidates choosing accept/decline
     PendingTrickCut = 4,         // trick about to reset, but someone has 4-pair-run → giving them chance to cut
+    VoteReset = 5,               // a player called a re-deal vote during trick 1; players are voting yes/no
 }
 
 public class MatchPlayer
@@ -30,6 +31,13 @@ public class MatchPlayer
     public bool JudgeIsVictim { get; set; }             // true if this player is being judged (didn't play this round)
     public bool JudgeIsPardoned { get; set; }           // true if Case B: judge fired but this player had already played
     public int JudgeHeldValue { get; set; }             // pig/3-pair/four/4-pair value held when judged (only for victims)
+
+    public bool Surrendered { get; set; }               // true if this player gave up this round (auto last rank)
+
+    /// <summary>Phiếu vote chia bài lại trong round hiện tại: null = chưa bỏ, true = Đồng ý, false = Bỏ.</summary>
+    public bool? VoteResetChoice { get; set; }
+    /// <summary>True khi player đã dùng quyền vote chia bài lại trong round này (mỗi người 1 lần/round).</summary>
+    public bool HasUsedVoteReset { get; set; }
 }
 
 public class Match
@@ -64,6 +72,13 @@ public class Match
     public DateTime? NextRoundAt { get; set; }
     public DateTime? WhiteWinDeadline { get; set; }
     public DateTime? TrickCutDeadline { get; set; }
+    public DateTime? VoteResetDeadline { get; set; }
+    public Guid? VoteResetInitiatorId { get; set; }
+    /// <summary>
+    /// True khi round đã sang trick thứ 2 trở đi (đã có ít nhất 1 trick reset). Một khi true thì
+    /// không cho mở vote chia bài lại nữa (vote chỉ ở trick 1).
+    /// </summary>
+    public bool PastFirstTrick { get; set; }
     public Guid? PendingTrickWinnerId { get; set; } // owner of trick that just won, awaiting possible 4-pair-run cut
     public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
 

@@ -22,6 +22,9 @@ interface UseRoomConnectionResult {
   endMatch: () => Promise<void>;
   playCards: (cards: CardDto[]) => Promise<void>;
   passTurn: () => Promise<void>;
+  surrender: () => Promise<void>;
+  startVoteReset: () => Promise<void>;
+  respondVoteReset: (accept: boolean) => Promise<void>;
   respondWhiteWin: (accept: boolean) => Promise<void>;
   cutNewTrick: (cards: CardDto[]) => Promise<void>;
   declineTrickCut: () => Promise<void>;
@@ -201,6 +204,24 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('PassTurn');
   }, []);
 
+  const surrender = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('Surrender');
+  }, []);
+
+  const startVoteReset = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('StartVoteReset');
+  }, []);
+
+  const respondVoteReset = useCallback(async (accept: boolean) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('RespondVoteReset', accept);
+  }, []);
+
   const respondWhiteWin = useCallback(async (accept: boolean) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -239,7 +260,8 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   return {
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
-    playCards, passTurn, respondWhiteWin, cutNewTrick, declineTrickCut,
+    playCards, passTurn, surrender, startVoteReset, respondVoteReset,
+    respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };
 }

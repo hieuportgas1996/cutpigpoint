@@ -99,6 +99,28 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Vote-reset timeout → treat unset as "Bỏ", resolve (deal lại nếu đủ phiếu)
+                foreach (var match in _matches.AllVoteReset())
+                {
+                    if (!match.VoteResetDeadline.HasValue || match.VoteResetDeadline.Value > now) continue;
+                    try
+                    {
+                        var resolved = _matches.ResolveVoteResetTimeout(match.RoomId);
+                        if (resolved == null) continue;
+                        await _hub.Clients.Group($"room:{resolved.Match.RoomId}").SendAsync("MatchState", BuildPublic(resolved.Match), stoppingToken);
+                        if (resolved.Dealt)
+                        {
+                            await SendPrivateHandsAsync(resolved.Match, stoppingToken);
+                            if (resolved.Match.Status == MatchStatus.WaitingNextRound)
+                                await EmitRoundEndAsync(resolved.Match, stoppingToken); // bài mới về trắng
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "VoteReset timeout resolve failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
@@ -200,12 +222,19 @@ public class MatchTimerService : BackgroundService
                 p.TotalScore,
                 p.WhiteWinReason,
                 p.WhiteWinAccepted,
-                p.HasAvatar)).ToList(),
+                p.HasAvatar,
+                p.Surrendered,
+                p.VoteResetChoice,
+                p.HasUsedVoteReset)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
             m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null,
             m.LastWonTrickCards?.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
-            m.LastWonTrickWinnerId);
+            m.LastWonTrickWinnerId,
+            m.ShowOpponentCardCount,
+            m.VoteResetDeadline,
+            m.VoteResetInitiatorId,
+            m.PastFirstTrick);
     }
 }

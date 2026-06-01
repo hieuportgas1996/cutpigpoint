@@ -148,6 +148,7 @@ export default function RoomPlayPage() {
     status, state: room, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
+    surrender, startVoteReset, respondVoteReset,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -162,6 +163,9 @@ export default function RoomPlayPage() {
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const [seatBubbles, setSeatBubbles] = useState<Record<string, { id: string; text: string }>>({});
   const lastBubbledChatId = useRef<string | null>(null);
+  // "Qua lượt tự động": khi bật, đến lượt mình mà ĐANG CÓ TRICK thì tự bỏ qua. Mở nước thì dừng chờ mình.
+  const [autoPass, setAutoPass] = useState(false);
+  const autoPassFiredRef = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -455,6 +459,37 @@ export default function RoomPlayPage() {
     : 0;
   const trickWinnerName = matchState?.players.find(p => p.userId === matchState.pendingTrickWinnerId)?.displayName ?? '';
 
+  // Vote chia bài lại
+  const isVoteResetPhase = matchState?.status === MatchStatus.VoteReset;
+  const myVoteResetChoice = me?.voteResetChoice ?? null;
+  const myHasUsedVoteReset = me?.hasUsedVoteReset ?? false;
+  const voteResetYes = matchState?.players.filter(p => p.voteResetChoice === true).length ?? 0;
+  const voteResetInitiatorName = matchState?.players.find(p => p.userId === matchState.voteResetInitiatorId)?.displayName ?? '';
+  const voteResetLeftSec = matchState?.voteResetDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.voteResetDeadline).getTime() - now) / 1000))
+    : 0;
+  // Có thể mở vote: đang InProgress, chưa qua trick 1, chưa ai về, chưa dùng quyền.
+  const canStartVoteReset = matchState?.status === MatchStatus.InProgress
+    && !matchState.pastFirstTrick
+    && !matchState.players.some(p => p.finalRank !== null)
+    && !myHasUsedVoteReset
+    && (me?.finalRank == null);
+  // Có thể đầu hàng: đang chơi, chưa có thứ hạng.
+  const canSurrender = matchState?.status === MatchStatus.InProgress && me != null && me.finalRank == null;
+
+  // Auto-pass: đến lượt mình + đang có trick (không phải mở nước) + bật autoPass → tự bỏ qua một lần.
+  useEffect(() => {
+    if (!autoPass || !isMyTurn || trickCombo === null) {
+      // Reset cờ khi rời lượt để lần tới vào lượt lại bắn được.
+      if (!isMyTurn) autoPassFiredRef.current = null;
+      return;
+    }
+    const fireKey = `${matchState?.roundNumber}|${matchState?.currentTurnSeatIndex}|${trick.map(c => c.id).join(',')}`;
+    if (autoPassFiredRef.current === fireKey) return;
+    autoPassFiredRef.current = fireKey;
+    passTurn().catch(() => undefined);
+  }, [autoPass, isMyTurn, trickCombo, matchState?.roundNumber, matchState?.currentTurnSeatIndex]);
+
   if (state.status !== 'authenticated') return null;
 
   if (error) {
@@ -559,6 +594,22 @@ export default function RoomPlayPage() {
 
   async function handleDeclineCut() {
     try { await declineTrickCut(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleSurrender() {
+    if (!confirm('Đầu hàng ván này? Bạn sẽ về chót và bị trừ điểm hàng còn giữ (heo, tứ quý, đôi thông…).')) return;
+    try { await surrender(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleStartVoteReset() {
+    try { await startVoteReset(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleVoteReset(accept: boolean) {
+    try { await respondVoteReset(accept); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -671,6 +722,9 @@ export default function RoomPlayPage() {
                 )}
                 {player.passedThisTrick && !player.finalRank && (
                   <div className="tlmn-seat-pass">BỎ LƯỢT</div>
+                )}
+                {player.surrendered && (
+                  <div className="tlmn-seat-pass surrendered">🏳 ĐẦU HÀNG</div>
                 )}
                 {isMe && cutPigBanner && (
                   <div className="seat-cut-pig" key={cutPigBanner.id}>
@@ -800,6 +854,31 @@ export default function RoomPlayPage() {
           {selectedCards.length > 0 && (
             <button className="tlmn-btn ghost" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
           )}
+          <button
+            className={`tlmn-btn ghost ${autoPass ? 'auto-pass-on' : ''}`}
+            onClick={() => setAutoPass(v => !v)}
+            title={autoPass ? 'Đang tự bỏ qua khi có nước trên bàn — bấm để tắt' : 'Tự động bỏ qua lượt khi có nước trên bàn (mở nước thì dừng chờ bạn)'}
+          >
+            {autoPass ? '⏸ Tắt qua lượt tự động' : '⏩ Qua lượt tự động'}
+          </button>
+          {canStartVoteReset && (
+            <button
+              className="tlmn-btn ghost"
+              onClick={handleStartVoteReset}
+              title="Vote chia bài lại (chỉ ở trick 1, cần ≥2 đồng ý, mỗi người 1 lần/ván)"
+            >
+              🔄 Vote chia lại
+            </button>
+          )}
+          {canSurrender && (
+            <button
+              className="tlmn-btn ghost danger"
+              onClick={handleSurrender}
+              title="Đầu hàng — về chót và bị trừ điểm hàng còn giữ"
+            >
+              🏳 Đầu hàng
+            </button>
+          )}
         </div>
 
         {isWhiteWinChoicePhase && myWhiteWinReason && (
@@ -854,6 +933,45 @@ export default function RoomPlayPage() {
                 <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
                 <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {isVoteResetPhase && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }}>
+            <div className="match-end-card">
+              <h2>🔄 Vote chia bài lại</h2>
+              <div className="next-round-countdown">
+                <b>{voteResetInitiatorName}</b> đề nghị chia bài lại. Cần <b>2</b> phiếu đồng ý.
+                {' '}Đã có <b>{voteResetYes}</b> phiếu. <b>{voteResetLeftSec}s</b>
+              </div>
+              <div className="match-end-list">
+                {matchState.players.map(p => (
+                  <div key={p.userId} className="match-end-row">
+                    <span className="rank-tag">{p.voteResetChoice === true ? '✓' : p.voteResetChoice === false ? '✗' : '…'}</span>
+                    <div className="match-end-name">
+                      <div>{p.userId === myUserId ? 'Bạn' : p.displayName}</div>
+                    </div>
+                    <span className="muted small">
+                      {p.voteResetChoice === true ? 'Đồng ý'
+                        : p.voteResetChoice === false ? 'Bỏ'
+                        : '… đang chọn'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {myVoteResetChoice === null ? (
+                <div className="match-end-actions">
+                  <button className="tlmn-btn primary" onClick={() => handleVoteReset(true)}>✓ Đồng ý chia lại</button>
+                  <button className="tlmn-btn ghost" onClick={() => handleVoteReset(false)}>✗ Bỏ</button>
+                </div>
+              ) : (
+                <div className="match-end-actions">
+                  <div className="next-round-countdown">
+                    {voteResetLeftSec > 0 ? <>Đang chờ người khác bỏ phiếu… <b>{voteResetLeftSec}s</b></> : <>Đang xử lý…</>}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

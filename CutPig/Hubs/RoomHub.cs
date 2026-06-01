@@ -565,6 +565,82 @@ public class RoomHub : Hub
         }
     }
 
+    public async Task Surrender()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        PassResult result;
+        try
+        {
+            result = _matches.Surrender(roomId.Value, auth.Value.UserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
+        if (result.RoundEnded)
+        {
+            await EmitRoundEndAsync(result.Match);
+        }
+    }
+
+    public async Task StartVoteReset()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        VoteResetResult result;
+        try
+        {
+            result = _matches.StartVoteReset(roomId.Value, auth.Value.UserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
+        if (result.Dealt)
+        {
+            await SendPrivateHandsAsync(result.Match);
+            if (result.Match.Status == MatchStatus.WaitingNextRound)
+                await EmitRoundEndAsync(result.Match); // bài mới về trắng
+        }
+    }
+
+    public async Task RespondVoteReset(bool accept)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        VoteResetResult result;
+        try
+        {
+            result = _matches.RespondVoteReset(roomId.Value, auth.Value.UserId, accept);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(result.Match));
+        if (result.Dealt)
+        {
+            await SendPrivateHandsAsync(result.Match);
+            if (result.Match.Status == MatchStatus.WaitingNextRound)
+                await EmitRoundEndAsync(result.Match);
+        }
+    }
+
     private async Task EmitRoundEndAsync(Match match)
     {
         var roundScores = _matches.ComputeRoundScores(match);
@@ -688,14 +764,20 @@ public class RoomHub : Hub
                 p.TotalScore,
                 p.WhiteWinReason,
                 p.WhiteWinAccepted,
-                p.HasAvatar)).ToList(),
+                p.HasAvatar,
+                p.Surrendered,
+                p.VoteResetChoice,
+                p.HasUsedVoteReset)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
             m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null,
             m.LastWonTrickCards?.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
             m.LastWonTrickWinnerId,
-            m.ShowOpponentCardCount);
+            m.ShowOpponentCardCount,
+            m.VoteResetDeadline,
+            m.VoteResetInitiatorId,
+            m.PastFirstTrick);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

@@ -12,6 +12,8 @@ public class MatchManager
     public static TimeSpan NextRoundDelay { get; } = TimeSpan.FromSeconds(20);
     public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(20);
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
+    public static TimeSpan VoteResetTimeout { get; } = TimeSpan.FromSeconds(20);
+    private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -77,6 +79,9 @@ public class MatchManager
         match.FinishOrder.Clear();
         match.WhiteWinDeadline = null;
         match.TrickCutDeadline = null;
+        match.VoteResetDeadline = null;
+        match.VoteResetInitiatorId = null;
+        match.PastFirstTrick = false;
         match.PendingTrickWinnerId = null;
         match.TrickCutCandidates.Clear();
         match.TrickChopChain.Clear();
@@ -96,6 +101,9 @@ public class MatchManager
             p.JudgeIsVictim = false;
             p.JudgeIsPardoned = false;
             p.JudgeHeldValue = 0;
+            p.Surrendered = false;
+            p.VoteResetChoice = null;
+            p.HasUsedVoteReset = false;
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.
@@ -372,6 +380,7 @@ public class MatchManager
         match.TrickCutDeadline = null;
         match.PendingTrickWinnerId = null;
         match.TrickCutCandidates.Clear();
+        match.PastFirstTrick = true; // trick 1 vừa kết thúc → khoá vote chia bài lại
         match.Status = MatchStatus.InProgress;
         foreach (var p in match.Players) p.PassedThisTrick = false;
         var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
@@ -616,6 +625,7 @@ public class MatchManager
                     match.LastWonTrickWinnerId = ownerId;
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
+                    match.PastFirstTrick = true; // trick 1 vừa kết thúc → khoá vote chia bài lại
                     foreach (var p in match.Players) p.PassedThisTrick = false;
                     var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
                     // Người mở nước mới = người thắng trick (owner). Nếu owner đã hết bài → người
@@ -641,6 +651,193 @@ public class MatchManager
                 match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
             return new PassResult(newTrick, false, match);
         }
+    }
+
+    /// <summary>
+    /// Player tự nguyện đầu hàng: bị gán hạng chót còn trống thấp nhất (n, rồi n-1 cho người đầu hàng sau),
+    /// bài giữ nguyên để tính held penalty như về chót bình thường. Ván tiếp tục cho người còn lại.
+    /// KHÔNG tăng FinishedCount (người về Nhất/Nhì... vẫn chiếm hạng trên qua FinishedCount).
+    /// </summary>
+    public PassResult Surrender(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.FinalRank.HasValue)
+                throw new InvalidOperationException("Bạn đã hết bài / đã có thứ hạng.");
+
+            int n = match.Players.Count;
+            int surrenderedBefore = match.Players.Count(p => p.Surrendered);
+            player.Surrendered = true;
+            player.FinalRank = n - surrenderedBefore; // người đầu hàng đầu tiên = chót (n), sau = n-1...
+            player.PassedThisTrick = false;
+            match.FinishOrder.Add(userId);
+
+            bool wasCurrentTurn = match.CurrentTurnSeatIndex == player.SeatIndex;
+
+            if (match.CurrentTrickOwnerId == userId && match.CurrentTrick != null)
+            {
+                // Người đầu hàng đang giữ trick (vừa thắng vòng, đến lượt mở nước) → reset trick,
+                // trao lượt mở nước cho người active kế tiếp.
+                SettleTrickChopChain(match);
+                match.LastWonTrickCards = match.CurrentTrick.Cards.ToList();
+                match.LastWonTrickWinnerId = null;
+                match.CurrentTrick = null;
+                match.CurrentTrickOwnerId = null;
+                match.PastFirstTrick = true;
+                foreach (var p in match.Players) p.PassedThisTrick = false;
+                AdvanceTurnSkippingPassed(match);
+                match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+            }
+            else if (wasCurrentTurn)
+            {
+                // Đến lượt người đầu hàng (giữa trick) → bỏ qua, trao lượt cho người active kế tiếp.
+                AdvanceTurnSkippingPassed(match);
+                match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+
+                // Corner case: mọi người active còn lại đều đã pass → trick reset về owner (nếu owner còn bài).
+                var curr = match.Players[match.CurrentTurnSeatIndex];
+                bool noActiveMover = curr.FinalRank.HasValue || curr.PassedThisTrick;
+                if (noActiveMover && match.CurrentTrick != null && match.CurrentTrickOwnerId.HasValue)
+                {
+                    var ownerId = match.CurrentTrickOwnerId.Value;
+                    SettleTrickChopChain(match);
+                    match.LastWonTrickCards = match.CurrentTrick.Cards.ToList();
+                    match.LastWonTrickWinnerId = ownerId;
+                    match.CurrentTrick = null;
+                    match.CurrentTrickOwnerId = null;
+                    match.PastFirstTrick = true;
+                    foreach (var p in match.Players) p.PassedThisTrick = false;
+                    var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
+                    match.CurrentTurnSeatIndex = ownerSeat;
+                    if (ownerSeat < 0 || match.Players[ownerSeat].FinalRank.HasValue)
+                        AdvanceTurnSkippingPassed(match);
+                    match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+                }
+            }
+
+            // Kết thúc ván nếu chỉ còn ≤1 người chưa có thứ hạng.
+            var remaining = match.Players.Where(p => !p.FinalRank.HasValue).ToList();
+            if (remaining.Count <= 1)
+            {
+                foreach (var p in remaining)
+                {
+                    match.FinishedCount++;
+                    p.FinalRank = match.FinishedCount;
+                    match.FinishOrder.Add(p.UserId);
+                    if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
+                        p.StuckWithThreeOfSpades = true;
+                }
+                SettleTrickChopChain(match);
+                match.Status = MatchStatus.WaitingNextRound;
+                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+                return new PassResult(false, true, match);
+            }
+            return new PassResult(false, false, match);
+        }
+    }
+
+    /// <summary>
+    /// Bất kỳ player nào mở vote chia bài lại — chỉ khi đang trick 1 (chưa qua trick thứ 2) và chưa
+    /// có ai về. Initiator tự động tính 1 phiếu "Đồng ý". Đủ 2 phiếu là chia lại.
+    /// </summary>
+    public VoteResetResult StartVoteReset(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.PastFirstTrick)
+                throw new InvalidOperationException("Đã qua trick 1, không thể vote chia bài lại.");
+            if (match.FinishedCount > 0 || match.Players.Any(p => p.FinalRank.HasValue))
+                throw new InvalidOperationException("Đã có người về, không thể vote chia bài lại.");
+            var initiator = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (initiator.HasUsedVoteReset)
+                throw new InvalidOperationException("Bạn đã dùng quyền vote chia bài lại trong ván này.");
+
+            match.Status = MatchStatus.VoteReset;
+            match.VoteResetInitiatorId = userId;
+            match.VoteResetDeadline = DateTime.UtcNow + VoteResetTimeout;
+            foreach (var p in match.Players) p.VoteResetChoice = null;
+            // Initiator tự động đồng ý + tiêu quyền.
+            initiator.VoteResetChoice = true;
+            initiator.HasUsedVoteReset = true;
+            bool dealt = TryResolveVoteReset(match);
+            return new VoteResetResult(match, dealt);
+        }
+    }
+
+    /// <summary>Player bỏ phiếu trong phase VoteReset. Mỗi người 1 phiếu/ván.</summary>
+    public VoteResetResult RespondVoteReset(Guid roomId, Guid userId, bool accept)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.Status != MatchStatus.VoteReset)
+                throw new InvalidOperationException("Không trong lúc vote chia bài lại.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.VoteResetChoice.HasValue)
+                throw new InvalidOperationException("Bạn đã bỏ phiếu rồi.");
+
+            player.VoteResetChoice = accept;
+            // Vote "Đồng ý" tiêu quyền vote-reset của người đó trong ván (kể cả khi vote không thành công).
+            if (accept) player.HasUsedVoteReset = true;
+            bool dealt = TryResolveVoteReset(match);
+            return new VoteResetResult(match, dealt);
+        }
+    }
+
+    /// <summary>Timer service gọi khi VoteResetDeadline qua — treat phiếu chưa bỏ là "Bỏ".</summary>
+    public VoteResetResult? ResolveVoteResetTimeout(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match)) return null;
+            if (match.Status != MatchStatus.VoteReset) return null;
+            foreach (var p in match.Players.Where(p => !p.VoteResetChoice.HasValue))
+                p.VoteResetChoice = false;
+            bool dealt = TryResolveVoteReset(match);
+            return new VoteResetResult(match, dealt);
+        }
+    }
+
+    /// <summary>Returns true nếu vote vừa giải quyết bằng cách chia bài lại (hub cần re-broadcast hand).</summary>
+    private static bool TryResolveVoteReset(Match match)
+    {
+        int yes = match.Players.Count(p => p.VoteResetChoice == true);
+        int decided = match.Players.Count(p => p.VoteResetChoice.HasValue);
+
+        if (yes >= VoteResetThreshold)
+        {
+            // Đủ phiếu → chia bài lại CÙNG round number (giữ nguyên luật mở nước của round này).
+            int keepRound = match.RoundNumber;
+            bool keepEnforce3S = match.EnforceThreeSpadesOpening;
+            match.VoteResetDeadline = null;
+            match.VoteResetInitiatorId = null;
+            DealRound(match, isFirstRound: false);
+            match.RoundNumber = keepRound;                       // DealRound đã +1, hoàn lại để không nhảy số ván
+            match.EnforceThreeSpadesOpening = keepEnforce3S;     // giữ luật 3♠ nếu đây là round 1 / sau white-win
+            // Nếu cần ép 3♠ mà bài mới không phải white-win, re-run SetupFirstTurn để chọn đúng người cầm 3♠
+            // (DealRound đã set turn theo PreviousRoundWinnerId vì isFirstRound=false).
+            if (keepEnforce3S && match.Status == MatchStatus.InProgress) SetupFirstTurn(match);
+            return true;
+        }
+
+        // Chưa đủ phiếu nhưng vẫn còn người chưa bỏ → chờ tiếp.
+        if (decided < match.Players.Count) return false;
+
+        // Tất cả đã bỏ mà không đủ → huỷ vote, chơi tiếp như cũ.
+        match.VoteResetDeadline = null;
+        match.VoteResetInitiatorId = null;
+        match.Status = MatchStatus.InProgress;
+        match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
+        return false;
     }
 
     /// <summary>
@@ -790,6 +987,8 @@ public class MatchManager
     public IEnumerable<Match> AllWhiteWinChoice() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.WhiteWinChoice);
 
     public IEnumerable<Match> AllPendingTrickCut() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.PendingTrickCut);
+
+    public IEnumerable<Match> AllVoteReset() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.VoteReset);
 
     public int[] ComputeRoundScores(Match match)
     {
@@ -1087,3 +1286,4 @@ public class MatchManager
 
 public record PlayResult(Combo Played, bool PlayerFinished, bool RoundEnded, Match Match);
 public record PassResult(bool NewTrick, bool RoundEnded, Match Match);
+public record VoteResetResult(Match Match, bool Dealt);

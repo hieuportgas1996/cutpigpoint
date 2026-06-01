@@ -47,7 +47,10 @@ public record MatchPlayerDto(
     int TotalScore,
     string? WhiteWinReason,
     bool? WhiteWinAccepted,
-    bool HasAvatar);
+    bool HasAvatar,
+    bool Surrendered = false,
+    bool? VoteResetChoice = null,
+    bool HasUsedVoteReset = false);
 
 public record MatchPublicStateDto(
     Guid MatchId,
@@ -67,7 +70,10 @@ public record MatchPublicStateDto(
     List<Guid>? TrickCutCandidates,
     List<CardDto>? LastWonTrick,
     Guid? LastWonTrickWinnerId,
-    bool ShowOpponentCardCount = true);
+    bool ShowOpponentCardCount = true,
+    DateTime? VoteResetDeadline = null,
+    Guid? VoteResetInitiatorId = null,
+    bool PastFirstTrick = false);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
