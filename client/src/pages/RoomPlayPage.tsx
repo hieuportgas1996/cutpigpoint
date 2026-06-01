@@ -166,6 +166,7 @@ export default function RoomPlayPage() {
   // "Qua lượt tự động": khi bật, đến lượt mình mà ĐANG CÓ TRICK thì tự bỏ qua. Mở nước thì dừng chờ mình.
   const [autoPass, setAutoPass] = useState(false);
   const autoPassFiredRef = useRef<string | null>(null);
+  const [surrenderConfirmOpen, setSurrenderConfirmOpen] = useState(false);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -598,7 +599,7 @@ export default function RoomPlayPage() {
   }
 
   async function handleSurrender() {
-    if (!confirm('Đầu hàng ván này? Bạn sẽ về chót và bị trừ điểm hàng còn giữ (heo, tứ quý, đôi thông…).')) return;
+    setSurrenderConfirmOpen(false);
     try { await surrender(); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
@@ -873,7 +874,7 @@ export default function RoomPlayPage() {
           {canSurrender && (
             <button
               className="tlmn-btn ghost danger"
-              onClick={handleSurrender}
+              onClick={() => setSurrenderConfirmOpen(true)}
               title="Đầu hàng — về chót và bị trừ điểm hàng còn giữ"
             >
               🏳 Đầu hàng
@@ -932,6 +933,21 @@ export default function RoomPlayPage() {
               <div className="match-end-actions">
                 <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
                 <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {surrenderConfirmOpen && canSurrender && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSurrenderConfirmOpen(false)}>
+            <div className="match-end-card" onClick={e => e.stopPropagation()}>
+              <h2>🏳 Đầu hàng ván này?</h2>
+              <div className="next-round-countdown">
+                Bạn sẽ <b>về chót</b> và bị trừ điểm hàng còn giữ (heo, tứ quý, 3/4 đôi thông…). Ván vẫn tiếp tục cho người khác.
+              </div>
+              <div className="match-end-actions">
+                <button className="tlmn-btn ghost danger" onClick={handleSurrender}>🏳 Đồng ý đầu hàng</button>
+                <button className="tlmn-btn primary" onClick={() => setSurrenderConfirmOpen(false)}>Bỏ</button>
               </div>
             </div>
           </div>
