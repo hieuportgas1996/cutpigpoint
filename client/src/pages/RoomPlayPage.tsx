@@ -7,7 +7,6 @@ import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { ChampionTrophy } from '../game/effects/ChampionTrophy';
-import { EuropaTrophy } from '../game/effects/EuropaTrophy';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -204,9 +203,6 @@ export default function RoomPlayPage() {
   // ID người Nhất đang được hiển thị pháo hoa (chỉ khi roundEnd vừa bùng ra)
   const [winnerCelebration, setWinnerCelebration] = useState<string | null>(null);
   const lastCelebratedRoundRef = useRef<string | null>(null);
-  // ID người Nhì đang hiện cúp C2 (kích hoạt độc lập khi finalRank=2 xuất hiện — có thể sau Nhất)
-  const [runnerUpCelebration, setRunnerUpCelebration] = useState<string | null>(null);
-  const lastRunnerUpRoundRef = useRef<string | null>(null);
   const lastStickerSentAt = useRef<number>(0);
   const [stickerCooldownLeft, setStickerCooldownLeft] = useState(0);
 
@@ -335,11 +331,14 @@ export default function RoomPlayPage() {
     wasMyTurnRef.current = !!isMine;
   }, [matchState?.currentTurnSeatIndex, matchState?.status, state]);
 
-  // Auto-clear roundEnd when next round begins (server auto-advances)
+  // Auto-clear roundEnd when next round begins (server auto-advances).
+  // FestivalReveal cũng phải clear: round lễ hội mới bắt đầu (pha nặn bài) → modal kết quả ván trước
+  // phải biến mất để overlay nặn bài hiện ra (bug: player khác kẹt ở modal phán xử ván trước).
   useEffect(() => {
     if (!roundEnd) return;
     if (matchState?.status === MatchStatus.InProgress
-      || matchState?.status === MatchStatus.WhiteWinChoice) {
+      || matchState?.status === MatchStatus.WhiteWinChoice
+      || matchState?.status === MatchStatus.FestivalReveal) {
       clearRoundEnd();
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
@@ -349,7 +348,7 @@ export default function RoomPlayPage() {
   const [delayedRoundEnd, setDelayedRoundEnd] = useState<RoundEnd | null>(null);
   useEffect(() => {
     if (!roundEnd) { setDelayedRoundEnd(null); return; }
-    if (roundEnd.wasWhiteWin) { setDelayedRoundEnd(roundEnd); return; }
+    if (roundEnd.wasWhiteWin || roundEnd.wasFestival) { setDelayedRoundEnd(roundEnd); return; }
     const t = setTimeout(() => setDelayedRoundEnd(roundEnd), 2000);
     return () => clearTimeout(t);
   }, [roundEnd]);
@@ -366,7 +365,10 @@ export default function RoomPlayPage() {
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
   // không cần chờ roundEnd của cả ván. Dùng key (roundNumber + winnerId) để chỉ chạy 1 lần / ván.
-  const winnerUserId = matchState?.players.find(p => p.finalRank === 1)?.userId ?? null;
+  // KHÔNG ăn mừng/cúp trong round lễ hội (Cào Rùa có winner riêng + pha nặn bài).
+  const winnerUserId = (matchState && !matchState.isFestivalRound)
+    ? (matchState.players.find(p => p.finalRank === 1)?.userId ?? null)
+    : null;
   useEffect(() => {
     if (!matchState || !winnerUserId) return;
     const key = `${matchState.roundNumber}|${winnerUserId}`;
@@ -379,21 +381,6 @@ export default function RoomPlayPage() {
     }, 3000);
     return () => clearTimeout(t);
   }, [matchState?.roundNumber, winnerUserId]);
-
-  // Cúp C2 cho người về Nhì — kích hoạt độc lập khi finalRank=2 xuất hiện (thường SAU Nhất,
-  // nên không dùng chung cửa sổ celebration của Nhất, nếu không sẽ lỡ mất).
-  const runnerUpUserId = matchState?.players.find(p => p.finalRank === 2)?.userId ?? null;
-  useEffect(() => {
-    if (!matchState || !runnerUpUserId) return;
-    const key = `${matchState.roundNumber}|${runnerUpUserId}`;
-    if (lastRunnerUpRoundRef.current === key) return;
-    lastRunnerUpRoundRef.current = key;
-    setRunnerUpCelebration(runnerUpUserId);
-    const t = setTimeout(() => {
-      setRunnerUpCelebration(prev => prev === runnerUpUserId ? null : prev);
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [matchState?.roundNumber, runnerUpUserId]);
 
   // Track previous trick combo signature/kind to detect "3-đôi-thông / tứ quý vừa bị thay bằng combo
   // lớn hơn" → play ahh.mp3 (mọi user nghe).
@@ -520,13 +507,21 @@ export default function RoomPlayPage() {
     ? matchState.players.find(p => p.userId === matchState.festivalOrganizerId)?.displayName ?? ''
     : '';
 
-  // Pha nặn bài lễ hội (FestivalReveal)
+  // Pha nặn bài lễ hội (FestivalReveal) — hiện bài Cào Rùa NGAY TẠI SEAT mỗi người (không modal).
   const isFestivalReveal = matchState?.status === MatchStatus.FestivalReveal;
   const myFestivalRevealed = me?.festivalRevealed ?? 0;
   const myAllRevealed = me != null && myFestivalRevealed >= 3;
   const festivalRevealLeftSec = matchState?.festivalRevealDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.festivalRevealDeadline).getTime() - now) / 1000))
     : 0;
+  // map userId → 3 slot (Card đã lật | null chưa lật) cho hiển thị tại seat.
+  const festivalSeatCards: Record<string, Array<Card | null>> = {};
+  if (isFestivalReveal && matchState) {
+    for (const p of matchState.players) {
+      const revealed = (p.festivalRevealedCards ?? []).map(cardFromDto);
+      festivalSeatCards[p.userId] = [0, 1, 2].map(i => (i < revealed.length ? revealed[i] : null));
+    }
+  }
 
   // Auto-pass: đến lượt mình + đang có trick (không phải mở nước) + bật autoPass → tự bỏ qua một lần.
   useEffect(() => {
@@ -839,10 +834,13 @@ export default function RoomPlayPage() {
                     </div>
                   </>
                 )}
-                {runnerUpCelebration === player.userId && (
-                  <div className="seat-champion seat-runnerup" aria-hidden="true">
-                    <EuropaTrophy size={70} />
-                    <div className="seat-champion-caption">Á quân</div>
+                {festivalSeatCards[player.userId] && (
+                  <div className="seat-festival-cards" aria-hidden="true">
+                    {festivalSeatCards[player.userId].map((slot, i) => (
+                      <div key={i} className={`festival-card-slot ${slot ? 'flipped' : ''}`}>
+                        <CardSvg card={slot ?? undefined} faceDown={!slot} size="sm" />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1049,47 +1047,23 @@ export default function RoomPlayPage() {
         )}
 
         {isFestivalReveal && (
-          <div className="match-end-overlay festival-reveal-overlay">
-            <div className="match-end-card festival-reveal-card">
-              <h2>🎉 Lễ hội Cào Rùa{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}</h2>
-              <div className="festival-reveal-sub">
-                {myAllRevealed
-                  ? (festivalRevealLeftSec > 0
-                      ? <>Mọi người đang xem bài… kết quả sau <b>{festivalRevealLeftSec}s</b></>
-                      : <>Nặn nốt đi nào, chờ mọi người lật hết…</>)
-                  : <>Nặn bài của bạn! Lật từng lá hoặc lật hết.</>}
-              </div>
-              <div className="festival-reveal-players">
-                {matchState.players.map(p => {
-                  const isMe = p.userId === myUserId;
-                  const revealedCards = (p.festivalRevealedCards ?? []).map(cardFromDto);
-                  return (
-                    <div key={p.userId} className={`festival-reveal-player ${isMe ? 'is-me' : ''}`}>
-                      <div className="festival-reveal-name">{isMe ? 'Bạn' : p.displayName}</div>
-                      <div className="festival-reveal-cards">
-                        {[0, 1, 2].map(i => {
-                          const card = i < revealedCards.length ? revealedCards[i] : null;
-                          return (
-                            <div key={i} className={`festival-card-slot ${card ? 'flipped' : ''}`}>
-                              <CardSvg card={card ?? undefined} faceDown={!card} size="sm" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {isMe && !myAllRevealed && (
-                        <div className="festival-reveal-actions">
-                          <button className="tlmn-btn ghost sm" onClick={() => handleFlipFestival(false)}>👆 Nặn 1 lá</button>
-                          <button className="tlmn-btn primary sm" onClick={() => handleFlipFestival(true)}>🃏 Lật hết</button>
-                        </div>
-                      )}
-                      {isMe && myAllRevealed && (
-                        <div className="festival-reveal-done">✓ Đã lật hết</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="festival-reveal-bar">
+            <div className="festival-reveal-title">
+              🎉 Lễ hội Cào Rùa{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}
             </div>
+            <div className="festival-reveal-status">
+              {myAllRevealed
+                ? (festivalRevealLeftSec > 0
+                    ? <>Đang chờ mọi người lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
+                    : <>Đang chờ mọi người lật hết…</>)
+                : <>Nặn bài của bạn! ({myFestivalRevealed}/3)</>}
+            </div>
+            {!myAllRevealed && (
+              <div className="festival-reveal-actions">
+                <button className="tlmn-btn ghost sm" onClick={() => handleFlipFestival(false)}>👆 Nặn 1 lá</button>
+                <button className="tlmn-btn primary sm" onClick={() => handleFlipFestival(true)}>🃏 Lật hết</button>
+              </div>
+            )}
           </div>
         )}
 
