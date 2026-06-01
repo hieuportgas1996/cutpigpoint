@@ -641,51 +641,29 @@ public class RoomHub : Hub
         }
     }
 
+    public async Task ScheduleFestival()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.ScheduleFestival(roomId.Value, auth.Value.UserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     private async Task EmitRoundEndAsync(Match match)
     {
-        var roundScores = _matches.ComputeRoundScores(match);
-        var breakdowns = _matches.ComputeRoundScoreBreakdowns(match);
-        var chopExtras = _matches.GetRoundChopExtras(match);
-        bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
-        // Apply to total
-        for (int i = 0; i < match.Players.Count; i++)
-            match.Players[i].TotalScore += roundScores[i];
-
-        var entries = match.Players
-            .OrderBy(p => p.FinalRank ?? int.MaxValue)
-            .Select((p, _) =>
-            {
-                int idx = match.Players.IndexOf(p);
-                int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
-                var bd = breakdowns[idx];
-                var held = GameEngine.TienLenComboEngine.ComputeHeldBreakdown(p.Hand);
-                var heldDetails = GameEngine.TienLenComboEngine.ComputeHeldDetails(p.Hand)
-                    .Select(d => new HeldDetailDto(d.Label, d.Value)).ToList();
-                return new RoundResultEntryDto(
-                    p.UserId, p.DisplayName,
-                    p.FinalRank ?? 0,
-                    roundScores[idx],
-                    p.TotalScore,
-                    p.WhiteWinReason,
-                    chop,
-                    p.FinishedWithThreeOfSpades,
-                    p.StuckWithThreeOfSpades,
-                    p.JudgeIsWinner,
-                    p.JudgeIsVictim,
-                    p.JudgeIsPardoned,
-                    p.JudgeHeldValue,
-                    bd.BaseRank,
-                    bd.ThreeOfSpades,
-                    bd.Judge,
-                    bd.WhiteWin,
-                    bd.HeldPenalty,
-                    new HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
-                    heldDetails);
-            })
-            .ToList();
-
-        var dto = new RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries);
-        match.RoundHistory.Add(dto);
+        var dto = _matches.BuildRoundEndDto(match);
         await Clients.Group(GroupName(match.RoomId)).SendAsync("RoundEnd", dto);
         await Clients.Group(GroupName(match.RoomId)).SendAsync("MatchState", BuildMatchPublic(match));
     }
@@ -767,7 +745,9 @@ public class RoomHub : Hub
                 p.HasAvatar,
                 p.Surrendered,
                 p.VoteResetChoice,
-                p.HasUsedVoteReset)).ToList(),
+                p.HasUsedVoteReset,
+                p.HasUsedFestival,
+                p.FestivalWinner)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -777,7 +757,9 @@ public class RoomHub : Hub
             m.ShowOpponentCardCount,
             m.VoteResetDeadline,
             m.VoteResetInitiatorId,
-            m.PastFirstTrick);
+            m.PastFirstTrick,
+            m.FestivalScheduled,
+            m.IsFestivalRound);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

@@ -50,7 +50,9 @@ public record MatchPlayerDto(
     bool HasAvatar,
     bool Surrendered = false,
     bool? VoteResetChoice = null,
-    bool HasUsedVoteReset = false);
+    bool HasUsedVoteReset = false,
+    bool HasUsedFestival = false,
+    bool FestivalWinner = false);
 
 public record MatchPublicStateDto(
     Guid MatchId,
@@ -73,7 +75,9 @@ public record MatchPublicStateDto(
     bool ShowOpponentCardCount = true,
     DateTime? VoteResetDeadline = null,
     Guid? VoteResetInitiatorId = null,
-    bool PastFirstTrick = false);
+    bool PastFirstTrick = false,
+    bool FestivalScheduled = false,
+    bool IsFestivalRound = false);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
@@ -84,8 +88,8 @@ public record ChatHistoryDto(List<ChatMessageDto> Messages);
 
 public record HeldItemsDto(int BlackPigs, int RedPigs, bool HasFourOfAKind, bool HasThreePairRun, bool HasFourPairRun);
 public record HeldDetailDto(string Label, int Value);
-public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus, bool WonByThreeOfSpades, bool LostByThreeOfSpades, bool JudgeIsWinner, bool JudgeIsVictim, bool JudgeIsPardoned, int JudgeHeldValue, int BaseRankScore, int ThreeOfSpadesDelta, int JudgeDelta, int WhiteWinDelta, int HeldPenaltyDelta, HeldItemsDto Held, List<HeldDetailDto> HeldDetails);
-public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, bool WasJudge, List<RoundResultEntryDto> Results);
+public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus, bool WonByThreeOfSpades, bool LostByThreeOfSpades, bool JudgeIsWinner, bool JudgeIsVictim, bool JudgeIsPardoned, int JudgeHeldValue, int BaseRankScore, int ThreeOfSpadesDelta, int JudgeDelta, int WhiteWinDelta, int HeldPenaltyDelta, HeldItemsDto Held, List<HeldDetailDto> HeldDetails, int FestivalDelta = 0, bool FestivalWinner = false, List<CardDto>? FestivalCards = null, string? FestivalLabel = null);
+public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, bool WasJudge, List<RoundResultEntryDto> Results, bool WasFestival = false);
 public record RoundHistoryDto(Guid MatchId, List<RoundEndDto> Rounds);
 public record MatchEndDto(Guid MatchId, List<RoundResultEntryDto> FinalScores);
 

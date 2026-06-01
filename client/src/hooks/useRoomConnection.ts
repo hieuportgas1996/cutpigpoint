@@ -25,6 +25,7 @@ interface UseRoomConnectionResult {
   surrender: () => Promise<void>;
   startVoteReset: () => Promise<void>;
   respondVoteReset: (accept: boolean) => Promise<void>;
+  scheduleFestival: () => Promise<void>;
   respondWhiteWin: (accept: boolean) => Promise<void>;
   cutNewTrick: (cards: CardDto[]) => Promise<void>;
   declineTrickCut: () => Promise<void>;
@@ -222,6 +223,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('RespondVoteReset', accept);
   }, []);
 
+  const scheduleFestival = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('ScheduleFestival');
+  }, []);
+
   const respondWhiteWin = useCallback(async (accept: boolean) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -260,7 +267,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   return {
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
-    playCards, passTurn, surrender, startVoteReset, respondVoteReset,
+    playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

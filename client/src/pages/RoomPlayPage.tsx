@@ -139,6 +139,34 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
   );
 }
 
+function FestivalResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  // Winner-first, rồi theo điểm/displayName.
+  const rows = [...round.results].sort((a, b) =>
+    (b.festivalWinner ? 1 : 0) - (a.festivalWinner ? 1 : 0));
+  return (
+    <div className="match-end-list festival-list">
+      {rows.map(r => (
+        <div key={r.userId} className={`match-end-row festival-row ${r.festivalWinner ? 'festival-winner' : ''}`}>
+          <span className="rank-tag">{r.festivalWinner ? '🏆' : ''}</span>
+          <div className="match-end-name">
+            <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+            <div className="festival-cards">
+              {(r.festivalCards ?? []).map(c => (
+                <CardSvg key={`${c.rank}-${c.suit}`} card={cardFromDto(c)} size="sm" />
+              ))}
+            </div>
+            <div className="festival-label">{r.festivalLabel}</div>
+          </div>
+          <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+            {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+          </span>
+          <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function RoomPlayPage() {
   const { id: code } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -148,7 +176,7 @@ export default function RoomPlayPage() {
     status, state: room, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
-    surrender, startVoteReset, respondVoteReset,
+    surrender, startVoteReset, respondVoteReset, scheduleFestival,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -480,6 +508,14 @@ export default function RoomPlayPage() {
   // Có thể đầu hàng: đang chơi, chưa có thứ hạng.
   const canSurrender = matchState?.status === MatchStatus.InProgress && me != null && me.finalRank == null;
 
+  // Lễ hội (Cào Rùa): có thể tổ chức nếu đang chơi, chưa ai đặt lịch, chưa phải round lễ hội, chưa dùng quyền.
+  const myHasUsedFestival = me?.hasUsedFestival ?? false;
+  const canScheduleFestival = matchState?.status === MatchStatus.InProgress
+    && !matchState.festivalScheduled
+    && !matchState.isFestivalRound
+    && !myHasUsedFestival;
+  const festivalScheduled = matchState?.festivalScheduled ?? false;
+
   // Auto-pass: đến lượt mình + đang có trick (không phải mở nước) + bật autoPass → tự bỏ qua một lần.
   useEffect(() => {
     if (!autoPass || !isMyTurn || trickCombo === null) {
@@ -625,6 +661,14 @@ export default function RoomPlayPage() {
 
   async function handleVoteReset(accept: boolean) {
     try { await respondVoteReset(accept); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleScheduleFestival() {
+    try {
+      await scheduleFestival();
+      toast.push('success', '🎉 Đã đặt lịch lễ hội — round sau chơi Cào Rùa!');
+    }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -876,12 +920,12 @@ export default function RoomPlayPage() {
           >
             {autoPass ? '⏸ Tắt qua lượt tự động' : '⏩ Qua lượt tự động'}
           </button>
-          {(canStartVoteReset || canSurrender) && (
+          {(canStartVoteReset || canSurrender || canScheduleFestival) && (
             <div className="tlmn-options" ref={optionsMenuRef}>
               <button
                 className={`tlmn-btn ghost ${optionsMenuOpen ? 'auto-pass-on' : ''}`}
                 onClick={() => setOptionsMenuOpen(o => !o)}
-                title="Tùy chọn: vote chia bài lại / đầu hàng"
+                title="Tùy chọn: vote bỏ bài / đầu hàng / tổ chức lễ hội"
               >
                 ⋯ Tùy chọn
               </button>
@@ -895,6 +939,14 @@ export default function RoomPlayPage() {
                       🔄 Vote bỏ bài
                     </button>
                   )}
+                  {canScheduleFestival && (
+                    <button
+                      className="tlmn-options-item"
+                      onClick={() => { setOptionsMenuOpen(false); handleScheduleFestival(); }}
+                    >
+                      🎉 Tổ chức lễ hội
+                    </button>
+                  )}
                   {canSurrender && (
                     <button
                       className="tlmn-options-item danger"
@@ -906,6 +958,9 @@ export default function RoomPlayPage() {
                 </div>
               )}
             </div>
+          )}
+          {festivalScheduled && !matchState.isFestivalRound && (
+            <span className="festival-pending-tag">🎉 Lễ hội round sau</span>
           )}
         </div>
 
@@ -1021,16 +1076,20 @@ export default function RoomPlayPage() {
 
         {delayedRoundEnd && !matchEnd && !isWhiteWinChoicePhase && (
           <div className="match-end-overlay">
-            {delayedRoundEnd.wasWhiteWin && <Confetti active={true} />}
+            {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival) && <Confetti active={true} />}
             <div className="match-end-card">
               <h2>
-                {delayedRoundEnd.wasWhiteWin
+                {delayedRoundEnd.wasFestival
+                  ? `🎉 Lễ hội Cào Rùa — Ván ${delayedRoundEnd.roundNumber}`
+                  : delayedRoundEnd.wasWhiteWin
                   ? '🌟 Có người về trắng!'
                   : delayedRoundEnd.wasJudge
                   ? `⚖️ Phán xử — Ván ${delayedRoundEnd.roundNumber}`
                   : `🎉 Kết quả ván ${delayedRoundEnd.roundNumber}`}
               </h2>
-              <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />
+              {delayedRoundEnd.wasFestival
+                ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
+                : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
                 <div className="next-round-countdown">
                   🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
@@ -1085,7 +1144,10 @@ export default function RoomPlayPage() {
                 <div className="history-list">
                   {[...roundHistory].reverse().map(r => {
                     const winner = r.results.find(x => x.finalRank === 1);
-                    const title = r.wasWhiteWin
+                    const festWinner = r.results.find(x => x.festivalWinner);
+                    const title = r.wasFestival
+                      ? `Ván ${r.roundNumber} · 🎉 Lễ hội${festWinner ? ` · ${festWinner.displayName} ăn` : ''}`
+                      : r.wasWhiteWin
                       ? `Ván ${r.roundNumber} · 🌟 Về trắng`
                       : r.wasJudge
                       ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
@@ -1106,7 +1168,9 @@ export default function RoomPlayPage() {
                             ))}
                           </span>
                         </summary>
-                        <RoundResultRows round={r} myUserId={myUserId} />
+                        {r.wasFestival
+                          ? <FestivalResultRows round={r} myUserId={myUserId} />
+                          : <RoundResultRows round={r} myUserId={myUserId} />}
                       </details>
                     );
                   })}

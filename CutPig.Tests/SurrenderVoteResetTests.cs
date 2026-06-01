@@ -191,4 +191,54 @@ public class SurrenderVoteResetTests
         // Quyền vote của P1 VẪN bị tiêu ở round mới (1 lần / trận, không reset ở DealRound).
         Assert.True(next.Players.First(p => p.UserId == ids[0]).HasUsedVoteReset);
     }
+
+    [Fact]
+    public void Festival_ScheduledRoundDealsThreeCards_AndScoresZeroSum()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+
+        // P1 tổ chức lễ hội → round hiện tại vẫn TLMN, chưa phải festival.
+        mgr.ScheduleFestival(roomId, ids[0]);
+        Assert.True(m.FestivalScheduled);
+        Assert.False(m.IsFestivalRound);
+        Assert.True(m.Players.First(p => p.UserId == ids[0]).HasUsedFestival);
+
+        // Kết thúc round hiện tại (đầu hàng dồn) → WaitingNextRound.
+        foreach (var id in new[] { ids[1], ids[2], ids[3] })
+            if (m.Players.First(p => p.UserId == id).FinalRank == null && m.Status == MatchStatus.InProgress)
+                mgr.Surrender(roomId, id);
+        Assert.Equal(MatchStatus.WaitingNextRound, m.Status);
+
+        // Round kế tiếp = lễ hội: chia 3 lá/người, resolve ngay → WaitingNextRound.
+        var fest = mgr.StartNextRound(roomId, null);
+        Assert.True(fest.IsFestivalRound);
+        Assert.False(fest.FestivalScheduled); // đã tiêu
+        Assert.All(fest.Players, p => Assert.Equal(3, p.Hand.Count));
+        Assert.Equal(MatchStatus.WaitingNextRound, fest.Status);
+        Assert.Contains(fest.Players, p => p.FestivalWinner);
+
+        // Điểm zero-sum.
+        var scores = mgr.ComputeRoundScores(fest);
+        Assert.Equal(0, scores.Sum());
+        // Nếu có loser (không phải mọi người đồng hạng): winner(s) dương, mỗi loser -2.
+        bool anyLoser = fest.Players.Any(p => !p.FestivalWinner);
+        if (anyLoser)
+        {
+            for (int i = 0; i < fest.Players.Count; i++)
+            {
+                if (fest.Players[i].FestivalWinner) Assert.True(scores[i] > 0);
+                else Assert.Equal(-2, scores[i]);
+            }
+        }
+    }
+
+    [Fact]
+    public void Festival_OncePerMatch()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+        mgr.ScheduleFestival(roomId, ids[0]);
+        // Đã có người đặt → người khác không đặt được round này.
+        Assert.Throws<InvalidOperationException>(() => mgr.ScheduleFestival(roomId, ids[1]));
+    }
 }

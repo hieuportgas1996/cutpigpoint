@@ -103,8 +103,18 @@ public class MatchManager
             p.JudgeHeldValue = 0;
             p.Surrendered = false;
             p.VoteResetChoice = null;
-            // HasUsedVoteReset KHÔNG reset ở đây: quyền vote chia bài lại là 1 lần / TRẬN (giữ qua các round),
+            p.FestivalWinner = false;
+            // HasUsedVoteReset / HasUsedFestival KHÔNG reset ở đây: quyền là 1 lần / TRẬN (giữ qua các round),
             // chỉ false mặc định khi MatchPlayer được tạo trong Create.
+        }
+
+        // Round lễ hội (Cào Rùa): tiêu cờ FestivalScheduled → round này là festival.
+        match.IsFestivalRound = match.FestivalScheduled;
+        match.FestivalScheduled = false;
+        if (match.IsFestivalRound)
+        {
+            DealFestivalRound(match);
+            return;
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.
@@ -138,6 +148,40 @@ public class MatchManager
         }
 
         SetupFirstTurn(match);
+    }
+
+    /// <summary>
+    /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
+    /// gán FinalRank theo độ mạnh (cho hiển thị/lịch sử), rồi chuyển sang WaitingNextRound — round này
+    /// được resolve ngay, không có pha đánh bài. KHÔNG đụng PreviousRoundWinnerId (giữ người Nhất
+    /// round trước-lễ-hội để đi đầu round Tiến Lên kế tiếp).
+    /// </summary>
+    private static void DealFestivalRound(Match match)
+    {
+        var deck = Deck.Shuffle(Deck.Build(), Random.Shared);
+        int idx = 0;
+        foreach (var p in match.Players)
+        {
+            for (int i = 0; i < 3 && idx < deck.Count; i++, idx++)
+                p.Hand.Add(deck[idx]);
+            p.Hand = p.Hand.OrderBy(c => c.Rank).ThenBy(c => c.Suit).ToList();
+        }
+
+        // Tìm độ mạnh cao nhất → mọi người đạt mức đó là winner (đồng hạng → chia đều pot khi tính điểm).
+        var strengths = match.Players
+            .Select(p => (Player: p, S: CaoRuaEngine.Strength(p.Hand)))
+            .ToList();
+        var best = strengths.Max(x => (x.S.Tier, x.S.Tiebreak));
+        // Xếp FinalRank: winner = 1, còn lại = 2 (đồng hạng nhì) — chỉ để DTO/lịch sử có thứ tự.
+        foreach (var (player, s) in strengths)
+        {
+            bool isWinner = (s.Tier, s.Tiebreak) == best;
+            player.FestivalWinner = isWinner;
+            player.FinalRank = isWinner ? 1 : 2;
+        }
+
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
 
     private static void SetupFirstTurn(Match match)
@@ -819,9 +863,11 @@ public class MatchManager
             // Đủ phiếu → chia bài lại CÙNG round number (giữ nguyên luật mở nước của round này).
             int keepRound = match.RoundNumber;
             bool keepEnforce3S = match.EnforceThreeSpadesOpening;
+            bool keepFestivalScheduled = match.FestivalScheduled; // vote-reset KHÔNG biến round hiện tại thành lễ hội
             match.VoteResetDeadline = null;
             match.VoteResetInitiatorId = null;
             DealRound(match, isFirstRound: false);
+            match.FestivalScheduled = keepFestivalScheduled;     // hoàn lại lịch lễ hội cho round SAU
             match.RoundNumber = keepRound;                       // DealRound đã +1, hoàn lại để không nhảy số ván
             match.EnforceThreeSpadesOpening = keepEnforce3S;     // giữ luật 3♠ nếu đây là round 1 / sau white-win
             // Nếu cần ép 3♠ mà bài mới không phải white-win, re-run SetupFirstTurn để chọn đúng người cầm 3♠
@@ -839,6 +885,32 @@ public class MatchManager
         match.Status = MatchStatus.InProgress;
         match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
         return false;
+    }
+
+    /// <summary>
+    /// Player "Tổ chức lễ hội": đánh dấu round KẾ TIẾP là Cào Rùa. Bất kỳ lúc nào trong round đang chơi.
+    /// Chỉ 1 người/round được đặt (FestivalScheduled), mỗi người 1 lần/TRẬN (HasUsedFestival).
+    /// Round hiện tại vẫn chơi bình thường đến hết.
+    /// </summary>
+    public Match ScheduleFestival(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.IsFestivalRound)
+                throw new InvalidOperationException("Đang trong round lễ hội rồi.");
+            if (match.FestivalScheduled)
+                throw new InvalidOperationException("Đã có người tổ chức lễ hội cho round sau.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.HasUsedFestival)
+                throw new InvalidOperationException("Bạn đã dùng quyền tổ chức lễ hội trong trận này.");
+
+            match.FestivalScheduled = true;
+            player.HasUsedFestival = true;
+            return match;
+        }
     }
 
     /// <summary>
@@ -997,6 +1069,29 @@ public class MatchManager
         var n = match.Players.Count;
         var scores = new int[n];
 
+        // Lễ hội (Cào Rùa): mỗi loser -2, pot = 2×(số loser) chia đều cho winner(s). Zero-sum.
+        if (match.IsFestivalRound)
+        {
+            int winnerCnt = match.Players.Count(p => p.FestivalWinner);
+            int loserCnt = n - winnerCnt;
+            if (winnerCnt > 0 && loserCnt > 0)
+            {
+                int pot = 2 * loserCnt;
+                int perWinner = pot / winnerCnt;
+                int rem = pot % winnerCnt;
+                int wi = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    if (match.Players[i].FestivalWinner)
+                        scores[i] = perWinner + (wi++ < rem ? 1 : 0);
+                    else
+                        scores[i] = -2;
+                }
+            }
+            // winnerCnt == n (mọi người đồng hạng) → hoà, scores giữ 0.
+            return scores;
+        }
+
         // White-win path: each loser pays 2 per winner; winners share the total equally.
         // (Chop-pig extras don't apply on white-win since the round ends before any trick is played.)
         var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
@@ -1082,13 +1177,83 @@ public class MatchManager
     /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
     public IReadOnlyDictionary<Guid, int> GetRoundChopExtras(Match match) => match.RoundChopExtra;
 
-    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total);
+    /// <summary>
+    /// Tính điểm round, cộng vào TotalScore, build RoundEndDto và append vào RoundHistory.
+    /// Dùng chung cho RoomHub.EmitRoundEndAsync và MatchTimerService.EmitRoundEndAsync để tránh lệch logic.
+    /// (Idempotent KHÔNG đảm bảo — gọi đúng 1 lần mỗi khi round kết thúc.)
+    /// </summary>
+    public Dtos.RoundEndDto BuildRoundEndDto(Match match)
+    {
+        var roundScores = ComputeRoundScores(match);
+        var breakdowns = ComputeRoundScoreBreakdowns(match);
+        var chopExtras = match.RoundChopExtra;
+        bool wasWhiteWin = match.Players.Any(p => p.WhiteWinReason != null);
+
+        for (int i = 0; i < match.Players.Count; i++)
+            match.Players[i].TotalScore += roundScores[i];
+
+        var entries = match.Players
+            .OrderBy(p => p.FinalRank ?? int.MaxValue)
+            .Select(p =>
+            {
+                int idx = match.Players.IndexOf(p);
+                int chop = chopExtras.TryGetValue(p.UserId, out var v) ? v : 0;
+                var bd = breakdowns[idx];
+                var held = TienLenComboEngine.ComputeHeldBreakdown(p.Hand);
+                var heldDetails = TienLenComboEngine.ComputeHeldDetails(p.Hand)
+                    .Select(d => new Dtos.HeldDetailDto(d.Label, d.Value)).ToList();
+                List<Dtos.CardDto>? festCards = match.IsFestivalRound
+                    ? p.Hand.Select(c => new Dtos.CardDto(c.Rank, (int)c.Suit)).ToList()
+                    : null;
+                string? festLabel = match.IsFestivalRound ? CaoRuaEngine.Label(p.Hand) : null;
+                return new Dtos.RoundResultEntryDto(
+                    p.UserId, p.DisplayName,
+                    p.FinalRank ?? 0,
+                    roundScores[idx],
+                    p.TotalScore,
+                    p.WhiteWinReason,
+                    chop,
+                    p.FinishedWithThreeOfSpades,
+                    p.StuckWithThreeOfSpades,
+                    p.JudgeIsWinner,
+                    p.JudgeIsVictim,
+                    p.JudgeIsPardoned,
+                    p.JudgeHeldValue,
+                    bd.BaseRank,
+                    bd.ThreeOfSpades,
+                    bd.Judge,
+                    bd.WhiteWin,
+                    bd.HeldPenalty,
+                    new Dtos.HeldItemsDto(held.BlackPigs, held.RedPigs, held.HasFourOfAKind, held.HasThreePairRun, held.HasFourPairRun),
+                    heldDetails,
+                    match.IsFestivalRound ? bd.Festival : 0,
+                    p.FestivalWinner,
+                    festCards,
+                    festLabel);
+            })
+            .ToList();
+
+        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound);
+        match.RoundHistory.Add(dto);
+        return dto;
+    }
+
+    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total, int Festival = 0);
 
     /// <summary>Per-player breakdown of the round score by component (for UI display).</summary>
     public RoundScoreBreakdown[] ComputeRoundScoreBreakdowns(Match match)
     {
         int n = match.Players.Count;
         var result = new RoundScoreBreakdown[n];
+
+        // Lễ hội (Cào Rùa): toàn bộ điểm vào component Festival.
+        if (match.IsFestivalRound)
+        {
+            var fest = ComputeRoundScores(match);
+            for (int i = 0; i < n; i++)
+                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, 0, 0, fest[i], fest[i]);
+            return result;
+        }
 
         var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
         if (winnerCount > 0)

@@ -351,6 +351,8 @@ export interface MatchPlayerPublic {
   surrendered: boolean;
   voteResetChoice: boolean | null;
   hasUsedVoteReset: boolean;
+  hasUsedFestival: boolean;
+  festivalWinner: boolean;
 }
 
 export interface MatchPublicState {
@@ -375,6 +377,8 @@ export interface MatchPublicState {
   voteResetDeadline: string | null;
   voteResetInitiatorId: string | null;
   pastFirstTrick: boolean;
+  festivalScheduled: boolean;
+  isFestivalRound: boolean;
 }
 
 export interface PrivateHand {
@@ -403,6 +407,10 @@ export interface RoundResultEntry {
   heldPenaltyDelta: number;
   held: HeldItems;
   heldDetails: HeldDetail[];
+  festivalDelta: number;
+  festivalWinner: boolean;
+  festivalCards: CardDto[] | null;
+  festivalLabel: string | null;
 }
 
 export interface HeldItems {
@@ -424,6 +432,7 @@ export interface RoundEnd {
   wasWhiteWin: boolean;
   wasJudge: boolean;
   results: RoundResultEntry[];
+  wasFestival: boolean;
 }
 
 export interface MatchEnd {

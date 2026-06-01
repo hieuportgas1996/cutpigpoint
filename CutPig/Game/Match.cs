@@ -38,6 +38,11 @@ public class MatchPlayer
     public bool? VoteResetChoice { get; set; }
     /// <summary>True khi player đã MỞ vote chia bài lại — mỗi người được mở 1 lần / TRẬN (giữ qua các round, không reset ở DealRound). Chỉ initiator tiêu quyền; người chỉ bỏ phiếu (kể cả Đồng ý) KHÔNG mất quyền.</summary>
     public bool HasUsedVoteReset { get; set; }
+
+    /// <summary>True khi player đã dùng quyền "Tổ chức lễ hội" — 1 lần / TRẬN (giữ qua round, không reset ở DealRound).</summary>
+    public bool HasUsedFestival { get; set; }
+    /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>
+    public bool FestivalWinner { get; set; }
 }
 
 public class Match
@@ -79,6 +84,11 @@ public class Match
     /// không cho mở vote chia bài lại nữa (vote chỉ ở trick 1).
     /// </summary>
     public bool PastFirstTrick { get; set; }
+
+    /// <summary>True khi đã có người đặt lịch "Tổ chức lễ hội" → round KẾ TIẾP sẽ là Cào Rùa. Chỉ 1 người/round được đặt.</summary>
+    public bool FestivalScheduled { get; set; }
+    /// <summary>True khi round HIỆN TẠI là round lễ hội (Cào Rùa 3 lá) thay vì Tiến Lên.</summary>
+    public bool IsFestivalRound { get; set; }
     public Guid? PendingTrickWinnerId { get; set; } // owner of trick that just won, awaiting possible 4-pair-run cut
     public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
 

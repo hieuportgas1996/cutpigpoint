@@ -957,3 +957,35 @@
 .tlmn-root .tlmn-options-item:hover { background: rgba(212, 164, 69, 0.18); }
 .tlmn-root .tlmn-options-item.danger { color: #ffd1d1; }
 .tlmn-root .tlmn-options-item.danger:hover { background: rgba(122, 43, 43, 0.45); }
+
+/* Lễ hội Cào Rùa */
+.tlmn-root .festival-pending-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #6b4a16, #4a3210);
+  border: 1px solid var(--gold);
+  color: #ffe9b0;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tlmn-root .festival-row .festival-cards {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 2px;
+}
+.tlmn-root .festival-label {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 600;
+}
+.tlmn-root .festival-row.festival-winner {
+  background: rgba(212, 164, 69, 0.14);
+  border-radius: 10px;
+}
+.tlmn-root .festival-row.festival-winner .festival-label {
+  color: #ffd76a;
+  opacity: 1;
+}
