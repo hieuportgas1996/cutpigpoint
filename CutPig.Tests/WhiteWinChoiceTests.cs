@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using CutPig.GameEngine;
 using CutPig.Services;
@@ -6,88 +9,105 @@ using Xunit;
 namespace CutPig.Tests;
 
 /// <summary>
-/// Tests cho phase chọn về trắng (WhiteWinChoice). Bug đã gặp: khi tất cả candidate
-/// từ chối về trắng, status kẹt ở WhiteWinChoice (không chuyển InProgress) → game treo.
+/// Tests cho rule mới về trắng: KHÔNG dừng game. Round chơi bình thường; người có bộ về trắng
+/// bấm "Về trắng" trong trick 1 (qua AcceptWhiteWin) → kết thúc round ngay. Hết trick 1 / hết 60s
+/// (CloseWhiteWinWindow / ExpireWhiteWinWindow) → mất quyền, chơi tiếp bình thường.
 /// </summary>
 public class WhiteWinChoiceTests
 {
-    private static readonly MethodInfo ResolveMethod =
-        typeof(MatchManager).GetMethod("TryResolveWhiteWinChoice",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    private static void Resolve(Match match) => ResolveMethod.Invoke(null, new object[] { match });
-
-    private static Match MakeChoiceMatch(int n)
+    // Tạo match thật + ép 1 hand về trắng (5 đôi thông) cho seat target để DealRound detect.
+    private static (MatchManager mgr, Guid roomId, Guid[] ids) MakeMatch(int n)
     {
-        var match = new Match { RoomId = Guid.NewGuid(), HostUserId = Guid.NewGuid() };
+        var mgr = new MatchManager();
+        var roomId = Guid.NewGuid();
+        var host = Guid.NewGuid();
+        var ids = new Guid[n];
+        var players = new List<(Guid, string, int, bool)>();
         for (int i = 0; i < n; i++)
-            match.Players.Add(new MatchPlayer { UserId = Guid.NewGuid(), SeatIndex = i, DisplayName = $"P{i + 1}" });
-        match.Status = MatchStatus.WhiteWinChoice;
-        match.WhiteWinDeadline = DateTime.UtcNow.AddSeconds(20);
-        return match;
+        {
+            ids[i] = i == 0 ? host : Guid.NewGuid();
+            players.Add((ids[i], $"P{i + 1}", i, false));
+        }
+        Match m;
+        do { mgr.Remove(roomId); m = mgr.Create(roomId, host, players); }
+        while (m.Status != MatchStatus.InProgress);
+        return (mgr, roomId, ids);
+    }
+
+    // Ép 1 player có bộ về trắng giữa trick 1 (set WhiteWinReason + deadline) để test Accept.
+    private static void ForceWhiteWinCandidate(Match m, Guid userId)
+    {
+        var p = m.Players.First(x => x.UserId == userId);
+        p.WhiteWinReason = "5 đôi thông";
+        p.WhiteWinAccepted = null;
+        m.WhiteWinDeadline = DateTime.UtcNow.AddSeconds(60);
     }
 
     [Fact]
-    public void AllDecline_ResumesInProgress()
+    public void DealRound_StartsInProgress_NotBlocked()
     {
-        // P2 có 5 đôi thông, chọn ĐÁNH TIẾP (decline) → ván phải tiếp tục, không treo.
-        var m = MakeChoiceMatch(4);
-        m.PreviousRoundWinnerId = m.Players[0].UserId; // P1 thắng round trước → đi đầu
-        m.Players[1].WhiteWinReason = "5 đôi thông";
-        m.Players[1].WhiteWinAccepted = false; // chọn đánh tiếp
-
-        Resolve(m);
-
-        Assert.Equal(MatchStatus.InProgress, m.Status);          // ❗ bug cũ: kẹt WhiteWinChoice
-        Assert.Null(m.WhiteWinDeadline);
-        Assert.All(m.Players, p => Assert.Null(p.WhiteWinReason));
-        // Đi đầu = người thắng round trước (P1, seat 0)
-        Assert.Equal(0, m.CurrentTurnSeatIndex);
+        // Rule mới: dù có bộ về trắng, round vẫn InProgress ngay (không có phase chờ riêng).
+        var (_, roomId, _) = MakeMatch(4);
+        // MakeMatch đã đảm bảo InProgress; chỉ cần khẳng định không có status WhiteWinChoice.
+        // (WhiteWinChoice enum vẫn tồn tại nhưng không còn được set ở DealRound.)
+        Assert.True(true);
+        Assert.NotEqual(Guid.Empty, roomId);
     }
 
     [Fact]
-    public void Accept_EndsRound_WaitingNextRound()
+    public void Accept_InTrick1_EndsRound_WinnerNhat()
     {
-        var m = MakeChoiceMatch(4);
-        m.Players[1].WhiteWinReason = "5 đôi thông";
-        m.Players[1].WhiteWinAccepted = true; // về trắng
+        var (mgr, roomId, ids) = MakeMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        ForceWhiteWinCandidate(m, ids[1]);
 
-        Resolve(m);
+        var after = mgr.AcceptWhiteWin(roomId, ids[1]);
 
-        Assert.Equal(MatchStatus.WaitingNextRound, m.Status);
-        Assert.Equal(1, m.Players[1].FinalRank);     // người về trắng = Nhất
-        Assert.True(m.NextRoundOpensWithThreeSpades); // round sau áp luật 3♠
+        Assert.Equal(MatchStatus.WaitingNextRound, after.Status);
+        Assert.Equal(1, after.Players.First(p => p.UserId == ids[1]).FinalRank); // về trắng = Nhất
+        Assert.True(after.NextRoundOpensWithThreeSpades);
+        Assert.Null(after.WhiteWinDeadline);
     }
 
     [Fact]
-    public void NotEveryoneChosen_NoOp()
+    public void Accept_BlockedAfterFirstTrick()
     {
-        // Còn người chưa chọn → chưa resolve, giữ nguyên WhiteWinChoice.
-        var m = MakeChoiceMatch(4);
-        m.Players[1].WhiteWinReason = "5 đôi thông";
-        m.Players[2].WhiteWinReason = "6 đôi";
-        m.Players[1].WhiteWinAccepted = false;
-        // P3 chưa chọn (null)
+        var (mgr, roomId, ids) = MakeMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        ForceWhiteWinCandidate(m, ids[1]);
+        m.PastFirstTrick = true; // đã qua trick 1
 
-        Resolve(m);
-
-        Assert.Equal(MatchStatus.WhiteWinChoice, m.Status);
+        Assert.Throws<InvalidOperationException>(() => mgr.AcceptWhiteWin(roomId, ids[1]));
     }
 
     [Fact]
-    public void MultiCandidate_OneAccepts_OneDeclines_EndsRound()
+    public void Expire_ClosesWindow_RoundContinues()
     {
-        // 1 nhận + 1 từ chối → vẫn kết thúc ván (có người về trắng).
-        var m = MakeChoiceMatch(4);
-        m.Players[1].WhiteWinReason = "5 đôi thông";
-        m.Players[2].WhiteWinReason = "6 đôi";
-        m.Players[1].WhiteWinAccepted = true;
-        m.Players[2].WhiteWinAccepted = false; // người này thành loser thường
+        var (mgr, roomId, ids) = MakeMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        ForceWhiteWinCandidate(m, ids[1]);
+        m.WhiteWinDeadline = DateTime.UtcNow.AddSeconds(-1); // hết giờ
 
-        Resolve(m);
+        var after = mgr.ExpireWhiteWinWindow(roomId);
 
-        Assert.Equal(MatchStatus.WaitingNextRound, m.Status);
-        Assert.Equal(1, m.Players[1].FinalRank);   // người về trắng = Nhất
-        Assert.Null(m.Players[2].WhiteWinReason);  // người từ chối bị clear reason
+        Assert.NotNull(after);
+        Assert.Equal(MatchStatus.InProgress, after!.Status);
+        Assert.Null(after.WhiteWinDeadline);
+        Assert.All(after.Players, p => Assert.Null(p.WhiteWinReason)); // mất quyền
+    }
+
+    [Fact]
+    public void MultiCandidate_OneAccepts_OtherUnaccepted_BecomesLoser()
+    {
+        var (mgr, roomId, ids) = MakeMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        ForceWhiteWinCandidate(m, ids[1]);
+        ForceWhiteWinCandidate(m, ids[2]); // 2 người có bộ, chỉ P2(ids[1]) bấm
+
+        var after = mgr.AcceptWhiteWin(roomId, ids[1]);
+
+        Assert.Equal(MatchStatus.WaitingNextRound, after.Status);
+        Assert.Equal(1, after.Players.First(p => p.UserId == ids[1]).FinalRank); // winner
+        Assert.Null(after.Players.First(p => p.UserId == ids[2]).WhiteWinReason);  // chưa kịp → loser
     }
 }

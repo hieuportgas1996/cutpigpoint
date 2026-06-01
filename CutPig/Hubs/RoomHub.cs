@@ -245,7 +245,9 @@ public class RoomHub : Hub
         Match match;
         try
         {
-            match = _matches.RespondWhiteWin(roomId.Value, auth.Value.UserId, accept);
+            match = accept
+                ? _matches.AcceptWhiteWin(roomId.Value, auth.Value.UserId)
+                : _matches.DeclineWhiteWin(roomId.Value, auth.Value.UserId);
         }
         catch (InvalidOperationException ex)
         {

@@ -63,23 +63,19 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
-                // White-win choice timeout → treat unset as decline, resolve
-                foreach (var match in _matches.AllWhiteWinChoice())
+                // Hết 60s cửa sổ về trắng (trong trick 1) mà chưa ai chốt → đóng cửa sổ, chơi tiếp.
+                foreach (var match in _matches.AllActive())
                 {
                     if (!match.WhiteWinDeadline.HasValue || match.WhiteWinDeadline.Value > now) continue;
                     try
                     {
-                        var resolved = _matches.ResolveWhiteWinTimeout(match.RoomId);
+                        var resolved = _matches.ExpireWhiteWinWindow(match.RoomId);
                         if (resolved == null) continue;
                         await _hub.Clients.Group($"room:{resolved.RoomId}").SendAsync("MatchState", BuildPublic(resolved), stoppingToken);
-                        if (resolved.Status == MatchStatus.WaitingNextRound)
-                        {
-                            await EmitRoundEndAsync(resolved, stoppingToken);
-                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "WhiteWin timeout resolve failed for room {RoomId}", match.RoomId);
+                        _logger.LogWarning(ex, "WhiteWin window expire failed for room {RoomId}", match.RoomId);
                     }
                 }
 

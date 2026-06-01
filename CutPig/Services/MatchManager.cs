@@ -10,7 +10,7 @@ public class MatchManager
 
     public static TimeSpan TurnTimeout { get; } = TimeSpan.FromSeconds(30);
     public static TimeSpan NextRoundDelay { get; } = TimeSpan.FromSeconds(20);
-    public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(20);
+    public static TimeSpan WhiteWinChoiceTimeout { get; } = TimeSpan.FromSeconds(60); // cửa sổ về trắng trong trick 1
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
     public static TimeSpan VoteResetTimeout { get; } = TimeSpan.FromSeconds(20);
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
@@ -146,15 +146,25 @@ public class MatchManager
             }
         }
 
+        // Rule mới: KHÔNG dừng game chờ chọn. Round chơi bình thường ngay; người có bộ về trắng
+        // được bấm "Về trắng" bất kỳ lúc nào TRONG TRICK 1 (chưa qua trick 2) và trong 60s.
+        // Hết trick 1 / hết 60s → cửa sổ đóng (CloseWhiteWinWindow xoá WhiteWinReason).
         if (anyWhiteWin)
-        {
-            // Move to choice phase: each candidate must accept/decline
-            match.Status = MatchStatus.WhiteWinChoice;
             match.WhiteWinDeadline = DateTime.UtcNow + WhiteWinChoiceTimeout;
-            return;
-        }
 
         SetupFirstTurn(match);
+    }
+
+    /// <summary>Đóng cửa sổ về trắng (hết trick 1 hoặc hết 60s): xoá mọi WhiteWinReason chưa được chốt.</summary>
+    private static void CloseWhiteWinWindow(Match match)
+    {
+        if (match.WhiteWinDeadline == null) return;
+        foreach (var p in match.Players)
+        {
+            p.WhiteWinReason = null;
+            p.WhiteWinAccepted = null;
+        }
+        match.WhiteWinDeadline = null;
     }
 
     /// <summary>
@@ -286,73 +296,61 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Player chooses accept/decline white-win during WhiteWinChoice phase.
-    /// Returns true if the round was fully resolved (status changed to WaitingNextRound or InProgress).
+    /// Player bấm "Về trắng" trong trick 1. Hợp lệ khi: round InProgress, chưa qua trick 1
+    /// (!PastFirstTrick), trong 60s, có WhiteWinReason. → kết thúc round NGAY, tính điểm white-win.
+    /// Multi-winner: ai đã accept (gồm người này) đều là winner; người có bộ nhưng chưa kịp → thua.
     /// </summary>
-    public Match RespondWhiteWin(Guid roomId, Guid userId, bool accept)
+    public Match AcceptWhiteWin(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.PastFirstTrick || match.WhiteWinDeadline == null)
+                throw new InvalidOperationException("Đã hết cửa sổ về trắng (qua trick 1).");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.WhiteWinReason == null)
+                throw new InvalidOperationException("Bạn không có bộ về trắng.");
+
+            player.WhiteWinAccepted = true;
+            EndRoundWhiteWin(match);
+            return match;
+        }
+    }
+
+    /// <summary>Player từ chối về trắng (ẩn nút). Chỉ đánh dấu, round vẫn chơi tiếp bình thường.</summary>
+    public Match DeclineWhiteWin(Guid roomId, Guid userId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match))
                 throw new InvalidOperationException("Trận không tồn tại.");
-            if (match.Status != MatchStatus.WhiteWinChoice)
-                throw new InvalidOperationException("Không trong lúc chọn về trắng.");
-            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
-                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
-            if (player.WhiteWinReason == null)
-                throw new InvalidOperationException("Bạn không có bộ về trắng.");
-            if (player.WhiteWinAccepted.HasValue)
-                throw new InvalidOperationException("Đã chọn rồi.");
-
-            player.WhiteWinAccepted = accept;
-            TryResolveWhiteWinChoice(match);
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId);
+            if (player?.WhiteWinReason != null)
+                player.WhiteWinAccepted = false;
             return match;
         }
     }
 
-    /// <summary>Called by timer service when WhiteWinDeadline passes — treat unset as decline.</summary>
-    public Match? ResolveWhiteWinTimeout(Guid roomId)
+    /// <summary>Timer: hết 60s mà chưa ai chốt → đóng cửa sổ về trắng, round chơi tiếp bình thường.</summary>
+    public Match? ExpireWhiteWinWindow(Guid roomId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match)) return null;
-            if (match.Status != MatchStatus.WhiteWinChoice) return null;
-            foreach (var p in match.Players.Where(p => p.WhiteWinReason != null && !p.WhiteWinAccepted.HasValue))
-                p.WhiteWinAccepted = false;
-            TryResolveWhiteWinChoice(match);
+            if (match.Status != MatchStatus.InProgress || match.WhiteWinDeadline == null) return null;
+            CloseWhiteWinWindow(match);
             return match;
         }
     }
 
-    private static void TryResolveWhiteWinChoice(Match match)
+    /// <summary>Kết thúc round bằng white-win: winner = ai đã accept; gán hạng + điểm + WaitingNextRound.</summary>
+    private static void EndRoundWhiteWin(Match match)
     {
-        var candidates = match.Players.Where(p => p.WhiteWinReason != null).ToList();
-        if (candidates.Any(p => !p.WhiteWinAccepted.HasValue)) return; // còn người chưa chọn
-
-        var accepted = candidates.Where(p => p.WhiteWinAccepted == true).ToList();
-        match.WhiteWinDeadline = null;
-
-        if (accepted.Count == 0)
-        {
-            // Không ai về trắng → chơi bình thường, xoá WhiteWinReason để không tính điểm white-win
-            foreach (var p in candidates)
-            {
-                p.WhiteWinReason = null;
-                p.WhiteWinAccepted = null;
-            }
-            // Chuyển sang InProgress: thiếu dòng này thì status kẹt ở WhiteWinChoice
-            // → Play/Pass throw "Ván chưa bắt đầu" → game treo sau khi từ chối về trắng.
-            match.Status = MatchStatus.InProgress;
-            SetupFirstTurn(match);
-            return;
-        }
-
-        // Có người về trắng → kết thúc ván ngay
-        // Người từ chối: clear reason, sẽ chia điểm như người không về trắng
-        foreach (var p in candidates.Where(p => p.WhiteWinAccepted != true))
-        {
+        // Người có bộ nhưng KHÔNG accept → bỏ reason, tính như người thua.
+        foreach (var p in match.Players.Where(p => p.WhiteWinReason != null && p.WhiteWinAccepted != true))
             p.WhiteWinReason = null;
-        }
 
         int rank = 1;
         foreach (var p in match.Players.Where(p => p.WhiteWinReason != null))
@@ -368,6 +366,7 @@ public class MatchManager
             match.FinishOrder.Add(p.UserId);
             match.FinishedCount++;
         }
+        match.WhiteWinDeadline = null;
         // Round sau white-win áp luật 3♠ đi đầu giống round 1
         match.NextRoundOpensWithThreeSpades = true;
         match.Status = MatchStatus.WaitingNextRound;
@@ -500,6 +499,7 @@ public class MatchManager
         match.PendingTrickWinnerId = null;
         match.TrickCutCandidates.Clear();
         match.PastFirstTrick = true; // trick 1 vừa kết thúc → khoá vote chia bài lại
+        CloseWhiteWinWindow(match);   // hết trick 1 → đóng cửa sổ về trắng
         match.Status = MatchStatus.InProgress;
         foreach (var p in match.Players) p.PassedThisTrick = false;
         var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
@@ -745,6 +745,7 @@ public class MatchManager
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
                     match.PastFirstTrick = true; // trick 1 vừa kết thúc → khoá vote chia bài lại
+        CloseWhiteWinWindow(match);   // hết trick 1 → đóng cửa sổ về trắng
                     foreach (var p in match.Players) p.PassedThisTrick = false;
                     var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
                     // Người mở nước mới = người thắng trick (owner). Nếu owner đã hết bài → người
@@ -807,6 +808,7 @@ public class MatchManager
                 match.CurrentTrick = null;
                 match.CurrentTrickOwnerId = null;
                 match.PastFirstTrick = true;
+                CloseWhiteWinWindow(match);
                 foreach (var p in match.Players) p.PassedThisTrick = false;
                 AdvanceTurnSkippingPassed(match);
                 match.TurnDeadline = DateTime.UtcNow + TurnTimeout;
@@ -829,6 +831,7 @@ public class MatchManager
                     match.CurrentTrick = null;
                     match.CurrentTrickOwnerId = null;
                     match.PastFirstTrick = true;
+                    CloseWhiteWinWindow(match);
                     foreach (var p in match.Players) p.PassedThisTrick = false;
                     var ownerSeat = match.Players.FindIndex(p => p.UserId == ownerId);
                     match.CurrentTurnSeatIndex = ownerSeat;

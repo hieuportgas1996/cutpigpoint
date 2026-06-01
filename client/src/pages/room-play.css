@@ -1026,6 +1026,19 @@
 }
 .tlmn-root .festival-flip-all-btn:hover { filter: brightness(1.1); }
 
+/* Nút "Về trắng" trong trick 1 — vàng nổi bật, nhấp nháy nhẹ để candidate chú ý */
+.tlmn-root .tlmn-btn.white-win-btn {
+  background: linear-gradient(145deg, #f5d36b, #c79a2e);
+  border-color: #fff3c4;
+  color: #3a2710;
+  font-weight: 800;
+  animation: whiteWinPulse 1.4s ease-in-out infinite;
+}
+@keyframes whiteWinPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 106, 0); }
+  50%      { box-shadow: 0 0 16px rgba(255, 215, 106, 0.7); }
+}
+
 /* Banner người tổ chức + trạng thái — nổi ở ĐỈNH bàn (không che seat/khu giữa) */
 .tlmn-root .festival-reveal-banner {
   position: absolute;

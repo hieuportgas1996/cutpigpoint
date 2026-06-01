@@ -194,6 +194,7 @@ export default function RoomPlayPage() {
   const [autoPass, setAutoPass] = useState(false);
   const autoPassFiredRef = useRef<string | null>(null);
   const [surrenderConfirmOpen, setSurrenderConfirmOpen] = useState(false);
+  const [whiteWinConfirmOpen, setWhiteWinConfirmOpen] = useState(false);
   const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement | null>(null);
   const lastFestivalAnnouncedRef = useRef<string | null>(null);
@@ -467,12 +468,17 @@ export default function RoomPlayPage() {
 
   const canPass = isMyTurn && trickCombo !== null;
 
-  const isWhiteWinChoicePhase = matchState?.status === MatchStatus.WhiteWinChoice;
   const myWhiteWinReason = me?.whiteWinReason ?? null;
   const myWhiteWinAccepted = me?.whiteWinAccepted ?? null;
   const whiteWinLeftSec = matchState?.whiteWinDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.whiteWinDeadline).getTime() - now) / 1000))
     : 0;
+  // Rule mới: nút "Về trắng" hiện cho candidate trong trick 1 (chưa qua trick 2), chưa từ chối, còn giờ.
+  const canGoWhiteWin = matchState?.status === MatchStatus.InProgress
+    && !matchState.pastFirstTrick
+    && myWhiteWinReason != null
+    && myWhiteWinAccepted !== false
+    && whiteWinLeftSec > 0;
 
   const isPendingTrickCut = matchState?.status === MatchStatus.PendingTrickCut;
   const canCutTrick = isPendingTrickCut && (matchState?.trickCutCandidates ?? []).includes(myUserId);
@@ -651,12 +657,8 @@ export default function RoomPlayPage() {
   }
 
   async function handleAcceptWhiteWin() {
+    setWhiteWinConfirmOpen(false);
     try { await respondWhiteWin(true); }
-    catch (e) { toast.push('error', (e as Error).message); }
-  }
-
-  async function handleDeclineWhiteWin() {
-    try { await respondWhiteWin(false); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -956,6 +958,15 @@ export default function RoomPlayPage() {
           {selectedCards.length > 0 && (
             <button className="tlmn-btn ghost" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
           )}
+          {canGoWhiteWin && (
+            <button
+              className="tlmn-btn white-win-btn"
+              onClick={() => setWhiteWinConfirmOpen(true)}
+              title={`Bạn có ${myWhiteWinReason} — về trắng thắng ngay (chỉ trong vòng đầu, còn ${whiteWinLeftSec}s)`}
+            >
+              🌟 Về trắng ({whiteWinLeftSec}s)
+            </button>
+          )}
           <button
             className={`tlmn-btn ghost ${autoPass ? 'auto-pass-on' : ''}`}
             onClick={() => setAutoPass(v => !v)}
@@ -1004,43 +1015,17 @@ export default function RoomPlayPage() {
           )}
         </div>
 
-        {isWhiteWinChoicePhase && myWhiteWinReason && (
-          <div className="match-end-overlay">
-            <div className="match-end-card">
-              <h2>🌟 Có bộ về trắng</h2>
-              <div className="match-end-list">
-                {matchState.players.filter(p => p.whiteWinReason).map(p => (
-                  <div key={p.userId} className="match-end-row">
-                    <span className="rank-tag">★</span>
-                    <div className="match-end-name">
-                      <div>{p.userId === myUserId ? 'Bạn' : p.displayName}</div>
-                      <div className="white-win-reason">{p.whiteWinReason}</div>
-                    </div>
-                    <span className="muted small">
-                      {p.whiteWinAccepted === true ? '✓ Về trắng'
-                        : p.whiteWinAccepted === false ? '✗ Từ chối'
-                        : '… đang chọn'}
-                    </span>
-                  </div>
-                ))}
+        {whiteWinConfirmOpen && canGoWhiteWin && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setWhiteWinConfirmOpen(false)}>
+            <div className="match-end-card" onClick={e => e.stopPropagation()}>
+              <h2>🌟 Về trắng?</h2>
+              <div className="next-round-countdown">
+                Bạn có <b>{myWhiteWinReason}</b>. Về trắng để <b>thắng ngay</b> ván này? Còn <b>{whiteWinLeftSec}s</b> (chỉ trong vòng đầu).
               </div>
-              {myWhiteWinAccepted === null ? (
-                <div className="match-end-actions">
-                  <div className="next-round-countdown">
-                    Bạn có <b>{myWhiteWinReason}</b> — về trắng để thắng ngay? ({whiteWinLeftSec}s)
-                  </div>
-                  <button className="tlmn-btn primary" onClick={handleAcceptWhiteWin}>✓ Về trắng</button>
-                  <button className="tlmn-btn ghost" onClick={handleDeclineWhiteWin}>✗ Đánh tiếp</button>
-                </div>
-              ) : (
-                <div className="match-end-actions">
-                  <div className="next-round-countdown">
-                    {whiteWinLeftSec > 0
-                      ? <>Đang chờ người khác chọn… <b>{whiteWinLeftSec}s</b></>
-                      : <>Đang xử lý…</>}
-                  </div>
-                </div>
-              )}
+              <div className="match-end-actions">
+                <button className="tlmn-btn primary" onClick={handleAcceptWhiteWin}>🌟 Về trắng ngay</button>
+                <button className="tlmn-btn ghost" onClick={() => setWhiteWinConfirmOpen(false)}>Để sau</button>
+              </div>
             </div>
           </div>
         )}
@@ -1127,7 +1112,7 @@ export default function RoomPlayPage() {
           </div>
         )}
 
-        {delayedRoundEnd && !matchEnd && !isWhiteWinChoicePhase && (
+        {delayedRoundEnd && !matchEnd && (
           <div className="match-end-overlay">
             {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival) && <Confetti active={true} />}
             <div className="match-end-card">
