@@ -354,19 +354,22 @@ export default function RoomPlayPage() {
   }, [roundEnd]);
 
   // Sound vỗ tay khi modal tổng kết ván vừa hiện ra. Dedup theo round.
+  // Về trắng: phát nice-sound ĐÚNG 1 LẦN (dedup theo round) thay cho clap.
   const lastVictoryRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (!delayedRoundEnd) return;
     const key = `${delayedRoundEnd.matchId}|${delayedRoundEnd.roundNumber}`;
     if (lastVictoryRoundRef.current === key) return;
     lastVictoryRoundRef.current = key;
-    playSound('clapHand', 0.7);
+    playSound(delayedRoundEnd.wasWhiteWin ? 'niceSound' : 'clapHand', 0.7);
   }, [delayedRoundEnd]);
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
   // không cần chờ roundEnd của cả ván. Dùng key (roundNumber + winnerId) để chỉ chạy 1 lần / ván.
-  // KHÔNG ăn mừng/cúp trong round lễ hội (Cào Rùa có winner riêng + pha nặn bài).
-  const winnerUserId = (matchState && !matchState.isFestivalRound)
+  // KHÔNG ăn mừng/cúp C1 trong round lễ hội (Cào Rùa có winner riêng) hoặc khi về trắng
+  // (white-win gán finalRank=1 cho NHIỀU người + có confetti/firework riêng → tránh nice-sound lặp).
+  const anyWhiteWin = matchState?.players.some(p => p.whiteWinReason != null) ?? false;
+  const winnerUserId = (matchState && !matchState.isFestivalRound && !anyWhiteWin)
     ? (matchState.players.find(p => p.finalRank === 1)?.userId ?? null)
     : null;
   useEffect(() => {
@@ -513,6 +516,10 @@ export default function RoomPlayPage() {
   const myAllRevealed = me != null && myFestivalRevealed >= 3;
   const festivalRevealLeftSec = matchState?.festivalRevealDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.festivalRevealDeadline).getTime() - now) / 1000))
+    : 0;
+  // Cooldown 60s buộc phải lật bài (auto-lật khi hết giờ).
+  const festivalAutoFlipLeftSec = matchState?.festivalAutoFlipDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.festivalAutoFlipDeadline).getTime() - now) / 1000))
     : 0;
   // map userId → 3 slot (Card đã lật | null chưa lật) cho hiển thị tại seat.
   const festivalSeatCards: Record<string, Array<Card | null>> = {};
@@ -1038,6 +1045,35 @@ export default function RoomPlayPage() {
           </div>
         )}
 
+        {isWhiteWinChoicePhase && !myWhiteWinReason && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.4)' }}>
+            <div className="match-end-card">
+              <h2>🌟 Có người có bộ về trắng</h2>
+              <div className="match-end-list">
+                {matchState.players.filter(p => p.whiteWinReason).map(p => (
+                  <div key={p.userId} className="match-end-row">
+                    <span className="rank-tag">★</span>
+                    <div className="match-end-name">
+                      <div>{p.displayName}</div>
+                      <div className="white-win-reason">{p.whiteWinReason}</div>
+                    </div>
+                    <span className="muted small">
+                      {p.whiteWinAccepted === true ? '✓ Về trắng'
+                        : p.whiteWinAccepted === false ? '✗ Từ chối'
+                        : '… đang chọn'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="match-end-actions">
+                <div className="next-round-countdown">
+                  Đang chờ họ quyết định về trắng… <b>{whiteWinLeftSec}s</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isPendingTrickCut && canCutTrick && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.35)' }}>
             <div className="match-end-card">
@@ -1054,16 +1090,14 @@ export default function RoomPlayPage() {
         )}
 
         {isFestivalReveal && (
-          <div className="festival-reveal-center" aria-hidden="true">
-            <div className="festival-reveal-title">
-              🎉 Lễ hội của {festivalOrganizerName || '?'}
-            </div>
+          <div className="festival-reveal-banner" aria-hidden="true">
+            <div className="festival-reveal-title">🎉 Lễ hội của {festivalOrganizerName || '?'}</div>
             <div className="festival-reveal-status">
               {myAllRevealed
                 ? (festivalRevealLeftSec > 0
-                    ? <>Đang chờ mọi người lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
-                    : <>Đang chờ mọi người lật hết…</>)
-                : <>Nhấn từng lá bài của bạn để nặn ({myFestivalRevealed}/3)</>}
+                    ? <>Mọi người đang lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
+                    : <>Chờ mọi người lật hết…</>)
+                : <>Nhấn từng lá bài của bạn để nặn ({myFestivalRevealed}/3) · tự lật sau <b>{festivalAutoFlipLeftSec}s</b></>}
             </div>
           </div>
         )}

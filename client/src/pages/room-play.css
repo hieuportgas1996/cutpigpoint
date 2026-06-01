@@ -1026,34 +1026,40 @@
 }
 .tlmn-root .festival-flip-all-btn:hover { filter: brightness(1.1); }
 
-/* Tên người tổ chức + trạng thái hiện GIỮA màn hình */
-.tlmn-root .festival-reveal-center {
+/* Banner người tổ chức + trạng thái — nổi ở ĐỈNH bàn (không che seat/khu giữa) */
+.tlmn-root .festival-reveal-banner {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 12;
+  top: 8px;
+  transform: translateX(-50%);
+  z-index: 18;
   pointer-events: none;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 8px 18px;
+  background: linear-gradient(160deg, rgba(107, 74, 22, 0.95), rgba(58, 39, 16, 0.95));
+  border: 2px solid var(--gold);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-width: 90%;
 }
 .tlmn-root .festival-reveal-title {
   font-weight: 800;
   color: #ffe9b0;
-  font-size: 22px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 14px rgba(255, 215, 106, 0.5);
+  font-size: 18px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 .tlmn-root .festival-reveal-status {
-  font-size: 14px;
+  font-size: 13px;
   color: #fff;
   opacity: 0.92;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
 @media (max-width: 720px) {
-  .tlmn-root .festival-reveal-title { font-size: 17px; }
-  .tlmn-root .festival-reveal-status { font-size: 12px; }
+  .tlmn-root .festival-reveal-title { font-size: 15px; }
+  .tlmn-root .festival-reveal-status { font-size: 11px; }
+  .tlmn-root .festival-reveal-banner { top: 4px; padding: 6px 12px; }
 }
