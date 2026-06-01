@@ -787,8 +787,8 @@ public class MatchManager
                 throw new InvalidOperationException("Bạn đã bỏ phiếu rồi.");
 
             player.VoteResetChoice = accept;
-            // Vote "Đồng ý" tiêu quyền vote-reset của người đó trong ván (kể cả khi vote không thành công).
-            if (accept) player.HasUsedVoteReset = true;
+            // KHÔNG tiêu quyền của người chỉ bỏ phiếu (kể cả "Đồng ý") — chỉ NGƯỜI MỞ VOTE (initiator)
+            // mới mất quyền. Người respond vẫn được tự mở vote của mình sau này.
             bool dealt = TryResolveVoteReset(match);
             return new VoteResetResult(match, dealt);
         }

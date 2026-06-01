@@ -137,6 +137,28 @@ public class SurrenderVoteResetTests
     }
 
     [Fact]
+    public void VoteReset_OnlyInitiatorConsumesRight()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+
+        // P1 mở vote (tiêu quyền), P2 đồng ý → đủ 2 phiếu → deal lại.
+        mgr.StartVoteReset(roomId, ids[0]);
+        var r = mgr.RespondVoteReset(roomId, ids[1], true);
+        Assert.True(r.Dealt);
+
+        // Chỉ initiator P1 mất quyền; responder P2 (dù đã "Đồng ý") VẪN giữ quyền mở vote.
+        Assert.True(r.Match.Players.First(p => p.UserId == ids[0]).HasUsedVoteReset);
+        Assert.False(r.Match.Players.First(p => p.UserId == ids[1]).HasUsedVoteReset);
+
+        // P2 vẫn mở được vote ở round mới (chỉ thử nếu bài mới không phải white-win → đang InProgress).
+        if (r.Match.Status == MatchStatus.InProgress)
+        {
+            var r2 = mgr.StartVoteReset(roomId, ids[1]);
+            Assert.Equal(MatchStatus.VoteReset, r2.Match.Status);
+        }
+    }
+
+    [Fact]
     public void VoteReset_BlockedAfterFirstTrick()
     {
         var (mgr, roomId, ids) = MakeStartedMatch(4);

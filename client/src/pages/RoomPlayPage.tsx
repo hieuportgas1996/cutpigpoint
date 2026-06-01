@@ -892,8 +892,7 @@ export default function RoomPlayPage() {
                       className="tlmn-options-item"
                       onClick={() => { setOptionsMenuOpen(false); handleStartVoteReset(); }}
                     >
-                      🔄 Vote chia bài lại
-                      <span className="tlmn-options-hint">trick 1 · cần 2 đồng ý · 1 lần/trận</span>
+                      🔄 Vote bỏ bài
                     </button>
                   )}
                   {canSurrender && (
@@ -902,7 +901,6 @@ export default function RoomPlayPage() {
                       onClick={() => { setOptionsMenuOpen(false); setSurrenderConfirmOpen(true); }}
                     >
                       🏳 Đầu hàng
-                      <span className="tlmn-options-hint">về chót · trừ điểm hàng còn giữ</span>
                     </button>
                   )}
                 </div>
