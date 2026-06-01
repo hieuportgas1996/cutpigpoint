@@ -867,7 +867,8 @@
   transform-origin: bottom center;
   animation: championPop 3s ease-out forwards;
 }
-.tlmn-root .tlmn-seat .seat-champion .champion-trophy-svg {
+.tlmn-root .tlmn-seat .seat-champion .champion-trophy-svg,
+.tlmn-root .tlmn-seat .seat-champion .europa-trophy-svg {
   filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 14px rgba(255, 215, 106, 0.55));
   animation: championFloat 2.4s ease-in-out 0.4s infinite alternate;
 }
@@ -893,5 +894,6 @@
 
 @media (max-width: 720px) {
   .tlmn-root .tlmn-seat .seat-champion .champion-trophy-svg { width: 56px; height: 78px; }
+  .tlmn-root .tlmn-seat .seat-champion .europa-trophy-svg { width: 48px; height: 67px; }
   .tlmn-root .tlmn-seat .seat-champion-caption { font-size: 11px; }
 }

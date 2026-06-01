@@ -48,7 +48,7 @@ const SOUND_START_OFFSET: Partial<Record<SoundKey, number>> = {
 
 /** Sounds that should stop after a max duration (seconds) instead of playing to the end. */
 const SOUND_MAX_DURATION: Partial<Record<SoundKey, number>> = {
-  quenChaNa: 10,
+  quenChaNa: 5,
 };
 
 // Cache one HTMLAudioElement per key so we don't re-decode the file on every play.

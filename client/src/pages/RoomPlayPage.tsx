@@ -7,6 +7,7 @@ import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { ChampionTrophy } from '../game/effects/ChampionTrophy';
+import { EuropaTrophy } from '../game/effects/EuropaTrophy';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -680,6 +681,12 @@ export default function RoomPlayPage() {
                       <div className="seat-champion-caption">Vô địch!</div>
                     </div>
                   </>
+                )}
+                {winnerCelebration && player.finalRank === 2 && (
+                  <div className="seat-champion seat-runnerup" aria-hidden="true">
+                    <EuropaTrophy size={70} />
+                    <div className="seat-champion-caption">Á quân</div>
+                  </div>
                 )}
               </div>
             );
