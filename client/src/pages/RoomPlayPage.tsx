@@ -355,14 +355,14 @@ export default function RoomPlayPage() {
   }, [roundEnd]);
 
   // Sound vỗ tay khi modal tổng kết ván vừa hiện ra. Dedup theo round.
-  // Về trắng: phát nice-sound ĐÚNG 1 LẦN (dedup theo round) thay cho clap.
+  // Về trắng: KHÔNG phát sound (theo yêu cầu). Round thường: clap.
   const lastVictoryRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (!delayedRoundEnd) return;
     const key = `${delayedRoundEnd.matchId}|${delayedRoundEnd.roundNumber}`;
     if (lastVictoryRoundRef.current === key) return;
     lastVictoryRoundRef.current = key;
-    playSound(delayedRoundEnd.wasWhiteWin ? 'niceSound' : 'clapHand', 0.7);
+    if (!delayedRoundEnd.wasWhiteWin) playSound('clapHand', 0.7);
   }, [delayedRoundEnd]);
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
