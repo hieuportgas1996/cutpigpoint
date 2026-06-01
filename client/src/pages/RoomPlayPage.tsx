@@ -167,6 +167,8 @@ export default function RoomPlayPage() {
   const [autoPass, setAutoPass] = useState(false);
   const autoPassFiredRef = useRef<string | null>(null);
   const [surrenderConfirmOpen, setSurrenderConfirmOpen] = useState(false);
+  const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
+  const optionsMenuRef = useRef<HTMLDivElement | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -490,6 +492,18 @@ export default function RoomPlayPage() {
     autoPassFiredRef.current = fireKey;
     passTurn().catch(() => undefined);
   }, [autoPass, isMyTurn, trickCombo, matchState?.roundNumber, matchState?.currentTurnSeatIndex]);
+
+  // Đóng menu "Tùy chọn" khi bấm ra ngoài.
+  useEffect(() => {
+    if (!optionsMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (optionsMenuRef.current && !optionsMenuRef.current.contains(e.target as Node)) {
+        setOptionsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [optionsMenuOpen]);
 
   if (state.status !== 'authenticated') return null;
 
@@ -862,23 +876,38 @@ export default function RoomPlayPage() {
           >
             {autoPass ? '⏸ Tắt qua lượt tự động' : '⏩ Qua lượt tự động'}
           </button>
-          {canStartVoteReset && (
-            <button
-              className="tlmn-btn ghost"
-              onClick={handleStartVoteReset}
-              title="Vote chia bài lại (chỉ ở trick 1, cần ≥2 đồng ý, mỗi người 1 lần/ván)"
-            >
-              🔄 Vote chia lại
-            </button>
-          )}
-          {canSurrender && (
-            <button
-              className="tlmn-btn ghost danger"
-              onClick={() => setSurrenderConfirmOpen(true)}
-              title="Đầu hàng — về chót và bị trừ điểm hàng còn giữ"
-            >
-              🏳 Đầu hàng
-            </button>
+          {(canStartVoteReset || canSurrender) && (
+            <div className="tlmn-options" ref={optionsMenuRef}>
+              <button
+                className={`tlmn-btn ghost ${optionsMenuOpen ? 'auto-pass-on' : ''}`}
+                onClick={() => setOptionsMenuOpen(o => !o)}
+                title="Tùy chọn: vote chia bài lại / đầu hàng"
+              >
+                ⋯ Tùy chọn
+              </button>
+              {optionsMenuOpen && (
+                <div className="tlmn-options-menu">
+                  {canStartVoteReset && (
+                    <button
+                      className="tlmn-options-item"
+                      onClick={() => { setOptionsMenuOpen(false); handleStartVoteReset(); }}
+                    >
+                      🔄 Vote chia bài lại
+                      <span className="tlmn-options-hint">trick 1 · cần 2 đồng ý · 1 lần/trận</span>
+                    </button>
+                  )}
+                  {canSurrender && (
+                    <button
+                      className="tlmn-options-item danger"
+                      onClick={() => { setOptionsMenuOpen(false); setSurrenderConfirmOpen(true); }}
+                    >
+                      🏳 Đầu hàng
+                      <span className="tlmn-options-hint">về chót · trừ điểm hàng còn giữ</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

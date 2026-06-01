@@ -103,7 +103,8 @@ public class MatchManager
             p.JudgeHeldValue = 0;
             p.Surrendered = false;
             p.VoteResetChoice = null;
-            p.HasUsedVoteReset = false;
+            // HasUsedVoteReset KHÔNG reset ở đây: quyền vote chia bài lại là 1 lần / TRẬN (giữ qua các round),
+            // chỉ false mặc định khi MatchPlayer được tạo trong Create.
         }
 
         // Deal exactly 13 cards each; remaining cards are buried.

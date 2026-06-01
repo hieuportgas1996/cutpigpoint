@@ -120,7 +120,7 @@ public class SurrenderVoteResetTests
     }
 
     [Fact]
-    public void VoteReset_OncePerPlayerPerRound()
+    public void VoteReset_OncePerPlayerPerMatch()
     {
         var (mgr, roomId, ids) = MakeStartedMatch(4);
         var m = mgr.GetByRoom(roomId)!;
@@ -143,5 +143,30 @@ public class SurrenderVoteResetTests
         var m = mgr.GetByRoom(roomId)!;
         m.PastFirstTrick = true; // giả lập đã qua trick 1
         Assert.Throws<InvalidOperationException>(() => mgr.StartVoteReset(roomId, ids[0]));
+    }
+
+    [Fact]
+    public void VoteReset_RightNotRestoredNextRound()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+
+        // P1 dùng quyền vote (mở vote → tiêu quyền), vote không thành.
+        mgr.StartVoteReset(roomId, ids[0]);
+        mgr.RespondVoteReset(roomId, ids[1], false);
+        mgr.RespondVoteReset(roomId, ids[2], false);
+        mgr.RespondVoteReset(roomId, ids[3], false);
+        Assert.True(m.Players.First(p => p.UserId == ids[0]).HasUsedVoteReset);
+
+        // Kết thúc round bằng đầu hàng dồn cho tới khi WaitingNextRound, rồi sang round mới.
+        foreach (var id in new[] { ids[1], ids[2], ids[3] })
+            if (m.Players.First(p => p.UserId == id).FinalRank == null && m.Status == MatchStatus.InProgress)
+                mgr.Surrender(roomId, id);
+        Assert.Equal(MatchStatus.WaitingNextRound, m.Status);
+
+        var next = mgr.StartNextRound(roomId, null);
+
+        // Quyền vote của P1 VẪN bị tiêu ở round mới (1 lần / trận, không reset ở DealRound).
+        Assert.True(next.Players.First(p => p.UserId == ids[0]).HasUsedVoteReset);
     }
 }

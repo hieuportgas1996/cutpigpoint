@@ -36,7 +36,7 @@ public class MatchPlayer
 
     /// <summary>Phiếu vote chia bài lại trong round hiện tại: null = chưa bỏ, true = Đồng ý, false = Bỏ.</summary>
     public bool? VoteResetChoice { get; set; }
-    /// <summary>True khi player đã dùng quyền vote chia bài lại trong round này (mỗi người 1 lần/round).</summary>
+    /// <summary>True khi player đã dùng quyền vote chia bài lại — mỗi người 1 lần / TRẬN (giữ qua các round, không reset ở DealRound).</summary>
     public bool HasUsedVoteReset { get; set; }
 }
 
