@@ -14,6 +14,9 @@ import chiuroiUrl from './chiuroi.mp3';
 import lotteryUrl from './lottery.mp3';
 import fireworkNewUrl from './firework-new.mp3';
 import soQuaUrl from './so-qua.mp3';
+import niceSoundUrl from './nice-sound.mp3';
+import saoMaDoUrl from './sao-ma-do.mp3';
+import quenChaNaUrl from './quen-cha-na.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -31,6 +34,9 @@ export const SOUND_URLS = {
   lottery: lotteryUrl,
   fireworkNew: fireworkNewUrl,
   soQua: soQuaUrl,
+  niceSound: niceSoundUrl,
+  saoMaDo: saoMaDoUrl,
+  quenChaNa: quenChaNaUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;
@@ -38,6 +44,11 @@ export type SoundKey = keyof typeof SOUND_URLS;
 /** Sounds that should start at a non-zero offset (seconds) instead of position 0. */
 const SOUND_START_OFFSET: Partial<Record<SoundKey, number>> = {
   ronaldoSiuuuu: 4,
+};
+
+/** Sounds that should stop after a max duration (seconds) instead of playing to the end. */
+const SOUND_MAX_DURATION: Partial<Record<SoundKey, number>> = {
+  quenChaNa: 10,
 };
 
 // Cache one HTMLAudioElement per key so we don't re-decode the file on every play.
@@ -53,6 +64,9 @@ function get(key: SoundKey): HTMLAudioElement {
   return el;
 }
 
+// Pending max-duration cutoff timers keyed by sound, so re-plays don't stack timers.
+const cutoffTimers = new Map<SoundKey, ReturnType<typeof setTimeout>>();
+
 /** Play a one-shot sound. Restarts from the configured start offset if it's already playing. */
 export function playSound(key: SoundKey, volume = 1) {
   try {
@@ -61,6 +75,18 @@ export function playSound(key: SoundKey, volume = 1) {
     el.volume = volume;
     el.currentTime = SOUND_START_OFFSET[key] ?? 0;
     void el.play().catch(() => undefined); // ignore autoplay-blocked rejections
+
+    const existing = cutoffTimers.get(key);
+    if (existing) { clearTimeout(existing); cutoffTimers.delete(key); }
+    const maxDuration = SOUND_MAX_DURATION[key];
+    if (maxDuration != null) {
+      const timer = setTimeout(() => {
+        el.pause();
+        el.currentTime = 0;
+        cutoffTimers.delete(key);
+      }, maxDuration * 1000);
+      cutoffTimers.set(key, timer);
+    }
   } catch {
     /* no-op */
   }

@@ -27,6 +27,8 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'beg', emoji: '🛐', label: 'Tao lạy mày', hint: 'Năn nỉ' },
   { code: 'chiuroi', emoji: '🤷', label: 'Thế thì chịu', hint: 'Thế thì chịu rồi' },
   { code: 'so-qua', emoji: '😱', label: 'Sợ quá sợ quá', hint: 'Sợ quá sợ quá' },
+  { code: 'sao-ma-do', emoji: '🛡️', label: 'Sao mà đỡ được', hint: 'Sao mà đỡ được' },
+  { code: 'khong-sao-ma', emoji: '😎', label: 'Không sao mà', hint: 'Không sao mà' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sos': 'sos',
@@ -35,6 +37,8 @@ const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'beg': 'begging',
   'chiuroi': 'chiuroi',
   'so-qua': 'soQua',
+  'sao-ma-do': 'saoMaDo',
+  'khong-sao-ma': 'quenChaNa',
 };
 const STICKER_VOLUME = 0.45;
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
@@ -328,6 +332,7 @@ export default function RoomPlayPage() {
     if (lastCelebratedRoundRef.current === key) return;
     lastCelebratedRoundRef.current = key;
     setWinnerCelebration(winnerUserId);
+    playSound('niceSound', 0.7);
     const t = setTimeout(() => {
       setWinnerCelebration(prev => prev === winnerUserId ? null : prev);
     }, 3000);
