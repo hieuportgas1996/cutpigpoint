@@ -852,53 +852,39 @@
   60%  { transform: translateY(-20px) scale(1); opacity: 1; }
   100% { transform: translateY(-44px) scale(0.8); opacity: 0; }
 }
-.tlmn-root .tlmn-seat .seat-fireworks .fw-5 {
-  animation-name: fwTrophy;
-}
-@keyframes fwTrophy {
-  0%   { transform: translateX(-50%) translateY(20px) scale(0.4); opacity: 0; }
-  20%  { transform: translateX(-50%) translateY(-4px) scale(1.4); opacity: 1; }
-  85%  { transform: translateX(-50%) translateY(-4px) scale(1.15); opacity: 1; }
-  100% { transform: translateX(-50%) translateY(-12px) scale(1); opacity: 0; }
-}
-
-/* Cúp C1 ở giữa bàn khi có người về Nhất */
-.tlmn-root .champion-overlay {
+/* Cúp C1 hiện ngay tại seat người về Nhất */
+.tlmn-root .tlmn-seat .seat-champion {
   position: absolute;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 14;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  z-index: 13;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.tlmn-root .champion-trophy-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  transform-origin: bottom center;
   animation: championPop 3s ease-out forwards;
 }
-.tlmn-root .champion-trophy-svg {
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 18px rgba(255, 215, 106, 0.55));
+.tlmn-root .tlmn-seat .seat-champion .champion-trophy-svg {
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 14px rgba(255, 215, 106, 0.55));
   animation: championFloat 2.4s ease-in-out 0.4s infinite alternate;
 }
-.tlmn-root .champion-caption {
+.tlmn-root .tlmn-seat .seat-champion-caption {
   font-weight: 800;
-  font-size: 18px;
+  font-size: 13px;
   color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 0 12px rgba(255, 215, 106, 0.6);
   white-space: nowrap;
   letter-spacing: 0.5px;
 }
 @keyframes championPop {
-  0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
-  18%  { transform: scale(1.18) rotate(3deg); opacity: 1; }
-  32%  { transform: scale(1) rotate(0deg); opacity: 1; }
-  82%  { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.9) translateY(-10px); opacity: 0; }
+  0%   { transform: translateX(-50%) scale(0.3) rotate(-8deg); opacity: 0; }
+  18%  { transform: translateX(-50%) scale(1.18) rotate(3deg); opacity: 1; }
+  32%  { transform: translateX(-50%) scale(1) rotate(0deg); opacity: 1; }
+  82%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) scale(0.9) translateY(-10px); opacity: 0; }
 }
 @keyframes championFloat {
   0%   { transform: translateY(0); }
@@ -906,6 +892,6 @@
 }
 
 @media (max-width: 720px) {
-  .tlmn-root .champion-trophy-svg { width: 84px; height: 118px; }
-  .tlmn-root .champion-caption { font-size: 14px; }
+  .tlmn-root .tlmn-seat .seat-champion .champion-trophy-svg { width: 56px; height: 78px; }
+  .tlmn-root .tlmn-seat .seat-champion-caption { font-size: 11px; }
 }

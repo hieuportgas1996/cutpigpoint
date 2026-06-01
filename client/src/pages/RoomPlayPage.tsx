@@ -668,28 +668,22 @@ export default function RoomPlayPage() {
                   </div>
                 )}
                 {winnerCelebration === player.userId && (
-                  <div className="seat-fireworks" aria-hidden="true">
-                    <span className="fw fw-1">🎆</span>
-                    <span className="fw fw-2">🎇</span>
-                    <span className="fw fw-3">✨</span>
-                    <span className="fw fw-4">🎉</span>
-                    <span className="fw fw-5">🏆</span>
-                  </div>
+                  <>
+                    <div className="seat-fireworks" aria-hidden="true">
+                      <span className="fw fw-1">🎆</span>
+                      <span className="fw fw-2">🎇</span>
+                      <span className="fw fw-3">✨</span>
+                      <span className="fw fw-4">🎉</span>
+                    </div>
+                    <div className="seat-champion" aria-hidden="true">
+                      <ChampionTrophy size={84} />
+                      <div className="seat-champion-caption">Vô địch!</div>
+                    </div>
+                  </>
                 )}
               </div>
             );
           })}
-
-          {winnerCelebration && (
-            <div className="champion-overlay" aria-hidden="true">
-              <div className="champion-trophy-wrap">
-                <ChampionTrophy size={120} />
-                <div className="champion-caption">
-                  🏆 {matchState.players.find(p => p.userId === winnerCelebration)?.displayName ?? ''} Vô địch!
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="play-area-cards">
             {trick.length === 0 ? (
