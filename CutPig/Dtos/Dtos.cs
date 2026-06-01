@@ -54,7 +54,7 @@ public record MatchPlayerDto(
     bool HasUsedFestival = false,
     bool FestivalWinner = false,
     int FestivalRevealed = 0,
-    List<CardDto>? FestivalRevealedCards = null);
+    List<CardDto?>? FestivalCardSlots = null);
 
 public record MatchPublicStateDto(
     Guid MatchId,

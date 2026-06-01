@@ -220,7 +220,7 @@ public class SurrenderVoteResetTests
         Assert.Equal(ids[0], fest.FestivalOrganizerId); // P1 là người tổ chức
 
         // Mọi người lật hết bài → finalize → WaitingNextRound.
-        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true);
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true, cardIndex: -1);
         var done = mgr.FinalizeFestival(roomId);
         Assert.NotNull(done);
         Assert.Equal(MatchStatus.WaitingNextRound, done!.Status);
@@ -261,14 +261,18 @@ public class SurrenderVoteResetTests
         var fest = mgr.StartNextRound(roomId, null);
         Assert.Equal(MatchStatus.FestivalReveal, fest.Status);
 
-        // Lật từng lá: mỗi người lật 1 → revealed=1.
-        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: false);
-        Assert.All(fest.Players, p => Assert.Equal(1, p.FestivalRevealed));
+        // Lật 1 lá bất kỳ (index 1) cho mỗi người → revealed=1, chưa hết.
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: false, cardIndex: 1);
+        Assert.All(fest.Players, p => Assert.Single(p.FestivalRevealedIdx));
         Assert.Null(fest.FestivalRevealDeadline); // chưa lật hết
 
+        // Lật lại đúng lá đã lật (index 1) → không tăng (HashSet) → vẫn 1.
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: false, cardIndex: 1);
+        Assert.All(fest.Players, p => Assert.Single(p.FestivalRevealedIdx));
+
         // Lật hết cho tất cả → set deadline xem bài 5s.
-        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true);
-        Assert.All(fest.Players, p => Assert.Equal(3, p.FestivalRevealed));
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true, cardIndex: -1);
+        Assert.All(fest.Players, p => Assert.Equal(3, p.FestivalRevealedIdx.Count));
         Assert.NotNull(fest.FestivalRevealDeadline);
     }
 
@@ -285,7 +289,7 @@ public class SurrenderVoteResetTests
 
         var flipped = mgr.AutoFlipFestival(roomId);
         Assert.NotNull(flipped);
-        Assert.All(flipped!.Players, p => Assert.Equal(3, p.FestivalRevealed));
+        Assert.All(flipped!.Players, p => Assert.Equal(3, p.FestivalRevealedIdx.Count));
         Assert.NotNull(flipped.FestivalRevealDeadline);
     }
 }

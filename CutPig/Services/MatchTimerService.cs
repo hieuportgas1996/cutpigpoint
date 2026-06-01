@@ -213,9 +213,9 @@ public class MatchTimerService : BackgroundService
                 p.HasUsedVoteReset,
                 p.HasUsedFestival,
                 p.FestivalWinner,
-                p.FestivalRevealed,
+                p.FestivalRevealedIdx.Count,
                 m.IsFestivalRound
-                    ? p.Hand.Take(p.FestivalRevealed).Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList()
+                    ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
                     : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,

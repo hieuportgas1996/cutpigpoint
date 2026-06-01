@@ -44,8 +44,8 @@ public class MatchPlayer
     public bool HasUsedFestival { get; set; }
     /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>
     public bool FestivalWinner { get; set; }
-    /// <summary>Số lá bài Cào Rùa player đã lật trong pha nặn bài (0..3). Mỗi người tự lật bài mình.</summary>
-    public int FestivalRevealed { get; set; }
+    /// <summary>Các index lá bài Cào Rùa player đã lật (0..2) — lật bất kỳ thứ tự nào. Mỗi người tự lật bài mình.</summary>
+    public HashSet<int> FestivalRevealedIdx { get; init; } = new();
 }
 
 public class Match

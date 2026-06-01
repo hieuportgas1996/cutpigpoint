@@ -661,7 +661,7 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
-    public async Task FlipFestivalCard(bool flipAll)
+    public async Task FlipFestivalCard(bool flipAll, int cardIndex)
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
@@ -671,7 +671,7 @@ public class RoomHub : Hub
         Match match;
         try
         {
-            match = _matches.FlipFestivalCard(roomId.Value, auth.Value.UserId, flipAll);
+            match = _matches.FlipFestivalCard(roomId.Value, auth.Value.UserId, flipAll, cardIndex);
         }
         catch (InvalidOperationException ex)
         {
@@ -768,9 +768,9 @@ public class RoomHub : Hub
                 p.HasUsedVoteReset,
                 p.HasUsedFestival,
                 p.FestivalWinner,
-                p.FestivalRevealed,
+                p.FestivalRevealedIdx.Count,
                 m.IsFestivalRound
-                    ? p.Hand.Take(p.FestivalRevealed).Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList()
+                    ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
                     : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,

@@ -106,7 +106,7 @@ public class MatchManager
             p.Surrendered = false;
             p.VoteResetChoice = null;
             p.FestivalWinner = false;
-            p.FestivalRevealed = 0;
+            p.FestivalRevealedIdx.Clear();
             // HasUsedVoteReset / HasUsedFestival KHÔNG reset ở đây: quyền là 1 lần / TRẬN (giữ qua các round),
             // chỉ false mặc định khi MatchPlayer được tạo trong Create.
         }
@@ -185,7 +185,7 @@ public class MatchManager
             bool isWinner = (s.Tier, s.Tiebreak) == best;
             player.FestivalWinner = isWinner;
             player.FinalRank = isWinner ? 1 : 2;
-            player.FestivalRevealed = 0;
+            player.FestivalRevealedIdx.Clear();
         }
 
         // Vào pha nặn bài: mỗi người tự lật 3 lá của mình. Auto-lật sau 60s nếu treo.
@@ -194,8 +194,11 @@ public class MatchManager
         match.FestivalAutoFlipDeadline = DateTime.UtcNow + FestivalAutoFlipTimeout;
     }
 
-    /// <summary>Player lật lá Cào Rùa kế tiếp của CHÍNH MÌNH (nặn từng lá). Trả về match đã cập nhật.</summary>
-    public Match FlipFestivalCard(Guid roomId, Guid userId, bool flipAll)
+    /// <summary>
+    /// Player lật bài Cào Rùa của CHÍNH MÌNH. flipAll=true → lật cả 3 lá; ngược lại lật lá tại cardIndex
+    /// (0..2, bất kỳ thứ tự nào). Trả về match đã cập nhật.
+    /// </summary>
+    public Match FlipFestivalCard(Guid roomId, Guid userId, bool flipAll, int cardIndex)
     {
         lock (LockFor(roomId))
         {
@@ -204,7 +207,14 @@ public class MatchManager
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
 
-            player.FestivalRevealed = flipAll ? player.Hand.Count : Math.Min(player.Hand.Count, player.FestivalRevealed + 1);
+            if (flipAll)
+            {
+                for (int i = 0; i < player.Hand.Count; i++) player.FestivalRevealedIdx.Add(i);
+            }
+            else if (cardIndex >= 0 && cardIndex < player.Hand.Count)
+            {
+                player.FestivalRevealedIdx.Add(cardIndex);
+            }
             CheckFestivalRevealComplete(match);
             return match;
         }
@@ -213,7 +223,7 @@ public class MatchManager
     /// <summary>Khi mọi người đã lật hết → set deadline xem bài 5s (timer sẽ finalize → RoundEnd).</summary>
     private static void CheckFestivalRevealComplete(Match match)
     {
-        bool allRevealed = match.Players.All(p => p.FestivalRevealed >= p.Hand.Count);
+        bool allRevealed = match.Players.All(p => p.FestivalRevealedIdx.Count >= p.Hand.Count);
         if (allRevealed && match.FestivalRevealDeadline == null)
         {
             match.FestivalRevealDeadline = DateTime.UtcNow + FestivalRevealViewTimeout;
@@ -227,7 +237,8 @@ public class MatchManager
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.FestivalReveal) return null;
-            foreach (var p in match.Players) p.FestivalRevealed = p.Hand.Count;
+            foreach (var p in match.Players)
+                for (int i = 0; i < p.Hand.Count; i++) p.FestivalRevealedIdx.Add(i);
             CheckFestivalRevealComplete(match);
             return match;
         }

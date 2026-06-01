@@ -518,8 +518,11 @@ export default function RoomPlayPage() {
   const festivalSeatCards: Record<string, Array<Card | null>> = {};
   if (isFestivalReveal && matchState) {
     for (const p of matchState.players) {
-      const revealed = (p.festivalRevealedCards ?? []).map(cardFromDto);
-      festivalSeatCards[p.userId] = [0, 1, 2].map(i => (i < revealed.length ? revealed[i] : null));
+      const slots = p.festivalCardSlots ?? [];
+      festivalSeatCards[p.userId] = [0, 1, 2].map(i => {
+        const c = slots[i];
+        return c ? cardFromDto(c) : null;
+      });
     }
   }
 
@@ -544,7 +547,6 @@ export default function RoomPlayPage() {
     lastFestivalAnnouncedRef.current = key;
     const who = matchState?.festivalOrganizerId === myUserId ? 'Bạn' : festivalOrganizerName;
     toast.push('info', `🎉 ${who} đã tổ chức lễ hội — round sau chơi Cào Rùa!`);
-    playSound('lottery', 0.5);
   }, [festivalScheduled, matchState?.festivalOrganizerId, matchState?.roundNumber, matchState?.isFestivalRound]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
@@ -688,8 +690,8 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
-  async function handleFlipFestival(flipAll: boolean) {
-    try { await flipFestivalCard(flipAll); }
+  async function handleFlipFestival(flipAll: boolean, cardIndex: number) {
+    try { await flipFestivalCard(flipAll, cardIndex); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -835,12 +837,22 @@ export default function RoomPlayPage() {
                   </>
                 )}
                 {festivalSeatCards[player.userId] && (
-                  <div className="seat-festival-cards" aria-hidden="true">
+                  <div className={`seat-festival-cards ${isMe ? 'is-me' : ''}`}>
                     {festivalSeatCards[player.userId].map((slot, i) => (
-                      <div key={i} className={`festival-card-slot ${slot ? 'flipped' : ''}`}>
+                      <div
+                        key={i}
+                        className={`festival-card-slot ${slot ? 'flipped' : ''} ${isMe && !slot ? 'flippable' : ''}`}
+                        onClick={isMe && !slot ? () => handleFlipFestival(false, i) : undefined}
+                        title={isMe && !slot ? 'Nhấn để lật lá này' : undefined}
+                      >
                         <CardSvg card={slot ?? undefined} faceDown={!slot} size="sm" />
                       </div>
                     ))}
+                    {isMe && !myAllRevealed && (
+                      <button className="festival-flip-all-btn" onClick={() => handleFlipFestival(true, -1)}>
+                        Lật hết
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -983,11 +995,6 @@ export default function RoomPlayPage() {
               )}
             </div>
           )}
-          {festivalScheduled && !matchState.isFestivalRound && (
-            <span className="festival-pending-tag">
-              🎉 Lễ hội round sau{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}
-            </span>
-          )}
         </div>
 
         {isWhiteWinChoicePhase && myWhiteWinReason && (
@@ -1047,23 +1054,17 @@ export default function RoomPlayPage() {
         )}
 
         {isFestivalReveal && (
-          <div className="festival-reveal-bar">
+          <div className="festival-reveal-center" aria-hidden="true">
             <div className="festival-reveal-title">
-              🎉 Lễ hội Cào Rùa{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}
+              🎉 Lễ hội của {festivalOrganizerName || '?'}
             </div>
             <div className="festival-reveal-status">
               {myAllRevealed
                 ? (festivalRevealLeftSec > 0
                     ? <>Đang chờ mọi người lật… kết quả sau <b>{festivalRevealLeftSec}s</b></>
                     : <>Đang chờ mọi người lật hết…</>)
-                : <>Nặn bài của bạn! ({myFestivalRevealed}/3)</>}
+                : <>Nhấn từng lá bài của bạn để nặn ({myFestivalRevealed}/3)</>}
             </div>
-            {!myAllRevealed && (
-              <div className="festival-reveal-actions">
-                <button className="tlmn-btn ghost sm" onClick={() => handleFlipFestival(false)}>👆 Nặn 1 lá</button>
-                <button className="tlmn-btn primary sm" onClick={() => handleFlipFestival(true)}>🃏 Lật hết</button>
-              </div>
-            )}
           </div>
         )}
 

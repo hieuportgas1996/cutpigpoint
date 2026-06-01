@@ -355,7 +355,7 @@ export interface MatchPlayerPublic {
   hasUsedFestival: boolean;
   festivalWinner: boolean;
   festivalRevealed: number;
-  festivalRevealedCards: CardDto[] | null;
+  festivalCardSlots: (CardDto | null)[] | null;
 }
 
 export interface MatchPublicState {
