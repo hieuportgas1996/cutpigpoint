@@ -6,6 +6,7 @@ import { useToast } from '../ui/Toast';
 import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
+import { ChampionTrophy } from '../game/effects/ChampionTrophy';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -678,6 +679,17 @@ export default function RoomPlayPage() {
               </div>
             );
           })}
+
+          {winnerCelebration && (
+            <div className="champion-overlay" aria-hidden="true">
+              <div className="champion-trophy-wrap">
+                <ChampionTrophy size={120} />
+                <div className="champion-caption">
+                  🏆 {matchState.players.find(p => p.userId === winnerCelebration)?.displayName ?? ''} Vô địch!
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="play-area-cards">
             {trick.length === 0 ? (
