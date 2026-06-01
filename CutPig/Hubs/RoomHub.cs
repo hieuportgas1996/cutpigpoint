@@ -661,6 +661,26 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task FlipFestivalCard(bool flipAll)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.FlipFestivalCard(roomId.Value, auth.Value.UserId, flipAll);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     private async Task EmitRoundEndAsync(Match match)
     {
         var dto = _matches.BuildRoundEndDto(match);
@@ -747,7 +767,11 @@ public class RoomHub : Hub
                 p.VoteResetChoice,
                 p.HasUsedVoteReset,
                 p.HasUsedFestival,
-                p.FestivalWinner)).ToList(),
+                p.FestivalWinner,
+                p.FestivalRevealed,
+                m.IsFestivalRound
+                    ? p.Hand.Take(p.FestivalRevealed).Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList()
+                    : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -759,7 +783,10 @@ public class RoomHub : Hub
             m.VoteResetInitiatorId,
             m.PastFirstTrick,
             m.FestivalScheduled,
-            m.IsFestivalRound);
+            m.IsFestivalRound,
+            m.FestivalOrganizerId,
+            m.FestivalRevealDeadline,
+            m.FestivalAutoFlipDeadline);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

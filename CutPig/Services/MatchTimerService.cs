@@ -121,6 +121,32 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Festival reveal: auto-lật toàn bộ sau 60s, hoặc finalize 5s sau khi lật hết.
+                foreach (var match in _matches.AllFestivalReveal())
+                {
+                    try
+                    {
+                        if (match.FestivalRevealDeadline.HasValue && match.FestivalRevealDeadline.Value <= now)
+                        {
+                            var resolved = _matches.FinalizeFestival(match.RoomId);
+                            if (resolved == null) continue;
+                            await _hub.Clients.Group($"room:{resolved.RoomId}").SendAsync("MatchState", BuildPublic(resolved), stoppingToken);
+                            if (resolved.Status == MatchStatus.WaitingNextRound)
+                                await EmitRoundEndAsync(resolved, stoppingToken);
+                        }
+                        else if (match.FestivalAutoFlipDeadline.HasValue && match.FestivalAutoFlipDeadline.Value <= now)
+                        {
+                            var flipped = _matches.AutoFlipFestival(match.RoomId);
+                            if (flipped == null) continue;
+                            await _hub.Clients.Group($"room:{flipped.RoomId}").SendAsync("MatchState", BuildPublic(flipped), stoppingToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Festival reveal resolve failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
@@ -186,7 +212,11 @@ public class MatchTimerService : BackgroundService
                 p.VoteResetChoice,
                 p.HasUsedVoteReset,
                 p.HasUsedFestival,
-                p.FestivalWinner)).ToList(),
+                p.FestivalWinner,
+                p.FestivalRevealed,
+                m.IsFestivalRound
+                    ? p.Hand.Take(p.FestivalRevealed).Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList()
+                    : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -198,6 +228,9 @@ public class MatchTimerService : BackgroundService
             m.VoteResetInitiatorId,
             m.PastFirstTrick,
             m.FestivalScheduled,
-            m.IsFestivalRound);
+            m.IsFestivalRound,
+            m.FestivalOrganizerId,
+            m.FestivalRevealDeadline,
+            m.FestivalAutoFlipDeadline);
     }
 }

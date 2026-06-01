@@ -8,6 +8,7 @@ public enum MatchStatus
     WhiteWinChoice = 3,          // round just dealt, white-win candidates choosing accept/decline
     PendingTrickCut = 4,         // trick about to reset, but someone has 4-pair-run → giving them chance to cut
     VoteReset = 5,               // a player called a re-deal vote during trick 1; players are voting yes/no
+    FestivalReveal = 6,          // round lễ hội: đã chia 3 lá, mỗi người đang nặn/lật bài trước khi tính điểm
 }
 
 public class MatchPlayer
@@ -43,6 +44,8 @@ public class MatchPlayer
     public bool HasUsedFestival { get; set; }
     /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>
     public bool FestivalWinner { get; set; }
+    /// <summary>Số lá bài Cào Rùa player đã lật trong pha nặn bài (0..3). Mỗi người tự lật bài mình.</summary>
+    public int FestivalRevealed { get; set; }
 }
 
 public class Match
@@ -89,6 +92,12 @@ public class Match
     public bool FestivalScheduled { get; set; }
     /// <summary>True khi round HIỆN TẠI là round lễ hội (Cào Rùa 3 lá) thay vì Tiến Lên.</summary>
     public bool IsFestivalRound { get; set; }
+    /// <summary>UserId người đã tổ chức lễ hội cho round này (để hiển thị "ai tổ chức").</summary>
+    public Guid? FestivalOrganizerId { get; set; }
+    /// <summary>Hết hạn pha nặn bài: khi mọi người lật hết 3 lá → set now+5s để xem rồi mới resolve.</summary>
+    public DateTime? FestivalRevealDeadline { get; set; }
+    /// <summary>Hết hạn auto-lật: nếu sau 60s vẫn còn lá chưa lật → tự lật hết.</summary>
+    public DateTime? FestivalAutoFlipDeadline { get; set; }
     public Guid? PendingTrickWinnerId { get; set; } // owner of trick that just won, awaiting possible 4-pair-run cut
     public List<Guid> TrickCutCandidates { get; init; } = new(); // users who hold 4-pair-run and can interrupt
 

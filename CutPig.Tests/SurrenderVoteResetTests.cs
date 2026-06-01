@@ -210,13 +210,20 @@ public class SurrenderVoteResetTests
                 mgr.Surrender(roomId, id);
         Assert.Equal(MatchStatus.WaitingNextRound, m.Status);
 
-        // Round kế tiếp = lễ hội: chia 3 lá/người, resolve ngay → WaitingNextRound.
+        // Round kế tiếp = lễ hội: chia 3 lá/người, vào pha nặn bài FestivalReveal.
         var fest = mgr.StartNextRound(roomId, null);
         Assert.True(fest.IsFestivalRound);
         Assert.False(fest.FestivalScheduled); // đã tiêu
         Assert.All(fest.Players, p => Assert.Equal(3, p.Hand.Count));
-        Assert.Equal(MatchStatus.WaitingNextRound, fest.Status);
+        Assert.Equal(MatchStatus.FestivalReveal, fest.Status);
         Assert.Contains(fest.Players, p => p.FestivalWinner);
+        Assert.Equal(ids[0], fest.FestivalOrganizerId); // P1 là người tổ chức
+
+        // Mọi người lật hết bài → finalize → WaitingNextRound.
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true);
+        var done = mgr.FinalizeFestival(roomId);
+        Assert.NotNull(done);
+        Assert.Equal(MatchStatus.WaitingNextRound, done!.Status);
 
         // Điểm zero-sum.
         var scores = mgr.ComputeRoundScores(fest);
@@ -240,5 +247,45 @@ public class SurrenderVoteResetTests
         mgr.ScheduleFestival(roomId, ids[0]);
         // Đã có người đặt → người khác không đặt được round này.
         Assert.Throws<InvalidOperationException>(() => mgr.ScheduleFestival(roomId, ids[1]));
+    }
+
+    [Fact]
+    public void Festival_RevealFlow_FlipPerCard_ThenViewDeadline()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        mgr.ScheduleFestival(roomId, ids[0]);
+        foreach (var id in new[] { ids[1], ids[2], ids[3] })
+            if (m.Players.First(p => p.UserId == id).FinalRank == null && m.Status == MatchStatus.InProgress)
+                mgr.Surrender(roomId, id);
+        var fest = mgr.StartNextRound(roomId, null);
+        Assert.Equal(MatchStatus.FestivalReveal, fest.Status);
+
+        // Lật từng lá: mỗi người lật 1 → revealed=1.
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: false);
+        Assert.All(fest.Players, p => Assert.Equal(1, p.FestivalRevealed));
+        Assert.Null(fest.FestivalRevealDeadline); // chưa lật hết
+
+        // Lật hết cho tất cả → set deadline xem bài 5s.
+        foreach (var id in ids) mgr.FlipFestivalCard(roomId, id, flipAll: true);
+        Assert.All(fest.Players, p => Assert.Equal(3, p.FestivalRevealed));
+        Assert.NotNull(fest.FestivalRevealDeadline);
+    }
+
+    [Fact]
+    public void Festival_AutoFlip_RevealsAll()
+    {
+        var (mgr, roomId, ids) = MakeStartedMatch(4);
+        var m = mgr.GetByRoom(roomId)!;
+        mgr.ScheduleFestival(roomId, ids[0]);
+        foreach (var id in new[] { ids[1], ids[2], ids[3] })
+            if (m.Players.First(p => p.UserId == id).FinalRank == null && m.Status == MatchStatus.InProgress)
+                mgr.Surrender(roomId, id);
+        mgr.StartNextRound(roomId, null);
+
+        var flipped = mgr.AutoFlipFestival(roomId);
+        Assert.NotNull(flipped);
+        Assert.All(flipped!.Players, p => Assert.Equal(3, p.FestivalRevealed));
+        Assert.NotNull(flipped.FestivalRevealDeadline);
     }
 }

@@ -52,7 +52,9 @@ public record MatchPlayerDto(
     bool? VoteResetChoice = null,
     bool HasUsedVoteReset = false,
     bool HasUsedFestival = false,
-    bool FestivalWinner = false);
+    bool FestivalWinner = false,
+    int FestivalRevealed = 0,
+    List<CardDto>? FestivalRevealedCards = null);
 
 public record MatchPublicStateDto(
     Guid MatchId,
@@ -77,7 +79,10 @@ public record MatchPublicStateDto(
     Guid? VoteResetInitiatorId = null,
     bool PastFirstTrick = false,
     bool FestivalScheduled = false,
-    bool IsFestivalRound = false);
+    bool IsFestivalRound = false,
+    Guid? FestivalOrganizerId = null,
+    DateTime? FestivalRevealDeadline = null,
+    DateTime? FestivalAutoFlipDeadline = null);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

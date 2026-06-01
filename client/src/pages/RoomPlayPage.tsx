@@ -176,7 +176,7 @@ export default function RoomPlayPage() {
     status, state: room, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
-    surrender, startVoteReset, respondVoteReset, scheduleFestival,
+    surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -197,6 +197,7 @@ export default function RoomPlayPage() {
   const [surrenderConfirmOpen, setSurrenderConfirmOpen] = useState(false);
   const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const lastFestivalAnnouncedRef = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -515,6 +516,17 @@ export default function RoomPlayPage() {
     && !matchState.isFestivalRound
     && !myHasUsedFestival;
   const festivalScheduled = matchState?.festivalScheduled ?? false;
+  const festivalOrganizerName = matchState?.festivalOrganizerId
+    ? matchState.players.find(p => p.userId === matchState.festivalOrganizerId)?.displayName ?? ''
+    : '';
+
+  // Pha nặn bài lễ hội (FestivalReveal)
+  const isFestivalReveal = matchState?.status === MatchStatus.FestivalReveal;
+  const myFestivalRevealed = me?.festivalRevealed ?? 0;
+  const myAllRevealed = me != null && myFestivalRevealed >= 3;
+  const festivalRevealLeftSec = matchState?.festivalRevealDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.festivalRevealDeadline).getTime() - now) / 1000))
+    : 0;
 
   // Auto-pass: đến lượt mình + đang có trick (không phải mở nước) + bật autoPass → tự bỏ qua một lần.
   useEffect(() => {
@@ -528,6 +540,17 @@ export default function RoomPlayPage() {
     autoPassFiredRef.current = fireKey;
     passTurn().catch(() => undefined);
   }, [autoPass, isMyTurn, trickCombo, matchState?.roundNumber, matchState?.currentTurnSeatIndex]);
+
+  // Thông báo (mọi người) khi có người tổ chức lễ hội — 1 lần / lượt đặt lịch.
+  useEffect(() => {
+    if (!festivalScheduled || matchState?.isFestivalRound) return;
+    const key = `${matchState?.roundNumber}|${matchState?.festivalOrganizerId ?? ''}`;
+    if (lastFestivalAnnouncedRef.current === key) return;
+    lastFestivalAnnouncedRef.current = key;
+    const who = matchState?.festivalOrganizerId === myUserId ? 'Bạn' : festivalOrganizerName;
+    toast.push('info', `🎉 ${who} đã tổ chức lễ hội — round sau chơi Cào Rùa!`);
+    playSound('lottery', 0.5);
+  }, [festivalScheduled, matchState?.festivalOrganizerId, matchState?.roundNumber, matchState?.isFestivalRound]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -665,10 +688,13 @@ export default function RoomPlayPage() {
   }
 
   async function handleScheduleFestival() {
-    try {
-      await scheduleFestival();
-      toast.push('success', '🎉 Đã đặt lịch lễ hội — round sau chơi Cào Rùa!');
-    }
+    // Toast thông báo do effect festivalScheduled lo (cho cả mọi người), tránh double-toast ở đây.
+    try { await scheduleFestival(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleFlipFestival(flipAll: boolean) {
+    try { await flipFestivalCard(flipAll); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -960,7 +986,9 @@ export default function RoomPlayPage() {
             </div>
           )}
           {festivalScheduled && !matchState.isFestivalRound && (
-            <span className="festival-pending-tag">🎉 Lễ hội round sau</span>
+            <span className="festival-pending-tag">
+              🎉 Lễ hội round sau{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}
+            </span>
           )}
         </div>
 
@@ -1015,6 +1043,51 @@ export default function RoomPlayPage() {
               <div className="match-end-actions">
                 <button className="tlmn-btn primary" onClick={handleCutTrick}>⚔ Chặn bằng 4 đôi thông</button>
                 <button className="tlmn-btn ghost" onClick={handleDeclineCut}>Không chặn</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isFestivalReveal && (
+          <div className="match-end-overlay festival-reveal-overlay">
+            <div className="match-end-card festival-reveal-card">
+              <h2>🎉 Lễ hội Cào Rùa{festivalOrganizerName ? ` · ${festivalOrganizerName} tổ chức` : ''}</h2>
+              <div className="festival-reveal-sub">
+                {myAllRevealed
+                  ? (festivalRevealLeftSec > 0
+                      ? <>Mọi người đang xem bài… kết quả sau <b>{festivalRevealLeftSec}s</b></>
+                      : <>Nặn nốt đi nào, chờ mọi người lật hết…</>)
+                  : <>Nặn bài của bạn! Lật từng lá hoặc lật hết.</>}
+              </div>
+              <div className="festival-reveal-players">
+                {matchState.players.map(p => {
+                  const isMe = p.userId === myUserId;
+                  const revealedCards = (p.festivalRevealedCards ?? []).map(cardFromDto);
+                  return (
+                    <div key={p.userId} className={`festival-reveal-player ${isMe ? 'is-me' : ''}`}>
+                      <div className="festival-reveal-name">{isMe ? 'Bạn' : p.displayName}</div>
+                      <div className="festival-reveal-cards">
+                        {[0, 1, 2].map(i => {
+                          const card = i < revealedCards.length ? revealedCards[i] : null;
+                          return (
+                            <div key={i} className={`festival-card-slot ${card ? 'flipped' : ''}`}>
+                              <CardSvg card={card ?? undefined} faceDown={!card} size="sm" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {isMe && !myAllRevealed && (
+                        <div className="festival-reveal-actions">
+                          <button className="tlmn-btn ghost sm" onClick={() => handleFlipFestival(false)}>👆 Nặn 1 lá</button>
+                          <button className="tlmn-btn primary sm" onClick={() => handleFlipFestival(true)}>🃏 Lật hết</button>
+                        </div>
+                      )}
+                      {isMe && myAllRevealed && (
+                        <div className="festival-reveal-done">✓ Đã lật hết</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

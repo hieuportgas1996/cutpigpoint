@@ -989,3 +989,51 @@
   color: #ffd76a;
   opacity: 1;
 }
+
+/* Pha nặn bài lễ hội (FestivalReveal) */
+.tlmn-root .festival-reveal-card { max-width: 560px; }
+.tlmn-root .festival-reveal-sub {
+  text-align: center;
+  font-size: 14px;
+  color: #ffe9b0;
+  margin-bottom: 14px;
+}
+.tlmn-root .festival-reveal-players {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.tlmn-root .festival-reveal-player {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(212, 164, 69, 0.4);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.tlmn-root .festival-reveal-player.is-me {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(212, 164, 69, 0.35);
+}
+.tlmn-root .festival-reveal-name { font-weight: 700; font-size: 13px; }
+.tlmn-root .festival-reveal-cards { display: flex; gap: 6px; }
+.tlmn-root .festival-card-slot {
+  transition: transform 0.3s ease;
+}
+.tlmn-root .festival-card-slot.flipped {
+  animation: festivalFlip 0.45s ease;
+}
+@keyframes festivalFlip {
+  0%   { transform: rotateY(90deg) scale(0.9); opacity: 0.4; }
+  60%  { transform: rotateY(0deg) scale(1.08); opacity: 1; }
+  100% { transform: rotateY(0deg) scale(1); }
+}
+.tlmn-root .festival-reveal-actions { display: flex; gap: 6px; }
+.tlmn-root .festival-reveal-done { font-size: 12px; color: #7fdc95; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .tlmn-root .festival-reveal-players { grid-template-columns: 1fr; gap: 8px; }
+  .tlmn-root .festival-reveal-player { flex-direction: row; justify-content: space-between; }
+}

@@ -26,6 +26,7 @@ interface UseRoomConnectionResult {
   startVoteReset: () => Promise<void>;
   respondVoteReset: (accept: boolean) => Promise<void>;
   scheduleFestival: () => Promise<void>;
+  flipFestivalCard: (flipAll: boolean) => Promise<void>;
   respondWhiteWin: (accept: boolean) => Promise<void>;
   cutNewTrick: (cards: CardDto[]) => Promise<void>;
   declineTrickCut: () => Promise<void>;
@@ -229,6 +230,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('ScheduleFestival');
   }, []);
 
+  const flipFestivalCard = useCallback(async (flipAll: boolean) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('FlipFestivalCard', flipAll);
+  }, []);
+
   const respondWhiteWin = useCallback(async (accept: boolean) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -267,7 +274,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
   return {
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
-    playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival,
+    playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

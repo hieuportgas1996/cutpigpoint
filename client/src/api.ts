@@ -335,6 +335,7 @@ export const MatchStatus = {
   WhiteWinChoice: 3,
   PendingTrickCut: 4,
   VoteReset: 5,
+  FestivalReveal: 6,
 } as const;
 
 export interface MatchPlayerPublic {
@@ -353,6 +354,8 @@ export interface MatchPlayerPublic {
   hasUsedVoteReset: boolean;
   hasUsedFestival: boolean;
   festivalWinner: boolean;
+  festivalRevealed: number;
+  festivalRevealedCards: CardDto[] | null;
 }
 
 export interface MatchPublicState {
@@ -379,6 +382,9 @@ export interface MatchPublicState {
   pastFirstTrick: boolean;
   festivalScheduled: boolean;
   isFestivalRound: boolean;
+  festivalOrganizerId: string | null;
+  festivalRevealDeadline: string | null;
+  festivalAutoFlipDeadline: string | null;
 }
 
 export interface PrivateHand {
