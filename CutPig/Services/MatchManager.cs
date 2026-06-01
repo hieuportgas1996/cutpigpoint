@@ -677,13 +677,15 @@ public class MatchManager
 
         if (pardoned.Count >= 2)
         {
-            // Case C: victims share the last rank; pardoned continue playing normally
+            // Case C: victims share the last rank; pardoned continue playing normally.
+            // KHÔNG tăng FinishedCount cho victim — victim bị ghim ở hạng chót, còn pardoned mới là
+            // người "về tiếp theo" nên phải chiếm các hạng 2,3,... Nếu cộng FinishedCount ở đây thì
+            // pardoned về sau bị đẩy hạng sai (bug: pardoned về Nhì lại tính thành Ba).
             int lastRank = match.Players.Count;
             foreach (var v in victims)
             {
                 v.FinalRank = lastRank;
                 match.FinishOrder.Add(v.UserId);
-                match.FinishedCount++;
             }
             return false; // round continues with pardoned playing
         }

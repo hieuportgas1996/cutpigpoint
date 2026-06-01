@@ -168,6 +168,9 @@ export default function RoomPlayPage() {
   // ID người Nhất đang được hiển thị pháo hoa (chỉ khi roundEnd vừa bùng ra)
   const [winnerCelebration, setWinnerCelebration] = useState<string | null>(null);
   const lastCelebratedRoundRef = useRef<string | null>(null);
+  // ID người Nhì đang hiện cúp C2 (kích hoạt độc lập khi finalRank=2 xuất hiện — có thể sau Nhất)
+  const [runnerUpCelebration, setRunnerUpCelebration] = useState<string | null>(null);
+  const lastRunnerUpRoundRef = useRef<string | null>(null);
   const lastStickerSentAt = useRef<number>(0);
   const [stickerCooldownLeft, setStickerCooldownLeft] = useState(0);
 
@@ -340,6 +343,21 @@ export default function RoomPlayPage() {
     }, 3000);
     return () => clearTimeout(t);
   }, [matchState?.roundNumber, winnerUserId]);
+
+  // Cúp C2 cho người về Nhì — kích hoạt độc lập khi finalRank=2 xuất hiện (thường SAU Nhất,
+  // nên không dùng chung cửa sổ celebration của Nhất, nếu không sẽ lỡ mất).
+  const runnerUpUserId = matchState?.players.find(p => p.finalRank === 2)?.userId ?? null;
+  useEffect(() => {
+    if (!matchState || !runnerUpUserId) return;
+    const key = `${matchState.roundNumber}|${runnerUpUserId}`;
+    if (lastRunnerUpRoundRef.current === key) return;
+    lastRunnerUpRoundRef.current = key;
+    setRunnerUpCelebration(runnerUpUserId);
+    const t = setTimeout(() => {
+      setRunnerUpCelebration(prev => prev === runnerUpUserId ? null : prev);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [matchState?.roundNumber, runnerUpUserId]);
 
   // Track previous trick combo signature/kind to detect "3-đôi-thông / tứ quý vừa bị thay bằng combo
   // lớn hơn" → play ahh.mp3 (mọi user nghe).
@@ -682,7 +700,7 @@ export default function RoomPlayPage() {
                     </div>
                   </>
                 )}
-                {winnerCelebration && player.finalRank === 2 && (
+                {runnerUpCelebration === player.userId && (
                   <div className="seat-champion seat-runnerup" aria-hidden="true">
                     <EuropaTrophy size={70} />
                     <div className="seat-champion-caption">Á quân</div>
