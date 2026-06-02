@@ -61,7 +61,13 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
   if (r.chopBonus !== 0) parts.push({ label: '🐷 Chặt heo', value: r.chopBonus });
   if (r.judgeDelta !== 0) {
     if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử ăn', value: r.judgeDelta });
-    else if (r.judgeIsVictim) parts.push({ label: '⚖️ Bị xử', value: r.judgeDelta });
+    else if (r.judgeIsVictim) {
+      // Victim bị xử = −4 cố định + phạt giữ bài (held). Tách 2 dòng cho dễ hiểu, không gộp.
+      const fine = -4;
+      const heldPart = r.judgeDelta - fine; // = −held (judgeDelta = −(4+held))
+      parts.push({ label: '⚖️ Bị xử', value: fine });
+      if (heldPart !== 0) parts.push({ label: '🐷 Phạt giữ bài', value: heldPart });
+    }
     else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Đã ra bài', value: r.judgeDelta });
     else parts.push({ label: '⚖️ Phán xử', value: r.judgeDelta });
   }
