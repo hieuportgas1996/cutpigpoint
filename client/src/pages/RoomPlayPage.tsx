@@ -62,7 +62,7 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
   if (r.judgeDelta !== 0) {
     if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử ăn', value: r.judgeDelta });
     else if (r.judgeIsVictim) parts.push({ label: '⚖️ Bị xử', value: r.judgeDelta });
-    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Được tha', value: r.judgeDelta });
+    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Đã ra bài', value: r.judgeDelta });
     else parts.push({ label: '⚖️ Phán xử', value: r.judgeDelta });
   }
   if (r.threeOfSpadesDelta !== 0) {
