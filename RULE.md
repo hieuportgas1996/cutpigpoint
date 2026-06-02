@@ -255,7 +255,8 @@ Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (g
 - Player có Xì Dách/Vàng ngay 2 lá → lật + **chốt cặp với nhà cái ngay** (người khác chơi tiếp). Nhà cái Xì Dách/Vàng → lật hết, **ăn toàn bộ → kết thúc round**.
 
 ### So điểm (Nhà Cái vs từng Player) — zero-sum mỗi cặp
-- Nhà cái dừng rút → **chủ động bấm "Xét bài" từng player** (hoặc "Xét hết"), lật bài công khai. Nhà cái được **xét sớm** (ngay trong pha rút) với các player đã dừng, **miễn nhà cái đã đạt ≥15 điểm**.
+- Nhà cái dừng rút → **chủ động bấm "Xét bài" từng player** (hoặc "Xét hết"), lật bài công khai. Nhà cái được **xét sớm** (ngay trong pha rút) với các player đã dừng, **miễn nhà cái đã đạt ≥15 điểm** — và nhà cái **vẫn được rút tiếp** sau khi xét sớm.
+- **Kết quả chốt TẠI LÚC XÉT**: mỗi cặp tính theo tay nhà cái đúng thời điểm bấm "Xét". Nếu nhà cái xét sớm (vd 17đ) ăn player rồi sau đó **rút thêm tới quắc**, player **vẫn thua** — không bị đổi thành hòa.
 - Thắng/thua thường: **±2**. Bên thắng là **Ngũ Linh / Xì Vàng → ×2 (±4)**.
 - **Bằng điểm = hoà (0)**. **Cả 2 quắc = hoà (0)**. Nhà cái quắc → thua mọi player **không** quắc. Cả 2 cùng Xì Dách/Vàng → **Player thắng**.
 

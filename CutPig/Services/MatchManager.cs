@@ -114,6 +114,7 @@ public class MatchManager
             p.XiDachStood = false;
             p.XiDachSettled = false;
             p.XiDachDelta = 0;
+            p.XiDachBaseDelta = 0;
             p.XiDachRevealed = false;
             // HasUsedVoteReset / HasUsedFestival / HasUsedStarOfHope / HasUsedXiDach KHÔNG reset ở đây:
             // quyền là 1 lần / TRẬN (giữ qua các round), chỉ false mặc định khi MatchPlayer tạo trong Create.
@@ -324,23 +325,35 @@ public class MatchManager
         var dealerKind = XiDachEngine.Classify(dealer.Hand);
         if (dealerKind is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
         {
+            // Nhà cái đặc biệt sớm → chốt mọi cặp theo tay nhà cái HIỆN TẠI, kết thúc round.
+            foreach (var p in match.Players.Where(p => !p.IsXiDachDealer)) LockXiDachPair(match, p);
             EndXiDachRound(match);
             return;
         }
 
-        // Players đặc biệt sớm (Xì Dách / Xì Vàng) → đánh dấu "đã chốt" (delta tính ở EndXiDachRound), không rút.
+        // Players đặc biệt sớm (Xì Dách / Xì Vàng) → chốt cặp NGAY (theo tay nhà cái lúc này), không rút.
         foreach (var p in match.Players.Where(p => !p.IsXiDachDealer))
         {
             var k = XiDachEngine.Classify(p.Hand);
             if (k is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
-            {
-                p.XiDachSettled = true;
-                p.XiDachRevealed = true;
-            }
+                LockXiDachPair(match, p);
         }
 
         // Bắt đầu lượt rút theo thứ tự bóc (bên phải nhà cái, ngược kim đồng hồ = seat kế tiếp).
         AdvanceXiDachTurn(match, startFromBeginning: true);
+    }
+
+    /// <summary>
+    /// Chốt cặp player↔nhà cái TẠI THỜI ĐIỂM GỌI (dùng tay nhà cái hiện tại): lưu XiDachBaseDelta + đánh dấu
+    /// đã xét/lật. Idempotent (đã chốt thì bỏ qua). Nhà cái rút thêm sau KHÔNG đổi delta đã chốt này.
+    /// </summary>
+    private static void LockXiDachPair(Match match, MatchPlayer player)
+    {
+        if (player.IsXiDachDealer || player.XiDachSettled) return;
+        var dealer = match.Players.First(p => p.IsXiDachDealer);
+        player.XiDachBaseDelta = XiDachEngine.ComparePlayerDelta(dealer.Hand, player.Hand);
+        player.XiDachSettled = true;
+        player.XiDachRevealed = true;
     }
 
     /// <summary>Thứ tự bóc bài: players (không phải nhà cái) bắt đầu từ seat NGAY SAU nhà cái, vòng tròn.</summary>
@@ -416,13 +429,22 @@ public class MatchManager
         match.Status = MatchStatus.XiDachCompare;
     }
 
-    /// <summary>Kết thúc round xì dách: tính delta CẢ ROUND (có luật đền), lật hết, sang WaitingNextRound.</summary>
+    /// <summary>
+    /// Kết thúc round xì dách: chốt nốt cặp chưa xét (theo tay nhà cái CUỐI), rồi áp luật đền trên các
+    /// XiDachBaseDelta đã chốt (mỗi cặp đã cố định tại lúc xét). Lật hết, sang WaitingNextRound.
+    /// </summary>
     private static void EndXiDachRound(Match match)
     {
         var dealer = match.Players.First(p => p.IsXiDachDealer);
-        var order = XiDachDrawOrder(match); // players theo thứ tự bóc — quan trọng cho luật đền (ai gánh)
-        var (dealerDelta, playerDeltas) = XiDachEngine.ComputeRoundDeltas(
-            dealer.Hand, order.Select(p => (IReadOnlyList<Card>)p.Hand).ToList());
+        // Chốt nốt player chưa xét theo tay nhà cái hiện tại (cuối round).
+        foreach (var p in match.Players.Where(p => !p.IsXiDachDealer && !p.XiDachSettled))
+            LockXiDachPair(match, p);
+
+        var order = XiDachDrawOrder(match); // thứ tự bóc — quyết định ai là người đền gánh
+        // Áp đền redirect trên base delta đã chốt.
+        var (dealerDelta, playerDeltas) = XiDachEngine.RedirectDenDeltas(
+            order.Select(p => p.XiDachBaseDelta).ToArray(),
+            order.Select(p => XiDachEngine.IsDen(p.Hand)).ToArray());
 
         foreach (var p in match.Players) { p.XiDachDelta = 0; p.XiDachRevealed = true; p.XiDachSettled = true; }
         dealer.XiDachDelta = dealerDelta;
@@ -527,19 +549,17 @@ public class MatchManager
                     throw new InvalidOperationException("Đã xét người này rồi.");
                 if (!playerDone(target))
                     throw new InvalidOperationException("Người này chưa dừng rút bài.");
-                target.XiDachSettled = true;
-                target.XiDachRevealed = true;
+                // Chốt cặp NGAY theo tay nhà cái HIỆN TẠI (xét sớm 17đ → so với 17, nhà cái rút sau không đổi).
+                LockXiDachPair(match, target);
             }
             else
             {
-                // Xét hết: đánh dấu mọi player ĐÃ XONG chưa xét.
-                foreach (var p in match.Players.Where(p => !p.IsXiDachDealer && !p.XiDachSettled && playerDone(p)))
-                {
-                    p.XiDachSettled = true;
-                    p.XiDachRevealed = true;
-                }
+                // Xét hết: chốt mọi player ĐÃ XONG chưa xét theo tay nhà cái hiện tại.
+                foreach (var p in match.Players.Where(p => !p.IsXiDachDealer && !p.XiDachSettled && playerDone(p)).ToList())
+                    LockXiDachPair(match, p);
             }
-            dealer.XiDachStood = true; // nhà cái xét = chốt tay nhà cái luôn
+            // Chỉ chốt tay nhà cái khi đang ở PHA SO (nhà cái đã dừng rút). Xét SỚM → nhà cái vẫn rút tiếp được.
+            if (match.Status == MatchStatus.XiDachCompare) dealer.XiDachStood = true;
 
             // Hết người chưa xét → kết thúc round.
             if (!match.Players.Any(p => !p.IsXiDachDealer && !p.XiDachSettled))

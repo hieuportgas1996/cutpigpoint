@@ -189,6 +189,18 @@ public class XiDachTests
     }
 
     [Fact]
+    public void RedirectDen_OnLockedBaseDeltas()
+    {
+        // base deltas đã chốt: [đền(-2 tự thua), P3 thua -2, P4 ăn +2]; isDen=[true,false,false].
+        var (dealerDelta, pd) = XiDachEngine.RedirectDenDeltas(new[] { -2, -2, 2 }, new[] { true, false, false });
+        Assert.Equal(-6, pd[0]); // đền gánh: tự -2, thay P3 -2, thay nhà cái cho P4 -2
+        Assert.Equal(0, pd[1]);  // P3 được gánh
+        Assert.Equal(2, pd[2]);  // P4 vẫn ăn
+        Assert.Equal(4, dealerDelta);
+        Assert.Equal(0, dealerDelta + pd.Sum());
+    }
+
+    [Fact]
     public void NoDen_NormalPairs()
     {
         var dealer = new[] { C(9), C(9, Suit.Hearts) };   // 18
@@ -204,6 +216,49 @@ public class XiDachTests
 
     private static readonly MethodInfo DealXiDachMethod =
         typeof(MatchManager).GetMethod("DealXiDachRound", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo LockPairMethod =
+        typeof(MatchManager).GetMethod("LockXiDachPair", BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo EndRoundMethod =
+        typeof(MatchManager).GetMethod("EndXiDachRound", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    [Fact]
+    public void EarlyCompare_LocksResult_DealerBustsLater_PlayerStillLoses()
+    {
+        // P1 nhà cái lúc xét = 17 (8+9). P2 quắc 22 → xét sớm: P2 thua (-2) CHỐT theo tay 17.
+        // Sau đó nhà cái rút thêm thành quắc 23. Kết thúc round: P2 VẪN thua -2 (không thành hòa).
+        var mgr = new MatchManager();
+        var roomId = System.Guid.NewGuid();
+        var ids = Enumerable.Range(0, 2).Select(_ => System.Guid.NewGuid()).ToArray();
+        var match = mgr.Create(roomId, ids[0],
+            ids.Select((id, i) => (id, $"P{i + 1}", i, false)).ToList());
+        match.IsXiDachRound = true;
+        DealXiDachMethod.Invoke(null, new object[] { match, ids[0] });
+
+        var dealer = match.Players[0];
+        var p2 = match.Players[1];
+        dealer.IsXiDachDealer = true; p2.IsXiDachDealer = false;
+        match.XiDachDealerId = ids[0];
+
+        // Set tay: nhà cái 17 (8♠ + 9♠), P2 quắc 22 (10+10+2).
+        dealer.Hand.Clear(); dealer.Hand.Add(C(8)); dealer.Hand.Add(C(9));
+        p2.Hand.Clear(); p2.Hand.Add(C(13)); p2.Hand.Add(C(12)); p2.Hand.Add(C(15)); // 10+10+2 = 22
+        p2.XiDachStood = true;
+
+        // Xét sớm P2 (nhà cái 17) → chốt base delta -2.
+        LockPairMethod.Invoke(null, new object[] { match, p2 });
+        Assert.Equal(-2, p2.XiDachBaseDelta);
+
+        // Nhà cái rút thêm → quắc 23 (thêm K = 10 → 27? dùng 6 → 23).
+        dealer.Hand.Add(C(6)); // 8+9+6 = 23 quắc
+        dealer.XiDachStood = true;
+
+        EndRoundMethod.Invoke(null, new object[] { match });
+
+        // P2 VẪN thua -2 (chốt tại lúc xét), nhà cái +2 — dù nhà cái cuối cùng quắc.
+        Assert.Equal(-2, p2.XiDachDelta);
+        Assert.Equal(2, dealer.XiDachDelta);
+    }
 
     [Fact]
     public void FullRound_DriveToEnd_ZeroSum_AllSettled()

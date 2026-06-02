@@ -59,8 +59,10 @@ public class MatchPlayer
     public bool XiDachStood { get; set; }
     /// <summary>True khi cặp player↔nhà cái này đã được chốt điểm (xì dách/vàng lật sớm, hoặc nhà cái đã bấm So).</summary>
     public bool XiDachSettled { get; set; }
-    /// <summary>Điểm round xì dách player này nhận (zero-sum với nhà cái). Lưu để build round-end.</summary>
+    /// <summary>Điểm round xì dách player này nhận (zero-sum với nhà cái, ĐÃ áp đền). Lưu để build round-end.</summary>
     public int XiDachDelta { get; set; }
+    /// <summary>Delta player↔nhà cái CHỐT TẠI LÚC XÉT (theo tay nhà cái thời điểm đó), CHƯA áp redirect đền. Nhà cái rút thêm sau không đổi.</summary>
+    public int XiDachBaseDelta { get; set; }
     /// <summary>True nếu bài player này đã được lật công khai (đặc biệt sớm / đã so).</summary>
     public bool XiDachRevealed { get; set; }
     /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>

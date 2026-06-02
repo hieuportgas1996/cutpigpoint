@@ -180,18 +180,30 @@ public static class XiDachEngine
     public static (int DealerDelta, int[] PlayerDeltas) ComputeRoundDeltas(
         IReadOnlyList<Card> dealer, IReadOnlyList<IReadOnlyList<Card>> players)
     {
-        int n = players.Count;
+        var baseDeltas = players.Select(p => ComparePlayerDelta(dealer, p)).ToArray();
+        var isDen = players.Select(p => IsDen(p)).ToArray();
+        return RedirectDenDeltas(baseDeltas, isDen);
+    }
+
+    /// <summary>
+    /// Áp luật "đền" trên các base delta ĐÃ CHỐT (mỗi cặp player↔nhà cái đã cố định tại lúc xét).
+    /// `baseDeltas[i]` = delta player i nhận (vs nhà cái) tại lúc xét; `isDen[i]` = player i có ≥28 không.
+    /// Trả về (dealerDelta, playerDeltas) sau redirect. Cùng quy tắc với mô tả ComputeRoundDeltas.
+    /// </summary>
+    public static (int DealerDelta, int[] PlayerDeltas) RedirectDenDeltas(int[] baseDeltas, bool[] isDen)
+    {
+        int n = baseDeltas.Length;
         var pd = new int[n];
         int dealerDelta = 0;
 
-        // Người đền gánh = người đền đầu tiên theo thứ tự bóc.
+        // Người đền gánh = người đền đầu tiên (theo thứ tự bóc / thứ tự mảng).
         int absorber = -1;
         for (int i = 0; i < n; i++)
-            if (IsDen(players[i])) { absorber = i; break; }
+            if (isDen[i]) { absorber = i; break; }
 
         for (int i = 0; i < n; i++)
         {
-            int d = ComparePlayerDelta(dealer, players[i]); // delta player i nhận (vs nhà cái)
+            int d = baseDeltas[i]; // delta player i nhận (vs nhà cái), đã chốt tại lúc xét
 
             if (i == absorber)
             {

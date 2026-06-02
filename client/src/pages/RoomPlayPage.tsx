@@ -1334,7 +1334,7 @@ export default function RoomPlayPage() {
                       className="tlmn-options-item"
                       onClick={() => { setOptionsMenuOpen(false); setXiDachConfirmOpen(true); }}
                     >
-                      🃏 Sát Phạt (Xì Dách)
+                      🃏 Tổ chức Sát Phạt
                     </button>
                   )}
                   {canSurrender && (
