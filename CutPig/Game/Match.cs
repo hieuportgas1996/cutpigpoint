@@ -42,6 +42,11 @@ public class MatchPlayer
 
     /// <summary>True khi player đã dùng quyền "Tổ chức lễ hội" — 1 lần / TRẬN (giữ qua round, không reset ở DealRound).</summary>
     public bool HasUsedFestival { get; set; }
+
+    /// <summary>True khi player đã dùng quyền "Ngôi Sao Hi Vọng" — 1 lần / TRẬN (giữ qua round, không reset ở DealRound).</summary>
+    public bool HasUsedStarOfHope { get; set; }
+    /// <summary>True khi player này LÀ Ngôi Sao Hi Vọng của round HIỆN TẠI (điểm giao dịch với người này ×2). Reset ở DealRound.</summary>
+    public bool IsStarOfHope { get; set; }
     /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>
     public bool FestivalWinner { get; set; }
     /// <summary>Các index lá bài Cào Rùa player đã lật (0..2) — lật bất kỳ thứ tự nào. Mỗi người tự lật bài mình.</summary>
@@ -94,6 +99,9 @@ public class Match
     public bool IsFestivalRound { get; set; }
     /// <summary>UserId người đã tổ chức lễ hội cho round này (để hiển thị "ai tổ chức").</summary>
     public Guid? FestivalOrganizerId { get; set; }
+
+    /// <summary>UserId người đã kích hoạt "Ngôi Sao Hi Vọng" → round KẾ TIẾP người này là star (điểm ×2). Chỉ 1 người/round được kích. Null = chưa ai.</summary>
+    public Guid? StarOfHopeScheduledUserId { get; set; }
     /// <summary>Hết hạn pha nặn bài: khi mọi người lật hết 3 lá → set now+5s để xem rồi mới resolve.</summary>
     public DateTime? FestivalRevealDeadline { get; set; }
     /// <summary>Hết hạn auto-lật: nếu sau 60s vẫn còn lá chưa lật → tự lật hết.</summary>

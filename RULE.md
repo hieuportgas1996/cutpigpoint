@@ -191,6 +191,38 @@ Khi ván **không có phán xử** (không ai bị xử) mà người về **Ch�
 - Phạt held: P4 -3 (3 đôi thông), P3 (hạng kế trên) +3.
 - Tổng ván: P1 +2, P2 +1, P3 +2, P4 -5.
 
+## Ngôi Sao Hi Vọng (×2 giao dịch)
+
+Mỗi người chơi có **đúng 1 lần / trận** để kích hoạt "Ngôi Sao Hi Vọng" (giống Vote bỏ bài / Tổ chức lễ hội — dùng rồi mất quyền vĩnh viễn). Bấm bất kỳ lúc nào trong round đang chơi; hiệu lực áp vào **round KẾ TIẾP**. Chỉ **1 người/round** được kích — ai bấm trước thì nút của người khác bị ẩn cho round đó.
+
+Trong suốt round Ngôi Sao Hi Vọng, hiển thị icon **⭐ vàng chói** tại seat của player đó. Hết round → icon biến mất, quyền đã tiêu.
+
+### Cơ chế tính điểm
+
+**Nguyên tắc**: điểm round tính **hoàn toàn bình thường** (xếp hạng, chặt heo, tứ quý, về trắng, phán xử, held…). Sau đó, **mọi giao dịch điểm GIỮA player Ngôi Sao và bất kỳ người nào khác được nhân ×2** (cả 2 chiều thắng/thua). Giao dịch **không dính** Ngôi Sao giữ nguyên.
+
+Mô hình "đối tiền theo cặp" (giống tiền thật TLMN):
+- **Xếp hạng 4 người**: Nhất↔Bét (±2), Nhì↔Ba (±1). Ngôi Sao chỉ ×2 **cặp chứa mình**.
+- **Xếp hạng 3 người**: Nhất↔Bét (±2), Nhì = 0 (không giao dịch).
+- **Xếp hạng 2 người**: Nhất↔Bét (±1).
+- **Chặt heo / tứ quý / đôi thông**: cặp người chặt cuối ↔ người bị chặt cuối.
+- **Về trắng / lễ hội**: mỗi người thua ↔ mỗi người trắng/thắng.
+- **Phán xử**: nạn nhân ↔ người Nhất; sub-round pardoned đối tiền với nhau.
+- **Held (chót còn hàng)**: chót ↔ người kế trên.
+
+### Ví dụ (4 người, P1 = Ngôi Sao)
+
+| Tình huống | Điểm cơ bản | Sau ×2 |
+|---|---|---|
+| P1 Nhất, P2 Nhì, P3 Ba, P4 Bét | +2 / +1 / −1 / −2 | **P1 +4**, P2 +1, P3 −1, **P4 −4** |
+| P1 Nhì (star), Nhất/Ba/Bét khác | +2 / +1 / −1 / −2 | Nhất +2, **P1(Nhì) +2**, **Ba −2**, Bét −2 |
+| P1 Nhất chặt heo P4 (pot 2) | P1 +4, P4 −4 (rank+chop) | **P1 +8**, **P4 −8**, Nhì +1, Ba −1 |
+| P1 về trắng (sole winner) | P1 +6, mỗi người −2 | **P1 +12**, mỗi người **−4** |
+| P1 Nhất phán xử (3 victim held=0) | P1 +12, mỗi victim −4 | **P1 +24**, mỗi victim **−8** |
+| P1 Bét (P4 Nhất) | P1 −2, P4 +2 | **P1 −4**, **P4 +4** (đối tiền với star) |
+
+**Lưu ý**: dùng **base THẬT của game** (về trắng sole winner = +6/−2) rồi ×2 → +12/−4. Combo thưởng/phạt vẫn tính bình thường **trước** khi ×2.
+
 ## Trận đấu nhiều ván
 
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.

@@ -212,7 +212,9 @@ public class MatchTimerService : BackgroundService
                 p.FestivalRevealedIdx.Count,
                 m.IsFestivalRound
                     ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
-                    : null)).ToList(),
+                    : null,
+                p.HasUsedStarOfHope,
+                p.IsStarOfHope)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -227,6 +229,7 @@ public class MatchTimerService : BackgroundService
             m.IsFestivalRound,
             m.FestivalOrganizerId,
             m.FestivalRevealDeadline,
-            m.FestivalAutoFlipDeadline);
+            m.FestivalAutoFlipDeadline,
+            m.StarOfHopeScheduledUserId);
     }
 }

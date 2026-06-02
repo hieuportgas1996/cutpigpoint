@@ -75,6 +75,9 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
     const label = r.heldPenaltyDelta < 0 ? '🐷 Chót còn hàng' : '🐷 Ăn phạt Chót';
     parts.push({ label, value: r.heldPenaltyDelta });
   }
+  if (r.starDelta !== 0) {
+    parts.push({ label: '⭐ Ngôi Sao Hi Vọng (×2)', value: r.starDelta });
+  }
   return parts;
 }
 
@@ -90,7 +93,7 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
               {r.whiteWinReason ? '★' : RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}
             </span>
             <div className="match-end-name">
-              <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+              <div>{r.isStar && '⭐ '}{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
               {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
               {held.length > 0 && (
                 <div className="held-items">
@@ -175,7 +178,7 @@ export default function RoomPlayPage() {
     status, state: room, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
-    surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard,
+    surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -198,6 +201,8 @@ export default function RoomPlayPage() {
   const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement | null>(null);
   const lastFestivalAnnouncedRef = useRef<string | null>(null);
+  const lastStarAnnouncedRef = useRef<string | null>(null);
+  const [starConfirmOpen, setStarConfirmOpen] = useState(false);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -516,6 +521,17 @@ export default function RoomPlayPage() {
     ? matchState.players.find(p => p.userId === matchState.festivalOrganizerId)?.displayName ?? ''
     : '';
 
+  // Ngôi Sao Hi Vọng: kích được nếu đang chơi, chưa ai kích round này, chưa phải round lễ hội, chưa dùng quyền.
+  const myHasUsedStar = me?.hasUsedStarOfHope ?? false;
+  const starScheduledUserId = matchState?.starOfHopeScheduledUserId ?? null;
+  const canActivateStar = matchState?.status === MatchStatus.InProgress
+    && !starScheduledUserId
+    && !matchState.isFestivalRound
+    && !myHasUsedStar;
+  const starScheduledName = starScheduledUserId
+    ? matchState?.players.find(p => p.userId === starScheduledUserId)?.displayName ?? ''
+    : '';
+
   // Pha nặn bài lễ hội (FestivalReveal) — hiện bài Cào Rùa NGAY TẠI SEAT mỗi người (không modal).
   const isFestivalReveal = matchState?.status === MatchStatus.FestivalReveal;
   const myFestivalRevealed = me?.festivalRevealed ?? 0;
@@ -561,6 +577,16 @@ export default function RoomPlayPage() {
     const who = matchState?.festivalOrganizerId === myUserId ? 'Bạn' : festivalOrganizerName;
     toast.push('info', `🎉 ${who} đã tổ chức lễ hội — round sau chơi Cào Rùa!`);
   }, [festivalScheduled, matchState?.festivalOrganizerId, matchState?.roundNumber, matchState?.isFestivalRound]);
+
+  // Thông báo (mọi người) khi có người kích Ngôi Sao Hi Vọng cho round sau — 1 lần / lượt kích.
+  useEffect(() => {
+    if (!starScheduledUserId) return;
+    const key = `${matchState?.roundNumber}|${starScheduledUserId}`;
+    if (lastStarAnnouncedRef.current === key) return;
+    lastStarAnnouncedRef.current = key;
+    const who = starScheduledUserId === myUserId ? 'Bạn' : starScheduledName;
+    toast.push('info', `⭐ ${who} đã kích Ngôi Sao Hi Vọng — round sau điểm giao dịch với ${starScheduledUserId === myUserId ? 'bạn' : 'họ'} sẽ ×2!`);
+  }, [starScheduledUserId, matchState?.roundNumber]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -699,6 +725,13 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleActivateStar() {
+    setStarConfirmOpen(false);
+    // Toast thông báo do effect starScheduledUserId lo (cho cả mọi người), tránh double-toast ở đây.
+    try { await activateStarOfHope(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   async function handleFlipFestival(flipAll: boolean, cardIndex: number) {
     try { await flipFestivalCard(flipAll, cardIndex); }
     catch (e) { toast.push('error', (e as Error).message); }
@@ -783,9 +816,11 @@ export default function RoomPlayPage() {
               && matchState.status === MatchStatus.InProgress;
             const isMe = player.userId === myUserId;
             const bubble = seatBubbles[player.userId];
+            const isStar = player.isStarOfHope;
             return (
-              <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''}`}>
+              <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''} ${isStar ? 'is-star' : ''}`}>
                 {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
+                {isStar && <div className="seat-star-badge" title="Ngôi Sao Hi Vọng — điểm giao dịch ×2">⭐</div>}
                 <div className="tlmn-avatar">
                   {player.hasAvatar
                     ? <img src={api.userAvatarUrl(player.userId)} alt={player.displayName} />
@@ -987,12 +1022,12 @@ export default function RoomPlayPage() {
           >
             {autoPass ? '⏸ Tắt qua lượt tự động' : '⏩ Qua lượt tự động'}
           </button>
-          {(canStartVoteReset || canSurrender || canScheduleFestival) && (
+          {(canStartVoteReset || canSurrender || canScheduleFestival || canActivateStar) && (
             <div className="tlmn-options" ref={optionsMenuRef}>
               <button
                 className={`tlmn-btn ghost ${optionsMenuOpen ? 'auto-pass-on' : ''}`}
                 onClick={() => setOptionsMenuOpen(o => !o)}
-                title="Tùy chọn: vote bỏ bài / đầu hàng / tổ chức lễ hội"
+                title="Tùy chọn: vote bỏ bài / đầu hàng / tổ chức lễ hội / Ngôi Sao Hi Vọng"
               >
                 ⋯ Tùy chọn
               </button>
@@ -1012,6 +1047,14 @@ export default function RoomPlayPage() {
                       onClick={() => { setOptionsMenuOpen(false); handleScheduleFestival(); }}
                     >
                       🎉 Tổ chức lễ hội
+                    </button>
+                  )}
+                  {canActivateStar && (
+                    <button
+                      className="tlmn-options-item star"
+                      onClick={() => { setOptionsMenuOpen(false); setStarConfirmOpen(true); }}
+                    >
+                      ⭐ Ngôi Sao Hi Vọng
                     </button>
                   )}
                   {canSurrender && (
@@ -1068,6 +1111,22 @@ export default function RoomPlayPage() {
               <div className="match-end-actions">
                 <button className="tlmn-btn ghost danger" onClick={handleSurrender}>🏳 Đồng ý đầu hàng</button>
                 <button className="tlmn-btn primary" onClick={() => setSurrenderConfirmOpen(false)}>Bỏ</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {starConfirmOpen && canActivateStar && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setStarConfirmOpen(false)}>
+            <div className="match-end-card" onClick={e => e.stopPropagation()}>
+              <h2>⭐ Ngôi Sao Hi Vọng?</h2>
+              <div className="next-round-countdown">
+                Kích cho <b>round kế tiếp</b>: mọi điểm bạn <b>thắng/thua</b> với từng người sẽ được <b>×2</b> (cả 2 chiều).
+                Mỗi trận chỉ dùng <b>1 lần</b> — dùng rồi mất quyền vĩnh viễn.
+              </div>
+              <div className="match-end-actions">
+                <button className="tlmn-btn primary" onClick={handleActivateStar}>⭐ Kích ngay</button>
+                <button className="tlmn-btn ghost" onClick={() => setStarConfirmOpen(false)}>Để sau</button>
               </div>
             </div>
           </div>

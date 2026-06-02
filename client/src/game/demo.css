@@ -95,6 +95,44 @@
   }
 }
 
+/* Ngôi Sao Hi Vọng — seat của star phát sáng vàng chói + badge ⭐ */
+.tlmn-seat.is-star {
+  border-color: #ffd700;
+  border-width: 3px;
+  background: linear-gradient(145deg, #5a4410, #7a5a1a);
+  box-shadow:
+    0 8px 24px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 22px 6px rgba(255, 215, 0, 0.7);
+  animation: star-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes star-glow {
+  0%, 100% { box-shadow: 0 8px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 18px 4px rgba(255, 215, 0, 0.55); }
+  50% { box-shadow: 0 8px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 34px 12px rgba(255, 215, 0, 0.95); }
+}
+
+.seat-star-badge {
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  font-size: 26px;
+  z-index: 8;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.9));
+  animation: star-spin 3s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes star-spin {
+  0%, 100% { transform: scale(1) rotate(-12deg); }
+  50% { transform: scale(1.18) rotate(12deg); }
+}
+
+.tlmn-options-item.star {
+  color: #ffe26b;
+  font-weight: 700;
+}
+
 .tlmn-seat-top { top: 16px; left: 50%; transform: translateX(-50%); }
 .tlmn-seat-left { left: 16px; top: 50%; transform: translateY(-50%); }
 .tlmn-seat-right { right: 16px; top: 50%; transform: translateY(-50%); }

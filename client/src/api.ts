@@ -356,6 +356,8 @@ export interface MatchPlayerPublic {
   festivalWinner: boolean;
   festivalRevealed: number;
   festivalCardSlots: (CardDto | null)[] | null;
+  hasUsedStarOfHope: boolean;
+  isStarOfHope: boolean;
 }
 
 export interface MatchPublicState {
@@ -385,6 +387,7 @@ export interface MatchPublicState {
   festivalOrganizerId: string | null;
   festivalRevealDeadline: string | null;
   festivalAutoFlipDeadline: string | null;
+  starOfHopeScheduledUserId: string | null;
 }
 
 export interface PrivateHand {
@@ -417,6 +420,8 @@ export interface RoundResultEntry {
   festivalWinner: boolean;
   festivalCards: CardDto[] | null;
   festivalLabel: string | null;
+  starDelta: number;
+  isStar: boolean;
 }
 
 export interface HeldItems {

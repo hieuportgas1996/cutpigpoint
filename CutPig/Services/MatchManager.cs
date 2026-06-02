@@ -107,11 +107,21 @@ public class MatchManager
             p.VoteResetChoice = null;
             p.FestivalWinner = false;
             p.FestivalRevealedIdx.Clear();
-            // HasUsedVoteReset / HasUsedFestival KHÔNG reset ở đây: quyền là 1 lần / TRẬN (giữ qua các round),
+            p.IsStarOfHope = false;
+            // HasUsedVoteReset / HasUsedFestival / HasUsedStarOfHope KHÔNG reset ở đây: quyền là 1 lần / TRẬN (giữ qua các round),
             // chỉ false mặc định khi MatchPlayer được tạo trong Create.
         }
         match.FestivalRevealDeadline = null;
         match.FestivalAutoFlipDeadline = null;
+
+        // Ngôi Sao Hi Vọng: tiêu cờ đã đặt lịch round trước → round NÀY người đó là star (điểm giao dịch ×2).
+        // Áp cho cả round thường lẫn round lễ hội.
+        if (match.StarOfHopeScheduledUserId is Guid starId)
+        {
+            var star = match.Players.FirstOrDefault(p => p.UserId == starId);
+            if (star != null) star.IsStarOfHope = true;
+            match.StarOfHopeScheduledUserId = null;
+        }
 
         // Round lễ hội (Cào Rùa): tiêu cờ FestivalScheduled → round này là festival.
         match.IsFestivalRound = match.FestivalScheduled;
@@ -941,8 +951,11 @@ public class MatchManager
             int keepRound = match.RoundNumber;
             bool keepEnforce3S = match.EnforceThreeSpadesOpening;
             bool keepFestivalScheduled = match.FestivalScheduled; // vote-reset KHÔNG biến round hiện tại thành lễ hội
+            // Ngôi Sao Hi Vọng đã kích cho ROUND HIỆN TẠI phải sống sót qua re-deal (star vẫn là star ở bài mới).
+            Guid? keepStarId = match.Players.FirstOrDefault(p => p.IsStarOfHope)?.UserId;
             match.VoteResetDeadline = null;
             match.VoteResetInitiatorId = null;
+            match.StarOfHopeScheduledUserId = keepStarId;        // DealRound tiêu lại để re-set IsStarOfHope cho bài mới
             DealRound(match, isFirstRound: false);
             match.FestivalScheduled = keepFestivalScheduled;     // hoàn lại lịch lễ hội cho round SAU
             match.RoundNumber = keepRound;                       // DealRound đã +1, hoàn lại để không nhảy số ván
@@ -987,6 +1000,32 @@ public class MatchManager
             match.FestivalScheduled = true;
             match.FestivalOrganizerId = userId;
             player.HasUsedFestival = true;
+            return match;
+        }
+    }
+
+    /// <summary>
+    /// Player kích hoạt "Ngôi Sao Hi Vọng": round KẾ TIẾP người này là star (mọi giao dịch điểm với
+    /// player này ×2). Bất kỳ lúc nào trong round đang chơi. Chỉ 1 người/round được kích
+    /// (StarOfHopeScheduledUserId), mỗi người 1 lần/TRẬN (HasUsedStarOfHope). Round hiện tại không đổi.
+    /// </summary>
+    public Match ActivateStarOfHope(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.IsFestivalRound)
+                throw new InvalidOperationException("Đang trong round lễ hội rồi.");
+            if (match.StarOfHopeScheduledUserId.HasValue)
+                throw new InvalidOperationException("Đã có người kích Ngôi Sao Hi Vọng cho round sau.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.HasUsedStarOfHope)
+                throw new InvalidOperationException("Bạn đã dùng quyền Ngôi Sao Hi Vọng trong trận này.");
+
+            match.StarOfHopeScheduledUserId = userId;
+            player.HasUsedStarOfHope = true;
             return match;
         }
     }
@@ -1169,7 +1208,7 @@ public class MatchManager
                 }
             }
             // winnerCnt == n (mọi người đồng hạng) → hoà, scores giữ 0.
-            return scores;
+            return ApplyStarOfHopeDoubling(match, scores);
         }
 
         // White-win path: each loser pays 2 per winner; winners share the total equally.
@@ -1184,13 +1223,13 @@ public class MatchManager
             {
                 scores[i] = match.Players[i].WhiteWinReason != null ? perWinner : perLoser;
             }
-            return scores;
+            return ApplyStarOfHopeDoubling(match, scores);
         }
 
         // Phán xử path: replaces base rank + chop-pig + 3♠ scoring entirely.
         if (match.JudgeTriggered)
         {
-            return ComputeJudgeScores(match);
+            return ApplyStarOfHopeDoubling(match, ComputeJudgeScores(match));
         }
 
         // Normal path: base rank score + chop-pig settlements + 3♠ bonus/penalty.
@@ -1251,7 +1290,259 @@ public class MatchManager
             }
         }
 
-        return scores;
+        return ApplyStarOfHopeDoubling(match, scores);
+    }
+
+    /// <summary>
+    /// Ngôi Sao Hi Vọng: nhân ×2 mọi GIAO DỊCH điểm liên quan tới player star (cả 2 chiều thắng/thua),
+    /// các giao dịch không dính star giữ nguyên. Mô hình "đôi đối xứng theo hạng": phân tách điểm ván
+    /// thành các giao dịch theo cặp (base rank: Nhất↔Bét, Nhì↔Ba; chop: cutter↔victim; held: chót↔kế trên;
+    /// 3♠/về-trắng/phán-xử: theo cặp tương ứng), rồi nhân đôi cặp nào chứa star.
+    ///
+    /// Cách làm: xây ma trận giao dịch T[from,to] (from trả to amount ≥ 0) sao cho
+    /// base[i] = Σ_j (T[j,i] − T[i,j]). Sau đó với mỗi cặp (star, j): cộng thêm chính giao dịch đó 1 lần
+    /// nữa (×2). Vì T zero-sum theo cặp nên kết quả vẫn zero-sum. Phần phi-zero-sum (đui 3♠ khi n&lt;4)
+    /// xử lý riêng: nhân đôi delta của star trực tiếp.
+    ///
+    /// Nếu không có star trong round → trả về scores nguyên vẹn (không đổi hành vi cũ).
+    /// </summary>
+    private static int[] ApplyStarOfHopeDoubling(Match match, int[] scores)
+    {
+        int n = match.Players.Count;
+        int starIdx = -1;
+        for (int i = 0; i < n; i++) if (match.Players[i].IsStarOfHope) { starIdx = i; break; }
+        if (starIdx < 0) return scores;
+
+        var t = BuildTransactionMatrix(match, scores, out int[] residual);
+
+        // Reconcile: đảm bảo Σ_j(T[j,i]−T[i,j]) + residual[i] == scores[i]. Phần lệch (nếu có do làm
+        // tròn / case hiếm) dồn vào residual để không bao giờ sai tổng — residual chỉ ×2 cho star.
+        for (int i = 0; i < n; i++)
+        {
+            int pairNet = 0;
+            for (int j = 0; j < n; j++) pairNet += t[j, i] - t[i, j];
+            residual[i] = scores[i] - pairNet; // residual hấp thụ toàn bộ phần không theo cặp
+        }
+
+        var result = (int[])scores.Clone();
+        // Nhân đôi mọi giao dịch theo cặp dính star: cộng thêm 1 lần nữa (net j→star).
+        for (int j = 0; j < n; j++)
+        {
+            if (j == starIdx) continue;
+            int extraToStar = t[j, starIdx] - t[starIdx, j]; // dương = j trả star
+            result[starIdx] += extraToStar;
+            result[j] -= extraToStar;
+        }
+        // Phần residual (phi-zero-sum, vd đui 3♠ với n<4): nhân đôi phần của star.
+        result[starIdx] += residual[starIdx];
+        return result;
+    }
+
+    /// <summary>
+    /// Phân tách scores hiện tại thành ma trận giao dịch theo cặp T[from,to] (from trả to, ≥0).
+    /// `residual` được caller tính lại = scores − net(T) để hấp thụ phần phi-cặp (vd đui 3♠ n&lt;4).
+    /// Chỉ cần build các cặp dính star cho ĐÚNG; phần còn lại rơi vào residual cũng không sai tổng.
+    /// </summary>
+    private static int[,] BuildTransactionMatrix(Match match, int[] scores, out int[] residual)
+    {
+        int n = match.Players.Count;
+        var t = new int[n, n];
+        residual = new int[n];
+
+        if (match.IsFestivalRound)
+        {
+            DecomposeWinnersLosers(match, t, p => p.FestivalWinner, isWhiteWin: false);
+            return t;
+        }
+        if (match.Players.Any(p => p.WhiteWinReason != null))
+        {
+            DecomposeWinnersLosers(match, t, p => p.WhiteWinReason != null, isWhiteWin: true);
+            return t;
+        }
+        if (match.JudgeTriggered)
+        {
+            DecomposeJudge(match, t);
+            return t;
+        }
+        DecomposeNormalRound(match, t);
+        return t;
+    }
+
+    /// <summary>Phân tách kiểu winner/loser (về trắng &amp; lễ hội): mỗi loser trả cho từng winner phần tương ứng.</summary>
+    private static void DecomposeWinnersLosers(Match match, int[,] t, Func<MatchPlayer, bool> isWinner, bool isWhiteWin)
+    {
+        int n = match.Players.Count;
+        var winners = Enumerable.Range(0, n).Where(i => isWinner(match.Players[i])).ToList();
+        var losers = Enumerable.Range(0, n).Where(i => !isWinner(match.Players[i])).ToList();
+        if (winners.Count == 0 || losers.Count == 0) return;
+
+        // Mỗi loser đóng tổng |perLoser| chia cho các winner. Về trắng: perLoser = 2×winners (mỗi winner 2).
+        // Lễ hội: perLoser = 2, chia đều cho winners (số nguyên, dư rải cho winner đầu). Để khớp CHÍNH XÁC
+        // điểm winner đã tính, ta phân bổ theo cùng quy tắc round-robin "dư cho winner đầu".
+        foreach (int li in losers)
+        {
+            int loserPays = isWhiteWin ? 2 * winners.Count : 2;
+            int per = loserPays / winners.Count;
+            int rem = loserPays % winners.Count;
+            for (int w = 0; w < winners.Count; w++)
+            {
+                int amt = per + (w < rem ? 1 : 0);
+                t[li, winners[w]] += amt;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phân tách round thường thành cặp: base rank (đối xứng theo hạng), chop (cutter↔victim từ chain),
+    /// 3♠ thắng (winner↔mỗi người), held (chót↔kế trên). Đui 3♠ (phi-zero-sum khi n&lt;4) KHÔNG đưa vào
+    /// cặp — để rơi vào residual.
+    /// </summary>
+    private static void DecomposeNormalRound(Match match, int[,] t)
+    {
+        int n = match.Players.Count;
+
+        // Base rank: ghép cặp đối xứng theo VỊ TRÍ HẠNG. table đối xứng table[r] = -table[n-1-r].
+        // Người hạng r (tốt hơn) nhận |table[r]| từ người hạng n-1-r (đối tiền). Chỉ ghép nửa trên (r < n-1-r).
+        int[] table = n switch
+        {
+            4 => new[] { 2, 1, -1, -2 },
+            3 => new[] { 2, 0, -2 },
+            2 => new[] { 1, -1 },
+            _ => Enumerable.Range(0, n).Select(_ => 0).ToArray()
+        };
+        // map: rank-position (0-based) → player index
+        var byRank = Enumerable.Range(0, n)
+            .OrderBy(i => match.Players[i].FinalRank ?? n)
+            .ToList();
+        for (int r = 0; r < n - 1 - r; r++)
+        {
+            int better = byRank[r];
+            int worse = byRank[n - 1 - r];
+            int amt = table[r]; // dương: worse trả better
+            if (amt > 0) t[worse, better] += amt;
+            else if (amt < 0) t[better, worse] += -amt;
+        }
+
+        // Chop-pig: chain đã settle thành cặp (last cutter +pot, second-to-last -pot). RoundChopExtra
+        // là net per-player. Vì chỉ có 1 cặp non-zero mỗi settle nhưng cộng dồn nhiều trick, ta ghép cặp
+        // theo dấu: tổng dương = nhận, âm = trả. Ghép greedy donor→receiver (zero-sum nên khớp).
+        DecomposeNetBySign(match, t, match.RoundChopExtra);
+
+        // 3♠ thắng cuối: Nhất +(n-1), mỗi người khác -1 → cặp winner↔mỗi người (winner nhận 1 từ mỗi người).
+        var winner = match.Players.FirstOrDefault(p => p.FinalRank == 1 && p.FinishedWithThreeOfSpades);
+        if (winner != null)
+        {
+            int wi = match.Players.IndexOf(winner);
+            for (int i = 0; i < n; i++) if (i != wi) t[i, wi] += 1;
+        }
+
+        // Held: chót trả kế trên đúng held (zero-sum cặp).
+        var chot = match.Players.FirstOrDefault(p => p.FinalRank == n);
+        if (chot != null)
+        {
+            int held = TienLenComboEngine.ComputeHeldValue(chot.Hand);
+            if (held > 0)
+            {
+                var above = match.Players.FirstOrDefault(p => p.FinalRank == n - 1);
+                if (above != null)
+                    t[match.Players.IndexOf(chot), match.Players.IndexOf(above)] += held;
+            }
+        }
+        // Đui 3♠ (loser -3, others +1) cố ý KHÔNG ghép cặp ở đây → rơi vào residual (giữ đúng tổng).
+    }
+
+    /// <summary>
+    /// Phán xử: victim trả winner (4+held) — cặp victim↔winner. Case B pardoned trả winner 1. Case C
+    /// pardoned sub-round (ghép theo net sign) + held cuối. Chop + 3♠ stack ghép như round thường.
+    /// </summary>
+    private static void DecomposeJudge(Match match, int[,] t)
+    {
+        int n = match.Players.Count;
+        var winnerP = match.Players.FirstOrDefault(p => p.JudgeIsWinner);
+        if (winnerP == null) return;
+        int wi = match.Players.IndexOf(winnerP);
+
+        for (int i = 0; i < n; i++)
+        {
+            var p = match.Players[i];
+            if (p.JudgeIsVictim) t[i, wi] += 4 + p.JudgeHeldValue; // victim trả winner
+        }
+
+        var pardoned = match.Players.Where(p => p.JudgeIsPardoned).ToList();
+        if (pardoned.Count == 1)
+        {
+            t[match.Players.IndexOf(pardoned[0]), wi] += 1; // Case B: pardoned trả winner 1
+        }
+        else if (pardoned.Count >= 2)
+        {
+            // Sub-round base rank giữa pardoned (ghép cặp đối xứng theo hạng trong nhóm pardoned).
+            var ordered = pardoned.OrderBy(p => p.FinalRank ?? int.MaxValue).ToList();
+            int m = ordered.Count;
+            int[] subTable = m switch
+            {
+                3 => new[] { 2, 0, -2 },
+                2 => new[] { 1, -1 },
+                _ => Enumerable.Range(0, m).Select(_ => 0).ToArray()
+            };
+            for (int r = 0; r < m - 1 - r; r++)
+            {
+                int better = match.Players.IndexOf(ordered[r]);
+                int worse = match.Players.IndexOf(ordered[m - 1 - r]);
+                int amt = subTable[r];
+                if (amt > 0) t[worse, better] += amt;
+                else if (amt < 0) t[better, worse] += -amt;
+            }
+            // Pardoned chót còn held: trả chia đều cho pardoned khác.
+            var lastP = ordered[^1];
+            int lastHeld = TienLenComboEngine.ComputeHeldValue(lastP.Hand);
+            if (lastHeld > 0)
+            {
+                int li = match.Players.IndexOf(lastP);
+                var others = pardoned.Where(p => p.UserId != lastP.UserId).ToList();
+                int share = lastHeld / others.Count;
+                int rem = lastHeld % others.Count;
+                for (int k = 0; k < others.Count; k++)
+                    t[li, match.Players.IndexOf(others[k])] += share + (k < rem ? 1 : 0);
+            }
+        }
+
+        // Chop-pig (giữa pardoned / mọi entry) ghép theo net sign.
+        DecomposeNetBySign(match, t, match.RoundChopExtra);
+
+        // Stack 3♠ khi winner về bằng 3♠: winner nhận 1 từ mỗi người khác.
+        if (winnerP.FinishedWithThreeOfSpades)
+            for (int i = 0; i < n; i++) if (i != wi) t[i, wi] += 1;
+    }
+
+    /// <summary>
+    /// Ghép một bản đồ net-delta-per-player (zero-sum) thành cặp giao dịch: người âm (trả) gửi cho
+    /// người dương (nhận) theo greedy. Dùng cho chop-pig (đã zero-sum theo cặp nên ghép lại an toàn).
+    /// </summary>
+    private static void DecomposeNetBySign(Match match, int[,] t, IReadOnlyDictionary<Guid, int> net)
+    {
+        if (net.Count == 0) return;
+        int n = match.Players.Count;
+        var debtors = new List<(int idx, int amt)>();   // amt > 0 = phải trả
+        var creditors = new List<(int idx, int amt)>(); // amt > 0 = được nhận
+        for (int i = 0; i < n; i++)
+        {
+            if (!net.TryGetValue(match.Players[i].UserId, out var v) || v == 0) continue;
+            if (v < 0) debtors.Add((i, -v));
+            else creditors.Add((i, v));
+        }
+        int di = 0, ci = 0;
+        while (di < debtors.Count && ci < creditors.Count)
+        {
+            var (dIdx, dAmt) = debtors[di];
+            var (cIdx, cAmt) = creditors[ci];
+            int x = Math.Min(dAmt, cAmt);
+            t[dIdx, cIdx] += x;
+            dAmt -= x; cAmt -= x;
+            debtors[di] = (dIdx, dAmt);
+            creditors[ci] = (cIdx, cAmt);
+            if (dAmt == 0) di++;
+            if (cAmt == 0) ci++;
+        }
     }
 
     /// <summary>Read-only snapshot of per-player chop-pig deltas for the current round (for DTOs).</summary>
@@ -1309,7 +1600,9 @@ public class MatchManager
                     match.IsFestivalRound ? bd.Festival : 0,
                     p.FestivalWinner,
                     festCards,
-                    festLabel);
+                    festLabel,
+                    bd.StarDelta,
+                    p.IsStarOfHope);
             })
             .ToList();
 
@@ -1318,21 +1611,22 @@ public class MatchManager
         return dto;
     }
 
-    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total, int Festival = 0);
+    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total, int Festival = 0, int StarDelta = 0);
 
-    /// <summary>Per-player breakdown of the round score by component (for UI display).</summary>
+    /// <summary>Per-player breakdown of the round score by component (for UI display). StarDelta = phần
+    /// chênh do Ngôi Sao Hi Vọng ×2 (doubled total − base total); các component khác là điểm CƠ BẢN.</summary>
     public RoundScoreBreakdown[] ComputeRoundScoreBreakdowns(Match match)
     {
         int n = match.Players.Count;
         var result = new RoundScoreBreakdown[n];
 
-        // Lễ hội (Cào Rùa): toàn bộ điểm vào component Festival.
+        // Lễ hội (Cào Rùa): toàn bộ điểm cơ bản vào component Festival.
         if (match.IsFestivalRound)
         {
-            var fest = ComputeRoundScores(match);
+            var fest = ComputeFestivalBaseScores(match);
             for (int i = 0; i < n; i++)
                 result[i] = new RoundScoreBreakdown(0, 0, 0, 0, 0, 0, fest[i], fest[i]);
-            return result;
+            return ApplyStarDeltaToBreakdowns(match, result);
         }
 
         var winnerCount = match.Players.Count(p => p.WhiteWinReason != null);
@@ -1346,7 +1640,7 @@ public class MatchManager
                 int v = match.Players[i].WhiteWinReason != null ? perWinner : perLoser;
                 result[i] = new RoundScoreBreakdown(0, 0, 0, 0, v, 0, v);
             }
-            return result;
+            return ApplyStarDeltaToBreakdowns(match, result);
         }
 
         if (match.JudgeTriggered)
@@ -1362,7 +1656,7 @@ public class MatchManager
                 int judgePart = judgeScores[i] - threeBonus;
                 result[i] = new RoundScoreBreakdown(0, 0, threeBonus, judgePart, 0, 0, judgeScores[i]);
             }
-            return result;
+            return ApplyStarDeltaToBreakdowns(match, result);
         }
 
         int[] table = n switch
@@ -1421,7 +1715,40 @@ public class MatchManager
             int total = baseRank[i] + chop[i] + three[i] + heldPenalty[i];
             result[i] = new RoundScoreBreakdown(baseRank[i], chop[i], three[i], 0, 0, heldPenalty[i], total);
         }
-        return result;
+        return ApplyStarDeltaToBreakdowns(match, result);
+    }
+
+    /// <summary>Điểm CƠ BẢN round lễ hội (chưa ×2) — tách ra để breakdown hiển thị base + StarDelta riêng.</summary>
+    private static int[] ComputeFestivalBaseScores(Match match)
+    {
+        int n = match.Players.Count;
+        var scores = new int[n];
+        int winnerCnt = match.Players.Count(p => p.FestivalWinner);
+        int loserCnt = n - winnerCnt;
+        if (winnerCnt > 0 && loserCnt > 0)
+        {
+            int pot = 2 * loserCnt;
+            int perWinner = pot / winnerCnt;
+            int rem = pot % winnerCnt;
+            int wi = 0;
+            for (int i = 0; i < n; i++)
+                scores[i] = match.Players[i].FestivalWinner ? perWinner + (wi++ < rem ? 1 : 0) : -2;
+        }
+        return scores;
+    }
+
+    /// <summary>Gắn StarDelta = (điểm đã ×2) − (tổng base) vào mỗi breakdown; Total cập nhật thành điểm ×2.
+    /// Không star → StarDelta = 0, Total giữ nguyên.</summary>
+    private RoundScoreBreakdown[] ApplyStarDeltaToBreakdowns(Match match, RoundScoreBreakdown[] bases)
+    {
+        if (!match.Players.Any(p => p.IsStarOfHope)) return bases;
+        var doubled = ComputeRoundScores(match);
+        for (int i = 0; i < bases.Length; i++)
+        {
+            int starDelta = doubled[i] - bases[i].Total;
+            bases[i] = bases[i] with { StarDelta = starDelta, Total = doubled[i] };
+        }
+        return bases;
     }
 
     /// <summary>
