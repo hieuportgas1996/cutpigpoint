@@ -997,7 +997,7 @@ export default function RoomPlayPage() {
                   <div className="tlmn-seat-pass">BỎ LƯỢT</div>
                 )}
                 {player.surrendered && (
-                  <div className="tlmn-seat-pass surrendered">🏳 ĐẦU HÀNG</div>
+                  <div className="tlmn-seat-pass surrendered">🏳️ ĐẦU HÀNG</div>
                 )}
                 {isMe && cutPigBanner && (
                   <div className="seat-cut-pig" key={cutPigBanner.id}>
@@ -1293,7 +1293,7 @@ export default function RoomPlayPage() {
                       className="tlmn-options-item danger"
                       onClick={() => { setOptionsMenuOpen(false); setSurrenderConfirmOpen(true); }}
                     >
-                      🏳 Đầu hàng
+                      🏳️ Đầu hàng
                     </button>
                   )}
                 </div>
@@ -1335,12 +1335,12 @@ export default function RoomPlayPage() {
         {surrenderConfirmOpen && canSurrender && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSurrenderConfirmOpen(false)}>
             <div className="match-end-card" onClick={e => e.stopPropagation()}>
-              <h2>🏳 Đầu hàng ván này?</h2>
+              <h2>🏳️ Đầu hàng ván này?</h2>
               <div className="next-round-countdown">
                 Bạn sẽ <b>về chót</b> và bị trừ điểm hàng còn giữ (heo, tứ quý, 3/4 đôi thông…). Ván vẫn tiếp tục cho người khác.
               </div>
               <div className="match-end-actions">
-                <button className="tlmn-btn ghost danger" onClick={handleSurrender}>🏳 Đồng ý đầu hàng</button>
+                <button className="tlmn-btn ghost danger" onClick={handleSurrender}>🏳️ Đồng ý đầu hàng</button>
                 <button className="tlmn-btn primary" onClick={() => setSurrenderConfirmOpen(false)}>Bỏ</button>
               </div>
             </div>
