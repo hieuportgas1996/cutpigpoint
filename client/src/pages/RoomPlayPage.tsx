@@ -82,6 +82,18 @@ function xiDachHandTotal(hand: Card[]): number {
   return bestValid >= 0 ? bestValid : best;
 }
 
+// Nhãn tay Xì Dách (mirror XiDachEngine.Label): đặc biệt hiện tên, còn lại hiện "N điểm".
+function xiDachHandLabel(hand: Card[]): string {
+  const n = hand.length;
+  const total = xiDachHandTotal(hand);
+  const aces = hand.filter(c => c.rank === 14).length;
+  if (n === 2 && aces === 2) return 'Xì Vàng';
+  if (n === 2 && aces === 1 && hand.some(c => c.rank >= 10 && c.rank <= 13)) return 'Xì Dách';
+  if (n === 5 && total <= 21) return `Ngũ Linh (${total})`;
+  if (total > 21) return `Quắc (${total})`;
+  return `${total} điểm`;
+}
+
 function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
   const parts: Array<{ label: string; value: number }> = [];
   if (r.whiteWinDelta !== 0) parts.push({ label: '🌟 Về trắng', value: r.whiteWinDelta });
@@ -1092,9 +1104,9 @@ export default function RoomPlayPage() {
                     </div>
                     <div className="seat-xidach-meta">
                       {isMe
-                        ? <span className="seat-xidach-total">{myXiDachTotal} điểm · {myXiDachCount} lá</span>
-                        : player.xiDachRevealed
-                          ? <span className="seat-xidach-total">{player.xiDachVisibleTotal} điểm</span>
+                        ? <span className="seat-xidach-total">{xiDachHandLabel(myHand)} · {myXiDachCount} lá</span>
+                        : player.xiDachRevealed && player.xiDachVisibleCards
+                          ? <span className="seat-xidach-total">{xiDachHandLabel(player.xiDachVisibleCards.map(cardFromDto))}</span>
                           : <span className="muted">{player.cardsLeft} lá</span>}
                       {player.xiDachStood && !player.xiDachSettled && <span className="seat-xidach-stood">DỪNG</span>}
                       {player.xiDachSettled && <span className="seat-xidach-settled">✓ đã xét</span>}
