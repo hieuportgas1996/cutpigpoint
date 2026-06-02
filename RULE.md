@@ -234,7 +234,8 @@ Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (g
 ### Rút bài (tuần tự: players trước, nhà cái sau)
 - **Player**: tổng < 16 → **buộc rút**; ≥ 16 → được dừng hoặc rút tiếp. Tối đa **5 lá**. > 21 = **Quắc** (thua).
 - **Nhà cái**: tổng < 15 → buộc rút; ≥ 15 → được dừng. Tối đa 5 lá. > 21 = Quắc.
-- **60 giây/lượt**, hết giờ tự xử (được dừng → dừng; buộc rút → rút 1 lá).
+- **90 giây/lượt**, hết giờ tự xử (được dừng/quắc → dừng; buộc rút → rút 1 lá).
+- **Quắc rồi KHÔNG tự sang lượt**: player >21 vẫn giữ lượt, phải tự bấm "Dừng" để qua (cho phép "diễn" giấu việc đã quắc — người khác không thấy bài).
 
 ### Bài đặc biệt (yếu → mạnh)
 **Quắc (>21) < điểm thường 16..21 < Ngũ Linh < Xì Dách < Xì Vàng**

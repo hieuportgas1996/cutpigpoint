@@ -16,7 +16,7 @@ public class MatchManager
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
-    public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(60);          // 60s/lượt rút bài xì dách
+    public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(90);          // 90s/lượt rút bài xì dách
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -449,15 +449,16 @@ public class MatchManager
             // Rút 1 lá ngẫu nhiên từ phần còn lại của bộ (loại các lá đã chia).
             DrawOneCard(match, p);
 
-            // Sau khi rút: nếu quắc / đủ 5 lá → tự kết thúc lượt người này.
-            if (XiDachEngine.IsBust(p.Hand) || p.Hand.Count >= XiDachEngine.MaxCards
+            // Sau khi rút: đủ 5 lá / Ngũ Linh / đặc biệt → tự kết thúc lượt.
+            // QUẮC (>21): KHÔNG tự dừng — giữ lượt cho player tự bấm "Dừng" (để giấu việc đã quắc, "diễn").
+            if (p.Hand.Count >= XiDachEngine.MaxCards
                 || XiDachEngine.Classify(p.Hand) is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
             {
                 AdvanceXiDachTurn(match, startFromBeginning: false);
             }
             else
             {
-                // Còn rút tiếp được → reset deadline cho cùng người.
+                // Còn rút tiếp được (hoặc đã quắc nhưng chờ tự bấm Dừng) → reset deadline cho cùng người.
                 match.XiDachTurnDeadline = DateTime.UtcNow + XiDachTurnTimeout;
             }
             return match;
@@ -474,7 +475,8 @@ public class MatchManager
             if (match.XiDachTurnUserId != userId)
                 throw new InvalidOperationException("Chưa tới lượt bạn.");
             var p = match.Players.First(x => x.UserId == userId);
-            if (!XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
+            // Đã quắc → luôn được "Dừng" (qua lượt). Chưa quắc → phải đạt ngưỡng.
+            if (!XiDachEngine.IsBust(p.Hand) && !XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
                 throw new InvalidOperationException(p.IsXiDachDealer
                     ? "Nhà cái phải đạt 15 điểm mới được dừng."
                     : "Phải đạt 16 điểm mới được dừng.");
@@ -508,7 +510,7 @@ public class MatchManager
         }
     }
 
-    /// <summary>Timer: hết 60s lượt rút → tự xử (rút nếu buộc rút; dừng nếu được phép; nếu không thì rút).</summary>
+    /// <summary>Timer: hết giờ lượt rút → tự xử (quắc/đạt ngưỡng → dừng; buộc rút → rút 1 lá).</summary>
     public Match? AutoAdvanceXiDach(Guid roomId)
     {
         lock (LockFor(roomId))
@@ -516,8 +518,8 @@ public class MatchManager
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.XiDachPlaying) return null;
             if (match.XiDachTurnUserId is not Guid uid) return null;
             var p = match.Players.First(x => x.UserId == uid);
-            if (XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
-                p.XiDachStood = true;                       // được dừng → auto dừng
+            if (XiDachEngine.IsBust(p.Hand) || XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
+                p.XiDachStood = true;                       // quắc / được dừng → auto dừng
             else if (p.Hand.Count < XiDachEngine.MaxCards)
                 DrawOneCard(match, p);                       // buộc rút → auto rút 1 lá
             AdvanceXiDachTurn(match, startFromBeginning: false);

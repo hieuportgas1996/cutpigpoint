@@ -626,6 +626,9 @@ export default function RoomPlayPage() {
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
   const isXiDachCompare = matchState?.status === MatchStatus.XiDachCompare;
   const xiDachDealerId = matchState?.xiDachDealerId ?? null;
+  const xiDachDealerName = xiDachDealerId === myUserId
+    ? 'Bạn'
+    : matchState?.players.find(p => p.userId === xiDachDealerId)?.displayName ?? '';
   const iAmDealer = xiDachDealerId === myUserId;
   const xiDachTurnUserId = matchState?.xiDachTurnUserId ?? null;
   const isMyXiDachTurn = isXiDachPlaying && xiDachTurnUserId === myUserId;
@@ -1069,7 +1072,7 @@ export default function RoomPlayPage() {
                     {/* Nhà cái bấm So từng player trong pha so điểm */}
                     {iAmDealer && isXiDachCompare && !player.isXiDachDealer && !player.xiDachSettled && (
                       <button className="tlmn-btn primary seat-xidach-compare" onClick={() => handleCompareXiDach(player.userId)}>
-                        So điểm
+                        Xét bài
                       </button>
                     )}
                   </div>
@@ -1081,15 +1084,23 @@ export default function RoomPlayPage() {
           <div className="play-area-cards">
             {isXiDachRound ? (
               <div className="festival-reveal-center">
-                <div className="festival-reveal-title">🃏 Sát Phạt · Xì Dách</div>
+                <div className="festival-reveal-title">🃏 Sát Phạt của {xiDachDealerName || '?'}</div>
+                {/* Bộ bài giữa bàn: click để rút (chỉ khi tới lượt mình + được rút). */}
+                <button
+                  className={`xidach-deck ${myCanDraw ? 'drawable' : ''}`}
+                  onClick={myCanDraw ? handleDrawXiDach : undefined}
+                  disabled={!myCanDraw}
+                  title={myCanDraw ? 'Nhấn để rút 1 lá' : ''}
+                >
+                  <CardSvg faceDown size={cardSize} />
+                  {myCanDraw && <span className="xidach-deck-hint">Rút bài</span>}
+                </button>
                 <div className="festival-reveal-status">
                   {isXiDachCompare
-                    ? (iAmDealer
-                        ? <>Bấm <b>“So điểm”</b> ở từng người để lật bài & tính điểm</>
-                        : <>Nhà cái đang so điểm từng người…</>)
+                    ? (iAmDealer ? <>Xét bài từng người…</> : <>Nhà cái đang xét bài…</>)
                     : isMyXiDachTurn
-                      ? <>Lượt của <b>bạn</b> — Rút hoặc Dừng ({xiDachTurnLeftSec}s)</>
-                      : <>Đang chờ <b>{xiDachTurnName || '...'}</b> rút bài… ({xiDachTurnLeftSec}s)</>}
+                      ? <>Lượt của <b>bạn</b> ({xiDachTurnLeftSec}s)</>
+                      : <>Đang chờ <b>{xiDachTurnName || '...'}</b>… ({xiDachTurnLeftSec}s)</>}
                 </div>
               </div>
             ) : isFestivalReveal ? (
@@ -1134,7 +1145,7 @@ export default function RoomPlayPage() {
 
         <div className="my-hand-area" ref={handAreaRef}>
           {isXiDachRound ? (
-            <div className="muted">🃏 Bài Xì Dách của bạn hiện tại chỗ ngồi phía trên — {myXiDachTotal} điểm</div>
+            <div className="muted">🃏 {myXiDachTotal} điểm · {myXiDachCount} lá</div>
           ) : isFestivalReveal ? (
             <div className="muted">🎉 Nặn bài Cào Rùa tại chỗ ngồi của bạn phía trên</div>
           ) : myHand.length === 0 ? (
@@ -1181,27 +1192,19 @@ export default function RoomPlayPage() {
             isMyXiDachTurn ? (
               <>
                 <button
-                  className="tlmn-btn primary"
-                  disabled={!myCanDraw}
-                  onClick={handleDrawXiDach}
-                  title={myXiDachCount >= 5 ? 'Đã đủ 5 lá' : myXiDachTotal > 21 ? 'Đã quắc' : 'Rút thêm 1 lá'}
-                >
-                  🃏 Rút bài ({myXiDachTotal})
-                </button>
-                <button
                   className="tlmn-btn ghost"
-                  disabled={!myCanStand}
+                  disabled={!(myCanStand || myXiDachTotal > 21)}
                   onClick={handleStandXiDach}
-                  title={myCanStand ? 'Dừng & chốt tay' : `Phải đạt ${iAmDealer ? 15 : 16} điểm mới được dừng`}
+                  title={(myCanStand || myXiDachTotal > 21) ? 'Dừng & chốt tay' : `Phải đạt ${iAmDealer ? 15 : 16} điểm mới được dừng`}
                 >
                   ✋ Dừng ({myXiDachTotal})
                 </button>
-                {myMustDraw && <span className="muted" style={{ alignSelf: 'center' }}>Chưa đủ điểm — phải rút</span>}
+                {myMustDraw && <span className="muted" style={{ alignSelf: 'center' }}>Chưa đủ điểm — nhấn bộ bài giữa bàn để rút</span>}
               </>
             ) : (
               <span className="muted" style={{ alignSelf: 'center' }}>
                 {isXiDachCompare
-                  ? (iAmDealer ? 'Bấm “So điểm” ở từng người' : 'Nhà cái đang so điểm…')
+                  ? (iAmDealer ? 'Nhấn “Xét bài” ở từng người' : 'Nhà cái đang xét bài…')
                   : `Đang chờ ${xiDachTurnName || '...'} rút bài…`}
               </span>
             )
