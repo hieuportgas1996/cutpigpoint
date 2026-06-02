@@ -422,6 +422,8 @@ export interface RoundResultEntry {
   festivalLabel: string | null;
   starDelta: number;
   isStar: boolean;
+  chopLabels: string[] | null;
+  chopIsCutter: boolean;
 }
 
 export interface HeldItems {

@@ -44,8 +44,8 @@ public class ChopSettleTests
         // second-to-last = P1 (đã hết bài) → P3 không ăn gì.
         var (m, ids) = MakeMatch(3);
         m.Players[0].FinalRank = 1; // P1 về Nhất
-        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single));      // P1: 2♠
-        m.TrickChopChain.Add((ids[2], 3, ComboKind.RunOfPairs));  // P3: 3 đôi thông
+        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single, ""));      // P1: 2♠
+        m.TrickChopChain.Add((ids[2], 3, ComboKind.RunOfPairs, ""));  // P3: 3 đôi thông
 
         Settle(m);
 
@@ -62,9 +62,9 @@ public class ChopSettleTests
         var (m, ids) = MakeMatch(3);
         m.Players[0].FinalRank = 1; // P1 hết bài, nhưng nằm giữa chain
         // P2, P3 còn bài (FinalRank null)
-        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single));      // P1: 2♠
-        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single));      // P2: 2♥
-        m.TrickChopChain.Add((ids[2], 3, ComboKind.RunOfPairs));  // P3: 3 đôi thông
+        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single, ""));      // P1: 2♠
+        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single, ""));      // P2: 2♥
+        m.TrickChopChain.Add((ids[2], 3, ComboKind.RunOfPairs, ""));  // P3: 3 đôi thông
 
         Settle(m);
 
@@ -80,9 +80,9 @@ public class ChopSettleTests
         // chain = [P1(2♠), P2(2♥), P4(4-đôi-thông)]. second-to-last = P2 (đã hết bài) → P4 ăn 0.
         var (m, ids) = MakeMatch(4);
         m.Players[1].FinalRank = 1; // P2 hết bài
-        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single));      // P1: 2♠ (còn bài)
-        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single));      // P2: 2♥ (hết bài)
-        m.TrickChopChain.Add((ids[3], 5, ComboKind.RunOfPairs));  // P4: 4 đôi thông
+        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single, ""));      // P1: 2♠ (còn bài)
+        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single, ""));      // P2: 2♥ (hết bài)
+        m.TrickChopChain.Add((ids[3], 5, ComboKind.RunOfPairs, ""));  // P4: 4 đôi thông
 
         Settle(m);
 
@@ -97,8 +97,8 @@ public class ChopSettleTests
     {
         // single 2 chặn single 2 → không tính (rule cũ, vẫn giữ).
         var (m, ids) = MakeMatch(2);
-        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single)); // 2♠
-        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single)); // 2♥
+        m.TrickChopChain.Add((ids[0], 1, ComboKind.Single, "")); // 2♠
+        m.TrickChopChain.Add((ids[1], 2, ComboKind.Single, "")); // 2♥
 
         Settle(m);
 
@@ -120,8 +120,8 @@ public class ChopSettleTests
         // bất kể loại combo. (rule chung: second-to-last hết bài → không settle)
         var (m, ids) = MakeMatch(2);
         m.Players[0].FinalRank = 1; // người bị chặt đã hết bài
-        m.TrickChopChain.Add((ids[0], victimVal, victimKind));
-        m.TrickChopChain.Add((ids[1], cutterVal, cutterKind));
+        m.TrickChopChain.Add((ids[0], victimVal, victimKind, ""));
+        m.TrickChopChain.Add((ids[1], cutterVal, cutterKind, ""));
 
         Settle(m);
 
@@ -135,8 +135,8 @@ public class ChopSettleTests
     {
         // Cả 2 còn bài: P1 2♥ (2đ) → P2 tứ quý (4đ chặt). P2 +2, P1 -2.
         var (m, ids) = MakeMatch(2);
-        m.TrickChopChain.Add((ids[0], 2, ComboKind.Single)); // P1: 2♥
-        m.TrickChopChain.Add((ids[1], 4, ComboKind.Four));   // P2: tứ quý
+        m.TrickChopChain.Add((ids[0], 2, ComboKind.Single, "")); // P1: 2♥
+        m.TrickChopChain.Add((ids[1], 4, ComboKind.Four, ""));   // P2: tứ quý
 
         Settle(m);
 

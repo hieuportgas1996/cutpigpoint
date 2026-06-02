@@ -205,6 +205,35 @@ public static class TienLenComboEngine
     };
 
     /// <summary>
+    /// Nhãn tiếng Việt cho 1 combo có chop value (dùng hiển thị "chặt/bị chặt gì").
+    /// Heo lẻ/đôi/sám/tứ → liệt kê từng con heo theo chất; tứ quý non-2 → "Tứ quý X"; 3/4 đôi thông → kèm rank.
+    /// </summary>
+    public static string ComboLabel(Combo c)
+    {
+        // 2s (heo) — lẻ/đôi/sám/tứ: ghép tên từng con heo.
+        if (c.Cards.Count > 0 && c.Cards.All(card => card.Rank == 15)
+            && (c.Kind == ComboKind.Single || c.Kind == ComboKind.Pair
+                || c.Kind == ComboKind.Triple || c.Kind == ComboKind.Four))
+        {
+            return string.Join(" + ", c.Cards.OrderBy(x => (int)x.Suit).Select(x => $"Heo {SuitLabel(x.Suit)}"));
+        }
+        if (c.Kind == ComboKind.Four)
+            return $"Tứ quý {RankLabels[c.Cards[0].Rank]}";
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 6)
+        {
+            var rs = c.Cards.Select(x => x.Rank).Distinct().OrderBy(r => r).Select(r => RankLabels[r]);
+            return $"3 đôi thông {string.Join("-", rs)}";
+        }
+        if (c.Kind == ComboKind.RunOfPairs && c.Cards.Count == 8)
+        {
+            var rs = c.Cards.Select(x => x.Rank).Distinct().OrderBy(r => r).Select(r => RankLabels[r]);
+            return $"4 đôi thông {string.Join("-", rs)}";
+        }
+        // Combo không có chop value — nhãn chung (hiếm khi dùng).
+        return c.Kind.ToString();
+    }
+
+    /// <summary>
     /// Build a list of concrete held items with Vietnamese labels and point values.
     /// Each pig is listed individually by suit ("Heo bích", "Heo cơ"...). Tứ quý/3-đôi/4-đôi are listed with their ranks.
     /// </summary>

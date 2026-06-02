@@ -123,10 +123,17 @@ public class Match
     /// is "same-kind đơn", không tính điểm theo rule), the second-to-last player pays the sum of chopValue of
     /// chain[0..^1] to the last player; intermediate players net zero.
     /// </summary>
-    public List<(Guid PlayerId, int ChopValue, ComboKind Kind)> TrickChopChain { get; init; } = new();
+    public List<(Guid PlayerId, int ChopValue, ComboKind Kind, string Label)> TrickChopChain { get; init; } = new();
 
     /// <summary>Accumulated chop-pig deltas per player across all tricks of the current round.</summary>
     public Dictionary<Guid, int> RoundChopExtra { get; init; } = new();
+
+    /// <summary>
+    /// Chi tiết chặt heo per player trong round (để hiển thị "chặt/bị chặt gì").
+    /// IsCutter=true → người chặt cuối (ăn điểm), false → người bị chặt cuối (mất điểm).
+    /// Labels = danh sách combo trong chain (các nước bị tính pot). Cộng dồn qua nhiều trick.
+    /// </summary>
+    public Dictionary<Guid, (bool IsCutter, List<string> Labels)> RoundChopDetails { get; init; } = new();
 
     /// <summary>True if this round was decided by "Phán xử" (judge) — winner finished while ≥1 other player had not played yet.</summary>
     public bool JudgeTriggered { get; set; }

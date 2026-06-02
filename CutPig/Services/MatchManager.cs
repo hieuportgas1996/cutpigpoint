@@ -88,6 +88,7 @@ public class MatchManager
         match.TrickCutCandidates.Clear();
         match.TrickChopChain.Clear();
         match.RoundChopExtra.Clear();
+        match.RoundChopDetails.Clear();
         match.JudgeTriggered = false;
         foreach (var p in match.Players)
         {
@@ -1134,9 +1135,22 @@ public class MatchManager
             {
                 AddChopExtra(match, last.PlayerId, +pot);
                 AddChopExtra(match, secondLast.PlayerId, -pot);
+                // Chi tiết chặt/bị chặt: các combo bị tính pot = chain[0..^1] (mọi nước trước cutter cuối).
+                var labels = chain.Take(chain.Count - 1).Select(e => e.Label).ToList();
+                AddChopDetails(match, last.PlayerId, isCutter: true, labels);
+                AddChopDetails(match, secondLast.PlayerId, isCutter: false, labels);
             }
         }
         chain.Clear();
+    }
+
+    /// <summary>Gộp chi tiết chặt heo cho 1 player (cộng dồn qua nhiều trick trong round).</summary>
+    private static void AddChopDetails(Match match, Guid playerId, bool isCutter, List<string> labels)
+    {
+        if (match.RoundChopDetails.TryGetValue(playerId, out var cur))
+            cur.Labels.AddRange(labels);
+        else
+            match.RoundChopDetails[playerId] = (isCutter, new List<string>(labels));
     }
 
     private static void AddChopExtra(Match match, Guid playerId, int delta)
@@ -1150,7 +1164,7 @@ public class MatchManager
     {
         var value = TienLenComboEngine.ChopValue(combo);
         if (value > 0)
-            match.TrickChopChain.Add((playerId, value, combo.Kind));
+            match.TrickChopChain.Add((playerId, value, combo.Kind, TienLenComboEngine.ComboLabel(combo)));
     }
 
     /// <summary>Advance to next seat that is still active (not finished, not passed this trick).</summary>
@@ -1602,7 +1616,9 @@ public class MatchManager
                     festCards,
                     festLabel,
                     bd.StarDelta,
-                    p.IsStarOfHope);
+                    p.IsStarOfHope,
+                    match.RoundChopDetails.TryGetValue(p.UserId, out var cd) ? cd.Labels : null,
+                    match.RoundChopDetails.TryGetValue(p.UserId, out var cd2) && cd2.IsCutter);
             })
             .ToList();
 

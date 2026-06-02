@@ -57,9 +57,14 @@ function parseSticker(text: string): typeof STICKERS[number] | null {
 function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
   const parts: Array<{ label: string; value: number }> = [];
   if (r.whiteWinDelta !== 0) parts.push({ label: '🌟 Về trắng', value: r.whiteWinDelta });
-  if (r.baseRankScore !== 0) parts.push({ label: `Hạng ${RANK_LABEL[r.finalRank] ?? r.finalRank}`, value: r.baseRankScore });
-  if (r.chopBonus !== 0) parts.push({ label: '🐷 Chặt heo', value: r.chopBonus });
-  if (r.judgeDelta !== 0) {
+  // Phán xử thay toàn bộ scoring → khi có judge thì không hiện hạng thường (dùng dòng phán xử bên dưới).
+  const isJudge = r.judgeIsWinner || r.judgeIsVictim || r.judgeIsPardoned;
+  if (!isJudge && r.whiteWinDelta === 0 && r.festivalDelta === 0) {
+    // Luôn hiện hạng (kể cả 0) cho ván thường.
+    parts.push({ label: `Hạng ${RANK_LABEL[r.finalRank] ?? r.finalRank}`, value: r.baseRankScore });
+  }
+  if (r.chopBonus !== 0) parts.push({ label: r.chopBonus > 0 ? '🐷 Chặt heo' : '🐷 Bị chặt heo', value: r.chopBonus });
+  if (isJudge) {
     if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử ăn', value: r.judgeDelta });
     else if (r.judgeIsVictim) {
       // Victim bị xử = −4 cố định + phạt giữ bài (held). Tách 2 dòng cho dễ hiểu, không gộp.
@@ -68,8 +73,7 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
       parts.push({ label: '⚖️ Bị xử', value: fine });
       if (heldPart !== 0) parts.push({ label: '🐷 Phạt giữ bài', value: heldPart });
     }
-    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Đã ra bài', value: r.judgeDelta });
-    else parts.push({ label: '⚖️ Phán xử', value: r.judgeDelta });
+    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Đã ra bài', value: r.judgeDelta }); // luôn hiện kể cả 0
   }
   if (r.threeOfSpadesDelta !== 0) {
     const label = r.wonByThreeOfSpades ? '🏆 Thắng cuối 3♠'
@@ -121,6 +125,16 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {r.chopLabels && r.chopLabels.length > 0 && (
+                <div className="held-items">
+                  <div className="held-items-label">{r.chopIsCutter ? 'Chặt:' : 'Bị chặt:'}</div>
+                  {r.chopLabels.map((lbl, i) => (
+                    <div key={i} className="held-row">
+                      <span className="held-chip">🐷 {lbl}</span>
+                    </div>
+                  ))}
                 </div>
               )}
               {parts.length > 0 && (
