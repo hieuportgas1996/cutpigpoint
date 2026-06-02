@@ -60,9 +60,9 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
   if (r.baseRankScore !== 0) parts.push({ label: `Hạng ${RANK_LABEL[r.finalRank] ?? r.finalRank}`, value: r.baseRankScore });
   if (r.chopBonus !== 0) parts.push({ label: '🐷 Chặt heo', value: r.chopBonus });
   if (r.judgeDelta !== 0) {
-    if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử (ăn)', value: r.judgeDelta });
-    else if (r.judgeIsVictim) parts.push({ label: `⚖️ Bị xử (4 + giữ ${r.judgeHeldValue})`, value: r.judgeDelta });
-    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Tha (đã ra bài)', value: r.judgeDelta });
+    if (r.judgeIsWinner) parts.push({ label: '⚖️ Phán xử ăn', value: r.judgeDelta });
+    else if (r.judgeIsVictim) parts.push({ label: '⚖️ Bị xử', value: r.judgeDelta });
+    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Được tha', value: r.judgeDelta });
     else parts.push({ label: '⚖️ Phán xử', value: r.judgeDelta });
   }
   if (r.threeOfSpadesDelta !== 0) {
@@ -76,7 +76,7 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
     parts.push({ label, value: r.heldPenaltyDelta });
   }
   if (r.starDelta !== 0) {
-    parts.push({ label: '⭐ Ngôi Sao Hi Vọng (×2)', value: r.starDelta });
+    parts.push({ label: '⭐ Ngôi sao ×2', value: r.starDelta });
   }
   return parts;
 }
