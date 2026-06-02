@@ -73,7 +73,11 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
       parts.push({ label: '⚖️ Bị xử', value: fine });
       if (heldPart !== 0) parts.push({ label: '🐷 Phạt giữ bài', value: heldPart });
     }
-    else if (r.judgeIsPardoned) parts.push({ label: '⚖️ Đã ra bài', value: r.judgeDelta }); // luôn hiện kể cả 0
+    else if (r.judgeIsPardoned) {
+      // Pardoned (Case C): tách "Đã ra bài 0đ" (được tha) + dòng hạng sub-round (Nhì/Ba +/-).
+      parts.push({ label: '⚖️ Đã ra bài', value: 0 });
+      if (r.judgeDelta !== 0) parts.push({ label: `Hạng ${RANK_LABEL[r.finalRank] ?? r.finalRank}`, value: r.judgeDelta });
+    }
   }
   if (r.threeOfSpadesDelta !== 0) {
     const label = r.wonByThreeOfSpades ? '🏆 Thắng cuối 3♠'
