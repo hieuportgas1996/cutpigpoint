@@ -205,6 +205,10 @@
   0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5)); }
   50% { filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.95)); }
 }
+.xidach-compare-all {
+  pointer-events: auto; /* parent .play-area-cards có pointer-events:none */
+  margin-top: 6px;
+}
 
 .tlmn-seat-top { top: 16px; left: 50%; transform: translateX(-50%); }
 .tlmn-seat-left { left: 16px; top: 50%; transform: translateY(-50%); }

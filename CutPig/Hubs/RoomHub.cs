@@ -743,6 +743,21 @@ public class RoomHub : Hub
         if (match.Status == MatchStatus.WaitingNextRound) await EmitRoundEndAsync(match);
     }
 
+    public async Task CompareXiDachAll()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.CompareXiDachPlayer(roomId.Value, auth.Value.UserId, null); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        if (match.Status == MatchStatus.WaitingNextRound) await EmitRoundEndAsync(match);
+    }
+
     public async Task FlipFestivalCard(bool flipAll, int cardIndex)
     {
         var auth = await AuthenticateAsync();

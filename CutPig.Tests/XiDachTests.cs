@@ -163,6 +163,39 @@ public class XiDachTests
         Assert.Equal(-4, XiDachEngine.ComparePlayerDelta(dealer, player)); // nhà cái 20 > player 19 → player thua ×2
     }
 
+    // ---- Luật đền (player ≥28) ----
+
+    [Fact]
+    public void Den_AbsorbsForOtherPlayers()
+    {
+        // P1 nhà cái = 18 (vd 9+9). order: [P2 đền(28), P3 thua(17), P4 ăn(20)].
+        var dealer = new[] { C(9), C(9, Suit.Hearts) };                       // 18
+        var den = new[] { C(13), C(12), C(8) };                               // 10+10+8 = 28 đền
+        var loser = new[] { C(8), C(9) };                                     // 17 < 18 thua
+        var winner = new[] { C(10), C(10, Suit.Hearts) };                     // 20 > 18 ăn
+        var (dealerDelta, pd) = XiDachEngine.ComputeRoundDeltas(dealer, new IReadOnlyList<Card>[] { den, loser, winner });
+
+        // P2(đền) tự thua nhà cái -2; gánh thay P3 (-2) và thay nhà cái cho P4 (-2) → -6.
+        // P3 thua nhưng được đền → 0. P4 ăn → +2. Nhà cái: +2 (từ đền) +2 (từ P3 thua) +0 (P4 do đền gánh) = +4.
+        Assert.Equal(-6, pd[0]);  // đền
+        Assert.Equal(0, pd[1]);   // P3 thua được đền gánh
+        Assert.Equal(2, pd[2]);   // P4 ăn
+        Assert.Equal(4, dealerDelta);
+        Assert.Equal(0, dealerDelta + pd.Sum()); // zero-sum
+    }
+
+    [Fact]
+    public void NoDen_NormalPairs()
+    {
+        var dealer = new[] { C(9), C(9, Suit.Hearts) };   // 18
+        var loser = new[] { C(8), C(9) };                  // 17 thua
+        var winner = new[] { C(10), C(10, Suit.Hearts) };  // 20 ăn
+        var (dealerDelta, pd) = XiDachEngine.ComputeRoundDeltas(dealer, new IReadOnlyList<Card>[] { loser, winner });
+        Assert.Equal(-2, pd[0]);
+        Assert.Equal(2, pd[1]);
+        Assert.Equal(0, dealerDelta);
+    }
+
     // ---- Flow integration (drive MatchManager qua round xì dách) ----
 
     private static readonly MethodInfo DealXiDachMethod =

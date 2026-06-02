@@ -8,9 +8,13 @@ namespace CutPig.GameEngine;
 public static class XiDachEngine
 {
     public const int BlackjackTarget = 21;
+    public const int DenThreshold = 28;     // player ≥ 28 = "đền" (gánh thay điểm các player khác với nhà cái)
     public const int PlayerStandMin = 16;   // player được dừng khi tổng ≥ 16
     public const int DealerStandMin = 15;   // nhà cái được dừng khi tổng ≥ 15
     public const int MaxCards = 5;           // tối đa 5 lá
+
+    /// <summary>True nếu player (KHÔNG phải nhà cái) bị "đền": tổng ≥ 28.</summary>
+    public static bool IsDen(IReadOnlyList<Card> hand) => Total(hand) >= DenThreshold;
 
     /// <summary>Loại tay bài (để so sức mạnh). Số lớn = mạnh hơn.</summary>
     public enum HandKind
@@ -131,6 +135,68 @@ public static class XiDachEngine
 
     /// <summary>Hệ số nhân điểm theo tay: Ngũ Linh / Xì Vàng = 2 (×2 → ±4); còn lại = 1 (±2).</summary>
     private static int Multiplier(HandKind k) => (k is HandKind.FiveCard or HandKind.XiVang) ? 2 : 1;
+
+    /// <summary>
+    /// Tính delta điểm CẢ ROUND cho mọi người (zero-sum), có áp luật "đền" (player ≥28).
+    /// `dealer` = tay nhà cái; `players` = tay các player KHÔNG phải nhà cái, THEO THỨ TỰ BÓC (từ phải nhà cái).
+    /// Trả về (dealerDelta, playerDeltas[]) cùng thứ tự `players`.
+    ///
+    /// Luật đền: player ≥28 ("đền") gánh thay giao dịch của các player KHÔNG đền với nhà cái —
+    /// player khác thua → đền trả thay (player đó = 0); player khác thắng → đền trả thay nhà cái
+    /// (nhà cái không mất, player đó vẫn nhận). Người đền vẫn TỰ thua nhà cái (−2). Nhiều người đền →
+    /// chỉ NGƯỜI ĐỀN ĐẦU TIÊN (theo thứ tự bóc) gánh thay; người đền sau chỉ tự thua nhà cái.
+    /// </summary>
+    public static (int DealerDelta, int[] PlayerDeltas) ComputeRoundDeltas(
+        IReadOnlyList<Card> dealer, IReadOnlyList<IReadOnlyList<Card>> players)
+    {
+        int n = players.Count;
+        var pd = new int[n];
+        int dealerDelta = 0;
+
+        // Người đền gánh = người đền đầu tiên theo thứ tự bóc.
+        int absorber = -1;
+        for (int i = 0; i < n; i++)
+            if (IsDen(players[i])) { absorber = i; break; }
+
+        for (int i = 0; i < n; i++)
+        {
+            int d = ComparePlayerDelta(dealer, players[i]); // delta player i nhận (vs nhà cái)
+
+            if (i == absorber)
+            {
+                // Người gánh-đền: tự thua nhà cái như bình thường.
+                pd[i] += d;
+                dealerDelta -= d;
+                continue;
+            }
+
+            if (absorber >= 0)
+            {
+                // Có người gánh-đền → redirect giao dịch của player i.
+                if (d < 0)
+                {
+                    // player i thua → đền trả thay: player i = 0, nhà cái vẫn +|d|, đền −|d|.
+                    dealerDelta += -d;
+                    pd[absorber] += d;
+                }
+                else if (d > 0)
+                {
+                    // player i thắng → đền trả thay nhà cái: player i +d, nhà cái 0, đền −d.
+                    pd[i] += d;
+                    pd[absorber] -= d;
+                }
+                // d == 0: hòa, không ai đổi.
+            }
+            else
+            {
+                // Không có đền → cặp bình thường.
+                pd[i] += d;
+                dealerDelta -= d;
+            }
+        }
+
+        return (dealerDelta, pd);
+    }
 
     /// <summary>Nhãn tiếng Việt cho tay bài (hiển thị round-end).</summary>
     public static string Label(IReadOnlyList<Card> hand)

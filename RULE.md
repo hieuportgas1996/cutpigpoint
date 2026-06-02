@@ -231,11 +231,18 @@ Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (g
 - Nhà cái chia **2 lá/người** (kể cả nhà cái), bài bí mật (chỉ mình xem).
 - Điểm lá: **2..10 = mặt**; **J/Q/K = 10**; **A = 10 nếu tay 2-3 lá / 1 nếu tay 4-5 lá** (tính lại mỗi lần rút).
 
-### Rút bài (tuần tự: players trước, nhà cái sau)
+### Rút bài (tuần tự: từ phải nhà cái, nhà cái sau cùng)
+- **Thứ tự bóc**: bắt đầu từ player **bên phải nhà cái (seat ngay sau nhà cái)** rồi vòng tròn, **nhà cái bóc cuối cùng**.
 - **Player**: tổng < 16 → **buộc rút**; ≥ 16 → được dừng hoặc rút tiếp. Tối đa **5 lá**. > 21 = **Quắc** (thua).
-- **Nhà cái**: tổng < 15 → buộc rút; ≥ 15 → được dừng. Tối đa 5 lá. > 21 = Quắc.
+- **Nhà cái**: tổng < 15 → buộc rút; ≥ 15 → được dừng. Tối đa 5 lá. > 21 = Quắc. **Nhà cái KHÔNG dính luật đền** (bóc bao nhiêu cũng được).
 - **90 giây/lượt**, hết giờ tự xử (được dừng/quắc → dừng; buộc rút → rút 1 lá).
-- **Quắc rồi KHÔNG tự sang lượt**: player >21 vẫn giữ lượt, phải tự bấm "Dừng" để qua (cho phép "diễn" giấu việc đã quắc — người khác không thấy bài).
+- **Quắc ≤28 KHÔNG tự sang lượt**: player 21 < tổng ≤ 28 vẫn giữ lượt, phải tự bấm "Dừng" để qua (cho phép "diễn" giấu việc đã quắc).
+
+### Đền (player ≥ 28 điểm)
+- Player (không phải nhà cái) bóc tới **≥ 28 điểm** → **đền**, dừng ngay (không diễn).
+- Người đền **gánh thay** mọi giao dịch của các player KHÁC với nhà cái: player khác **thua** → người đền trả thay (player đó = 0); player khác **thắng** → người đền trả thay nhà cái (nhà cái không mất, player đó vẫn nhận). Người đền vẫn **tự thua nhà cái** (−2).
+- Ví dụ (P1 cái=18, P2 đền, P3 thua, P4 ăn): P1 **+4**, P2 **−6**, P3 **0**, P4 **+2**.
+- Nhiều người đền → chỉ **người đền đầu tiên** (theo thứ tự bóc) gánh thay; người đền sau chỉ tự thua nhà cái.
 
 ### Bài đặc biệt (yếu → mạnh)
 **Quắc (>21) < điểm thường 16..21 < Ngũ Linh < Xì Dách < Xì Vàng**
@@ -245,7 +252,7 @@ Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (g
 - Player có Xì Dách/Vàng ngay 2 lá → lật + **chốt cặp với nhà cái ngay** (người khác chơi tiếp). Nhà cái Xì Dách/Vàng → lật hết, **ăn toàn bộ → kết thúc round**.
 
 ### So điểm (Nhà Cái vs từng Player) — zero-sum mỗi cặp
-- Nhà cái dừng rút → **chủ động bấm "So" từng player**, lật bài công khai.
+- Nhà cái dừng rút → **chủ động bấm "Xét bài" từng player** (hoặc "Xét hết"), lật bài công khai. Nhà cái được **xét sớm** (ngay trong pha rút) với các player đã dừng, **miễn nhà cái đã đạt ≥15 điểm**.
 - Thắng/thua thường: **±2**. Bên thắng là **Ngũ Linh / Xì Vàng → ×2 (±4)**.
 - **Bằng điểm = hoà (0)**. **Cả 2 quắc = hoà (0)**. Nhà cái quắc → thua mọi player **không** quắc. Cả 2 cùng Xì Dách/Vàng → **Player thắng**.
 

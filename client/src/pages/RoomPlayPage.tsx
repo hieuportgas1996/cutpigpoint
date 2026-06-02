@@ -8,7 +8,7 @@ import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { ChampionTrophy } from '../game/effects/ChampionTrophy';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
-import { api, MatchStatus, RoundEnd, RoundResultEntry } from '../api';
+import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
 import '../game/demo.css';
 import './room-lobby.css';
@@ -247,7 +247,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, drawXiDachCard, standXiDach, compareXiDach,
+    activateXiDach, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -646,6 +646,18 @@ export default function RoomPlayPage() {
     && myXiDachTotal >= (iAmDealer ? 15 : 16);
   const myMustDraw = isMyXiDachTurn && myXiDachTotal < (iAmDealer ? 15 : 16) && myXiDachCount < 5;
   const myCanDraw = isMyXiDachTurn && myXiDachCount < 5 && myXiDachTotal <= 21;
+  // Nhà cái được "Xét bài" (sớm hoặc pha so) khi đã đạt ≥15 điểm (hoặc đã quắc/đang pha so).
+  const dealerCanCompare = iAmDealer && isXiDachRound
+    && (isXiDachCompare || myXiDachTotal >= 15 || myXiDachTotal > 21);
+  // Player đã "xong" (dừng/đặc biệt/đền/quắc) → nhà cái xét sớm được.
+  const playerXiDachDone = (p: MatchPlayerPublic): boolean => {
+    if (isXiDachCompare) return true;
+    if (p.xiDachStood || p.xiDachSettled) return true;
+    if (p.xiDachRevealed) return true;
+    return false;
+  };
+  // Còn ai chưa xét (để hiện nút "Xét hết").
+  const anyUnsettledXiDach = isXiDachRound && (matchState?.players.some(p => !p.isXiDachDealer && !p.xiDachSettled) ?? false);
 
   // Pha nặn bài lễ hội (FestivalReveal) — hiện bài Cào Rùa NGAY TẠI SEAT mỗi người (không modal).
   const isFestivalReveal = matchState?.status === MatchStatus.FestivalReveal;
@@ -878,6 +890,11 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleCompareXiDachAll() {
+    try { await compareXiDachAll(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   async function handleFlipFestival(flipAll: boolean, cardIndex: number) {
     try { await flipFestivalCard(flipAll, cardIndex); }
     catch (e) { toast.push('error', (e as Error).message); }
@@ -988,7 +1005,7 @@ export default function RoomPlayPage() {
                     )}
                   </div>
                 </div>
-                {isTurn && (
+                {isTurn && !isXiDachRound && (
                   <div className={`tlmn-seat-timer ${turnLeftSec <= 10 ? 'low' : ''}`}>
                     ⏱ {turnLeftSec}s
                   </div>
@@ -1065,10 +1082,10 @@ export default function RoomPlayPage() {
                           ? <span className="seat-xidach-total">{player.xiDachVisibleTotal} điểm</span>
                           : <span className="muted">{player.cardsLeft} lá</span>}
                       {player.xiDachStood && !player.xiDachSettled && <span className="seat-xidach-stood">DỪNG</span>}
-                      {player.xiDachSettled && <span className="seat-xidach-settled">✓ đã so</span>}
+                      {player.xiDachSettled && <span className="seat-xidach-settled">✓ đã xét</span>}
                     </div>
-                    {/* Nhà cái bấm So từng player trong pha so điểm */}
-                    {iAmDealer && isXiDachCompare && !player.isXiDachDealer && !player.xiDachSettled && (
+                    {/* Nhà cái xét bài từng player: pha so, hoặc sớm khi player đã xong + nhà cái ≥15. */}
+                    {dealerCanCompare && !player.isXiDachDealer && !player.xiDachSettled && playerXiDachDone(player) && (
                       <button className="tlmn-btn primary seat-xidach-compare" onClick={() => handleCompareXiDach(player.userId)}>
                         Xét bài
                       </button>
@@ -1095,11 +1112,16 @@ export default function RoomPlayPage() {
                 </button>
                 <div className="festival-reveal-status">
                   {isXiDachCompare
-                    ? (iAmDealer ? <>Xét bài từng người…</> : <>Nhà cái đang xét bài…</>)
+                    ? (iAmDealer ? <>Xét bài từng người (hoặc “Xét hết”)</> : <>Nhà cái đang xét bài…</>)
                     : isMyXiDachTurn
                       ? <>Lượt của <b>bạn</b> ({xiDachTurnLeftSec}s)</>
                       : <>Đang chờ <b>{xiDachTurnName || '...'}</b>… ({xiDachTurnLeftSec}s)</>}
                 </div>
+                {dealerCanCompare && anyUnsettledXiDach && (
+                  <button className="tlmn-btn primary xidach-compare-all" onClick={handleCompareXiDachAll}>
+                    ⚖️ Xét hết
+                  </button>
+                )}
               </div>
             ) : isFestivalReveal ? (
               <div className="festival-reveal-center" aria-hidden="true">
