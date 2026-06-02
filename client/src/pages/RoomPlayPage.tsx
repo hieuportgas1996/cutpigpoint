@@ -415,7 +415,9 @@ export default function RoomPlayPage() {
     if (!roundEnd) return;
     if (matchState?.status === MatchStatus.InProgress
       || matchState?.status === MatchStatus.WhiteWinChoice
-      || matchState?.status === MatchStatus.FestivalReveal) {
+      || matchState?.status === MatchStatus.FestivalReveal
+      || matchState?.status === MatchStatus.XiDachPlaying
+      || matchState?.status === MatchStatus.XiDachCompare) {
       clearRoundEnd();
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
