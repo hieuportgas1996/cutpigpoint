@@ -16,7 +16,7 @@ public class MatchManager
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
-    public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(90);          // 90s/lượt rút bài xì dách
+    public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -450,10 +450,10 @@ public class MatchManager
             // Rút 1 lá ngẫu nhiên từ phần còn lại của bộ (loại các lá đã chia).
             DrawOneCard(match, p);
 
-            // Sau khi rút: đủ 5 lá / đặc biệt → tự kết thúc lượt.
-            // Player ĐỀN (≥28): chốt ngay, sang lượt (không cho diễn). QUẮC ≤28: giữ lượt cho tự bấm Dừng ("diễn").
+            // Sau khi rút: chỉ ĐỀN (≥28) hoặc đặc biệt (xì dách/vàng) mới tự chốt sang lượt.
+            // Quắc ≤28 VÀ đủ 5 lá → KHÔNG tự sang lượt: giữ lượt cho player tự bấm "Dừng" ("diễn").
             bool denNow = !p.IsXiDachDealer && XiDachEngine.IsDen(p.Hand);
-            if (p.Hand.Count >= XiDachEngine.MaxCards || denNow
+            if (denNow
                 || XiDachEngine.Classify(p.Hand) is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
             {
                 if (denNow) p.XiDachStood = true; // đền → coi như đã chốt lượt
@@ -461,7 +461,7 @@ public class MatchManager
             }
             else
             {
-                // Còn rút tiếp được (hoặc đã quắc ≤28 nhưng chờ tự bấm Dừng) → reset deadline cho cùng người.
+                // Còn giữ lượt (đủ 5 lá / quắc ≤28 / chưa muốn dừng) → reset deadline cho cùng người.
                 match.XiDachTurnDeadline = DateTime.UtcNow + XiDachTurnTimeout;
             }
             return match;
@@ -1279,18 +1279,30 @@ public class MatchManager
     /// Chỉ 1 người/round được đặt (FestivalScheduled), mỗi người 1 lần/TRẬN (HasUsedFestival).
     /// Round hiện tại vẫn chơi bình thường đến hết.
     /// </summary>
+    /// <summary>
+    /// Guard chung cho 3 chế độ đặc biệt (Lễ hội / Sát Phạt / Ngôi Sao): mỗi round chỉ ĐƯỢC ĐẶT 1 cái.
+    /// Ai đặt trước thì người khác mất CẢ 3 option cho round đó. Throw nếu đã có cái nào được đặt
+    /// hoặc round hiện tại đang là round đặc biệt.
+    /// </summary>
+    private static void EnsureNoSpecialScheduled(Match match)
+    {
+        if (match.IsFestivalRound || match.IsXiDachRound)
+            throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
+        if (match.FestivalScheduled)
+            throw new InvalidOperationException("Round sau đã là Lễ hội rồi.");
+        if (match.XiDachScheduledUserId.HasValue)
+            throw new InvalidOperationException("Round sau đã là Sát Phạt rồi.");
+        if (match.StarOfHopeScheduledUserId.HasValue)
+            throw new InvalidOperationException("Round sau đã có Ngôi Sao Hi Vọng rồi.");
+    }
+
     public Match ScheduleFestival(Guid roomId, Guid userId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
-            if (match.IsFestivalRound || match.IsXiDachRound)
-                throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
-            if (match.FestivalScheduled)
-                throw new InvalidOperationException("Đã có người tổ chức lễ hội cho round sau.");
-            if (match.XiDachScheduledUserId.HasValue)
-                throw new InvalidOperationException("Round sau đã là Sát Phạt rồi.");
+            EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
             if (player.HasUsedFestival)
@@ -1314,10 +1326,7 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
-            if (match.IsFestivalRound)
-                throw new InvalidOperationException("Đang trong round lễ hội rồi.");
-            if (match.StarOfHopeScheduledUserId.HasValue)
-                throw new InvalidOperationException("Đã có người kích Ngôi Sao Hi Vọng cho round sau.");
+            EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
             if (player.HasUsedStarOfHope)
@@ -1340,12 +1349,7 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
-            if (match.IsFestivalRound || match.IsXiDachRound)
-                throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
-            if (match.XiDachScheduledUserId.HasValue)
-                throw new InvalidOperationException("Đã có người tổ chức Sát Phạt cho round sau.");
-            if (match.FestivalScheduled)
-                throw new InvalidOperationException("Round sau đã là lễ hội rồi.");
+            EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
             if (player.HasUsedXiDach)

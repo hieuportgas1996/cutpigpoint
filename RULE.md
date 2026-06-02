@@ -229,14 +229,17 @@ Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (g
 
 ### Chia bài & điểm lá
 - Nhà cái chia **2 lá/người** (kể cả nhà cái), bài bí mật (chỉ mình xem).
-- Điểm lá: **2..10 = mặt**; **J/Q/K = 10**; **A = 10 nếu tay 2-3 lá / 1 nếu tay 4-5 lá** (tính lại mỗi lần rút).
+- Điểm lá: **2..10 = mặt**; **J/Q/K = 10**; **"2"(rank15) = 2**.
+- **A linh hoạt**: tay **2-3 lá** → mỗi A = 1/10/11 (chọn tổng cao nhất ≤21, nếu mọi tổ hợp đều quắc thì nhỏ nhất); tay **4-5 lá** → A = 1.
 
 ### Rút bài (tuần tự: từ phải nhà cái, nhà cái sau cùng)
 - **Thứ tự bóc**: bắt đầu từ player **bên phải nhà cái (seat ngay sau nhà cái)** rồi vòng tròn, **nhà cái bóc cuối cùng**.
 - **Player**: tổng < 16 → **buộc rút**; ≥ 16 → được dừng hoặc rút tiếp. Tối đa **5 lá**. > 21 = **Quắc** (thua).
 - **Nhà cái**: tổng < 15 → buộc rút; ≥ 15 → được dừng. Tối đa 5 lá. > 21 = Quắc. **Nhà cái KHÔNG dính luật đền** (bóc bao nhiêu cũng được).
-- **90 giây/lượt**, hết giờ tự xử (được dừng/quắc → dừng; buộc rút → rút 1 lá).
-- **Quắc ≤28 KHÔNG tự sang lượt**: player 21 < tổng ≤ 28 vẫn giữ lượt, phải tự bấm "Dừng" để qua (cho phép "diễn" giấu việc đã quắc).
+- **30 giây/lượt**, hết giờ tự xử (được dừng/quắc → dừng; buộc rút → rút 1 lá).
+- **Quắc ≤28 hoặc đủ 5 lá KHÔNG tự sang lượt**: player vẫn giữ lượt, phải tự bấm "Dừng" để qua (cho phép "diễn"). Chỉ ≥28 (đền) / xì dách / xì vàng mới tự chốt.
+
+> **Lưu ý**: Lễ hội, Sát Phạt, Ngôi Sao Hi Vọng **loại trừ lẫn nhau** — mỗi round chỉ đặt được **1** trong 3. Ai đặt trước thì người khác mất cả 3 option cho round đó.
 
 ### Đền (player ≥ 28 điểm)
 - Player (không phải nhà cái) bóc tới **≥ 28 điểm** → **đền**, dừng ngay (không diễn).

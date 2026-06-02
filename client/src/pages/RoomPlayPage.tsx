@@ -54,18 +54,32 @@ function parseSticker(text: string): typeof STICKERS[number] | null {
   return STICKER_BY_CODE[code] ?? null;
 }
 
-// Tổng điểm tay Xì Dách (mirror server XiDachEngine): 3..10 = mặt; J/Q/K = 10; "2"(15) = 2;
-// A(14) = 10 nếu tay 2-3 lá / 1 nếu 4-5 lá. Tính theo SỐ LÁ hiện tại.
+// Tổng điểm tay Xì Dách (mirror server XiDachEngine): 3..10 = mặt; J/Q/K = 10; "2"(15) = 2.
+// A(14): tay 2-3 lá → linh hoạt 1/10/11 (chọn tổng cao nhất ≤21, fallback nhỏ nhất); tay 4-5 lá → 1.
 function xiDachHandTotal(hand: Card[]): number {
   const n = hand.length;
-  return hand.reduce((sum, c) => {
-    let v: number;
-    if (c.rank === 14) v = n <= 3 ? 10 : 1;       // A
-    else if (c.rank === 15) v = 2;                 // "2"
-    else if (c.rank >= 11) v = 10;                 // J/Q/K
-    else v = c.rank;                                // 2..10
-    return sum + v;
+  const aces = hand.filter(c => c.rank === 14).length;
+  const baseSum = hand.filter(c => c.rank !== 14).reduce((s, c) => {
+    if (c.rank === 15) return s + 2;
+    if (c.rank >= 11) return s + 10;
+    return s + c.rank;
   }, 0);
+  if (aces === 0) return baseSum;
+  if (n >= 4) return baseSum + aces; // A = 1
+  // 2-3 lá: thử tổ hợp A ∈ {1,10,11}
+  const opts = [11, 10, 1];
+  let best = Infinity, bestValid = -1;
+  const rec = (i: number, acc: number) => {
+    if (i === aces) {
+      const total = baseSum + acc;
+      if (total < best) best = total;
+      if (total <= 21 && total > bestValid) bestValid = total;
+      return;
+    }
+    for (const v of opts) rec(i + 1, acc + v);
+  };
+  rec(0, 0);
+  return bestValid >= 0 ? bestValid : best;
 }
 
 function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
@@ -585,11 +599,15 @@ export default function RoomPlayPage() {
 
   // Lễ hội (Cào Rùa): có thể tổ chức nếu đang chơi, chưa ai đặt lịch, chưa phải round lễ hội, chưa dùng quyền.
   const myHasUsedFestival = me?.hasUsedFestival ?? false;
-  const canScheduleFestival = matchState?.status === MatchStatus.InProgress
+  // 3 chế độ đặc biệt loại trừ lẫn nhau: round sau chỉ 1 cái. Ai đặt trước, người khác mất cả 3 option.
+  const noSpecialScheduled = matchState != null
     && !matchState.festivalScheduled
-    && !matchState.isFestivalRound
-    && !matchState.isXiDachRound
     && !matchState.xiDachScheduledUserId
+    && !matchState.starOfHopeScheduledUserId
+    && !matchState.isFestivalRound
+    && !matchState.isXiDachRound;
+  const canScheduleFestival = matchState?.status === MatchStatus.InProgress
+    && noSpecialScheduled
     && !myHasUsedFestival;
   const festivalScheduled = matchState?.festivalScheduled ?? false;
   const festivalOrganizerName = matchState?.festivalOrganizerId
@@ -600,9 +618,7 @@ export default function RoomPlayPage() {
   const myHasUsedStar = me?.hasUsedStarOfHope ?? false;
   const starScheduledUserId = matchState?.starOfHopeScheduledUserId ?? null;
   const canActivateStar = matchState?.status === MatchStatus.InProgress
-    && !starScheduledUserId
-    && !matchState.isFestivalRound
-    && !matchState.isXiDachRound
+    && noSpecialScheduled
     && !myHasUsedStar;
   const starScheduledName = starScheduledUserId
     ? matchState?.players.find(p => p.userId === starScheduledUserId)?.displayName ?? ''
@@ -612,10 +628,7 @@ export default function RoomPlayPage() {
   const myHasUsedXiDach = me?.hasUsedXiDach ?? false;
   const xiDachScheduledUserId = matchState?.xiDachScheduledUserId ?? null;
   const canActivateXiDach = matchState?.status === MatchStatus.InProgress
-    && !xiDachScheduledUserId
-    && !matchState.isFestivalRound
-    && !matchState.isXiDachRound
-    && !matchState.festivalScheduled
+    && noSpecialScheduled
     && !myHasUsedXiDach;
   const xiDachScheduledName = xiDachScheduledUserId
     ? matchState?.players.find(p => p.userId === xiDachScheduledUserId)?.displayName ?? ''
@@ -641,9 +654,11 @@ export default function RoomPlayPage() {
   // Tổng điểm tay MÌNH (từ private hand) — để biết được rút/dừng.
   const myXiDachTotal = isXiDachRound ? xiDachHandTotal(myHand) : 0;
   const myXiDachCount = myHand.length;
-  // Được dừng: đạt ngưỡng (nhà cái 15, player 16) và chưa quắc.
-  const myCanStand = isMyXiDachTurn && myXiDachTotal <= 21
-    && myXiDachTotal >= (iAmDealer ? 15 : 16);
+  // Được dừng: đạt ngưỡng (nhà cái 15, player 16) và chưa quắc; HOẶC đã đủ 5 lá / đã quắc (không rút được nữa).
+  const myCanStand = isMyXiDachTurn
+    && ((myXiDachTotal <= 21 && myXiDachTotal >= (iAmDealer ? 15 : 16))
+        || myXiDachCount >= 5
+        || myXiDachTotal > 21);
   const myMustDraw = isMyXiDachTurn && myXiDachTotal < (iAmDealer ? 15 : 16) && myXiDachCount < 5;
   const myCanDraw = isMyXiDachTurn && myXiDachCount < 5 && myXiDachTotal <= 21;
   // Nhà cái được "Xét bài" (sớm hoặc pha so) khi đã đạt ≥15 điểm (hoặc đã quắc/đang pha so).

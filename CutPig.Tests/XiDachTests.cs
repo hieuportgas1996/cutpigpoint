@@ -17,11 +17,15 @@ public class XiDachTests
     // ---- Card points ----
 
     [Fact]
-    public void Ace_Is10_With2or3Cards_1_With4or5()
+    public void Ace_Flexible_With2or3Cards_1_With4or5()
     {
-        // A + 5 (2 lá) → A=10 → 15
-        Assert.Equal(15, XiDachEngine.Total(new[] { C(14), C(5) }));
-        // A + 3 + 4 + A + 3 (5 lá) → mỗi A=1 → 1+3+4+1+3 = 12
+        // A + 5 (2 lá): A∈{1,10,11} → tổng cao nhất ≤21 = 11+5 = 16.
+        Assert.Equal(16, XiDachEngine.Total(new[] { C(14), C(5) }));
+        // A + 5 + 9 (3 lá): 11+5+9=25 quắc → 1+5+9=15 (A=1, cao nhất ≤21).
+        Assert.Equal(15, XiDachEngine.Total(new[] { C(14), C(5), C(9) }));
+        // A + A (2 lá): mỗi A linh hoạt → 11+10=21 (1 con 11, 1 con 10) — tổng cao nhất ≤21.
+        Assert.Equal(21, XiDachEngine.Total(new[] { C(14), C(14, Suit.Hearts) }));
+        // A + 3 + 4 + A + 3 (5 lá) → mỗi A=1 cố định → 1+3+4+1+3 = 12.
         Assert.Equal(12, XiDachEngine.Total(new[] { C(14), C(3), C(4), C(14, Suit.Hearts), C(3, Suit.Hearts) }));
     }
 

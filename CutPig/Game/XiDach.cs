@@ -26,17 +26,48 @@ public static class XiDachEngine
         XiVang = 4,      // A + A ở đúng 2 lá
     }
 
-    /// <summary>Giá trị 1 lá theo số lá hiện có trong tay (cho A linh hoạt).</summary>
-    public static int CardPoint(Card c, int handCount) => c.Rank switch
+    /// <summary>Giá trị 1 lá KHÔNG phải A. (A xử lý linh hoạt trong Total.)</summary>
+    private static int NonAcePoint(Card c) => c.Rank switch
     {
-        14 => (handCount <= 3 ? 10 : 1),   // A: 10 nếu tay 2-3 lá, 1 nếu 4-5 lá
-        15 => 2,                            // "2" (rank 15 trong encoding TLMN)
-        11 or 12 or 13 => 10,               // J, Q, K
-        _ => c.Rank,                        // 2..10 (rank 3..10) — face value
+        15 => 2,                  // "2" (rank 15 trong encoding TLMN)
+        11 or 12 or 13 => 10,     // J, Q, K
+        _ => c.Rank,              // 2..10 (rank 3..10) — face value
     };
 
-    /// <summary>Tổng điểm của tay (A tính theo số lá hiện tại).</summary>
-    public static int Total(IReadOnlyList<Card> hand) => hand.Sum(c => CardPoint(c, hand.Count));
+    /// <summary>
+    /// Tổng điểm của tay với A linh hoạt:
+    ///  - Tay 2-3 lá: mỗi A ∈ {1, 10, 11}, chọn tổ hợp cho tổng CAO NHẤT mà ≤ 21; nếu mọi tổ hợp đều &gt;21
+    ///    thì lấy tổng NHỎ NHẤT (toàn A=1).
+    ///  - Tay 4-5 lá: mỗi A = 1 (cố định).
+    /// </summary>
+    public static int Total(IReadOnlyList<Card> hand)
+    {
+        int aces = hand.Count(c => c.Rank == 14);
+        int baseSum = hand.Where(c => c.Rank != 14).Sum(NonAcePoint);
+
+        if (aces == 0) return baseSum;
+
+        // Tay 4-5 lá: A = 1.
+        if (hand.Count >= 4) return baseSum + aces * 1;
+
+        // Tay 2-3 lá: thử mọi tổ hợp giá trị A ∈ {1,10,11}. Chọn tổng cao nhất ≤21, fallback nhỏ nhất.
+        int[] options = { 11, 10, 1 };
+        int best = int.MaxValue;     // tổng nhỏ nhất (fallback khi mọi tổ hợp quắc)
+        int bestValid = -1;          // tổng cao nhất ≤21
+        void Recurse(int i, int acc)
+        {
+            if (i == aces)
+            {
+                int total = baseSum + acc;
+                if (total < best) best = total;
+                if (total <= BlackjackTarget && total > bestValid) bestValid = total;
+                return;
+            }
+            foreach (var v in options) Recurse(i + 1, acc + v);
+        }
+        Recurse(0, 0);
+        return bestValid >= 0 ? bestValid : best;
+    }
 
     /// <summary>True nếu là Xì Dách: đúng 2 lá, 1 lá A + 1 lá điểm 10 (10/J/Q/K).</summary>
     public static bool IsXiDach(IReadOnlyList<Card> hand)
