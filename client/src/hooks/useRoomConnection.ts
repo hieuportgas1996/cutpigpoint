@@ -28,6 +28,10 @@ interface UseRoomConnectionResult {
   scheduleFestival: () => Promise<void>;
   flipFestivalCard: (flipAll: boolean, cardIndex: number) => Promise<void>;
   activateStarOfHope: () => Promise<void>;
+  activateXiDach: () => Promise<void>;
+  drawXiDachCard: () => Promise<void>;
+  standXiDach: () => Promise<void>;
+  compareXiDach: (targetUserId: string) => Promise<void>;
   respondWhiteWin: (accept: boolean) => Promise<void>;
   cutNewTrick: (cards: CardDto[]) => Promise<void>;
   declineTrickCut: () => Promise<void>;
@@ -243,6 +247,30 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('ActivateStarOfHope');
   }, []);
 
+  const activateXiDach = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('ActivateXiDach');
+  }, []);
+
+  const drawXiDachCard = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('DrawXiDachCard');
+  }, []);
+
+  const standXiDach = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('StandXiDach');
+  }, []);
+
+  const compareXiDach = useCallback(async (targetUserId: string) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('CompareXiDach', targetUserId);
+  }, []);
+
   const respondWhiteWin = useCallback(async (accept: boolean) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -282,6 +310,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
+    activateXiDach, drawXiDachCard, standXiDach, compareXiDach,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

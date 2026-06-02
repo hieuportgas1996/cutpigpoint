@@ -16,6 +16,7 @@ public class MatchManager
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
+    public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(60);          // 60s/lượt rút bài xì dách
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -109,11 +110,19 @@ public class MatchManager
             p.FestivalWinner = false;
             p.FestivalRevealedIdx.Clear();
             p.IsStarOfHope = false;
-            // HasUsedVoteReset / HasUsedFestival / HasUsedStarOfHope KHÔNG reset ở đây: quyền là 1 lần / TRẬN (giữ qua các round),
-            // chỉ false mặc định khi MatchPlayer được tạo trong Create.
+            p.IsXiDachDealer = false;
+            p.XiDachStood = false;
+            p.XiDachSettled = false;
+            p.XiDachDelta = 0;
+            p.XiDachRevealed = false;
+            // HasUsedVoteReset / HasUsedFestival / HasUsedStarOfHope / HasUsedXiDach KHÔNG reset ở đây:
+            // quyền là 1 lần / TRẬN (giữ qua các round), chỉ false mặc định khi MatchPlayer tạo trong Create.
         }
         match.FestivalRevealDeadline = null;
         match.FestivalAutoFlipDeadline = null;
+        match.XiDachDealerId = null;
+        match.XiDachTurnUserId = null;
+        match.XiDachTurnDeadline = null;
 
         // Ngôi Sao Hi Vọng: tiêu cờ đã đặt lịch round trước → round NÀY người đó là star (điểm giao dịch ×2).
         // Áp cho cả round thường lẫn round lễ hội.
@@ -122,6 +131,15 @@ public class MatchManager
             var star = match.Players.FirstOrDefault(p => p.UserId == starId);
             if (star != null) star.IsStarOfHope = true;
             match.StarOfHopeScheduledUserId = null;
+        }
+
+        // Round Sát Phạt (Xì Dách): tiêu cờ XiDachScheduledUserId → round này là xì dách, người đó là Nhà Cái.
+        match.IsXiDachRound = match.XiDachScheduledUserId.HasValue;
+        if (match.IsXiDachRound)
+        {
+            DealXiDachRound(match, match.XiDachScheduledUserId!.Value);
+            match.XiDachScheduledUserId = null;
+            return;
         }
 
         // Round lễ hội (Cào Rùa): tiêu cờ FestivalScheduled → round này là festival.
@@ -277,6 +295,244 @@ public class MatchManager
             match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
             return match;
         }
+    }
+
+    // ==================== Xì Dách (Sát Phạt) ====================
+
+    /// <summary>
+    /// Deal round Sát Phạt (Xì Dách): chia 2 lá/người, dealerId làm Nhà Cái. Vào pha rút bài tuần tự.
+    /// Nếu Nhà Cái có Xì Dách/Xì Vàng ngay từ 2 lá → lật hết, ăn toàn bộ → kết thúc round luôn.
+    /// Nếu Nhà Cái KHÔNG đặc biệt → bắt đầu lượt rút từ player đầu tiên (không phải nhà cái).
+    /// KHÔNG đụng PreviousRoundWinnerId (giữ người Nhất round trước để đi đầu round TLMN kế tiếp).
+    /// </summary>
+    private static void DealXiDachRound(Match match, Guid dealerId)
+    {
+        var deck = Deck.Shuffle(Deck.Build(), Random.Shared);
+        int idx = 0;
+        foreach (var p in match.Players)
+        {
+            p.Hand.Clear();
+            for (int i = 0; i < 2 && idx < deck.Count; i++, idx++) p.Hand.Add(deck[idx]);
+            p.IsXiDachDealer = (p.UserId == dealerId);
+        }
+        match.XiDachDealerId = dealerId;
+        match.Status = MatchStatus.XiDachPlaying;
+
+        var dealer = match.Players.First(p => p.UserId == dealerId);
+
+        // Nhà Cái đặc biệt sớm (Xì Dách / Xì Vàng) → lật hết, ăn toàn bộ player → kết thúc round.
+        var dealerKind = XiDachEngine.Classify(dealer.Hand);
+        if (dealerKind is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
+        {
+            foreach (var p in match.Players) p.XiDachRevealed = true;
+            SettleAllXiDachPairs(match);
+            EndXiDachRound(match);
+            return;
+        }
+
+        // Players đặc biệt sớm (Xì Dách / Xì Vàng) → chốt cặp ngay, không cần rút.
+        foreach (var p in match.Players.Where(p => !p.IsXiDachDealer))
+        {
+            var k = XiDachEngine.Classify(p.Hand);
+            if (k is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
+                SettleXiDachPair(match, dealer, p);
+        }
+
+        // Bắt đầu lượt rút: player đầu tiên (seat order) chưa chốt; nếu hết → tới nhà cái.
+        AdvanceXiDachTurn(match, startFromBeginning: true);
+    }
+
+    /// <summary>Chốt điểm 1 cặp Nhà Cái ↔ player (lật + tính delta zero-sum). Idempotent: bỏ qua nếu đã chốt.</summary>
+    private static void SettleXiDachPair(Match match, MatchPlayer dealer, MatchPlayer player)
+    {
+        if (player.XiDachSettled || player.IsXiDachDealer) return;
+        int delta = XiDachEngine.ComparePlayerDelta(dealer.Hand, player.Hand);
+        player.XiDachDelta = delta;
+        dealer.XiDachDelta -= delta; // zero-sum
+        player.XiDachSettled = true;
+        player.XiDachRevealed = true;
+        dealer.XiDachRevealed = true;
+    }
+
+    /// <summary>Chốt tất cả cặp chưa chốt (dùng khi nhà cái đặc biệt sớm hoặc kết thúc round).</summary>
+    private static void SettleAllXiDachPairs(Match match)
+    {
+        var dealer = match.Players.First(p => p.IsXiDachDealer);
+        foreach (var p in match.Players.Where(p => !p.IsXiDachDealer && !p.XiDachSettled))
+            SettleXiDachPair(match, dealer, p);
+    }
+
+    /// <summary>
+    /// Chuyển lượt rút xì dách sang người kế tiếp CHƯA dừng/chốt (players trước, nhà cái sau cùng).
+    /// startFromBeginning=true → quét từ player đầu (sau khi deal). Khi không còn player nào cần rút
+    /// → tới lượt nhà cái. Khi nhà cái cũng xong → sang pha so điểm (XiDachCompare).
+    /// </summary>
+    private static void AdvanceXiDachTurn(Match match, bool startFromBeginning)
+    {
+        // Người cần rút = chưa chốt cặp (player), chưa dừng, chưa quắc, chưa đủ 5 lá đặc biệt.
+        bool NeedsTurn(MatchPlayer p)
+        {
+            if (p.XiDachSettled) return false;            // đã chốt (đặc biệt sớm)
+            if (p.XiDachStood) return false;              // đã dừng
+            var k = XiDachEngine.Classify(p.Hand);
+            if (k is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang) return false;
+            if (XiDachEngine.IsBust(p.Hand)) return false; // quắc rồi → không tới lượt nữa
+            return true;
+        }
+
+        // Players (không phải nhà cái) theo thứ tự seat.
+        var players = match.Players.Where(p => !p.IsXiDachDealer).OrderBy(p => p.SeatIndex).ToList();
+        var nextPlayer = players.FirstOrDefault(NeedsTurn);
+        if (nextPlayer != null)
+        {
+            SetXiDachTurn(match, nextPlayer);
+            return;
+        }
+
+        // Hết players → tới nhà cái nếu nhà cái còn cần rút.
+        var dealer = match.Players.First(p => p.IsXiDachDealer);
+        if (NeedsTurn(dealer))
+        {
+            SetXiDachTurn(match, dealer);
+            return;
+        }
+
+        // Mọi người đã chốt/dừng/quắc → sang pha so điểm.
+        EnterXiDachCompare(match);
+    }
+
+    private static void SetXiDachTurn(Match match, MatchPlayer p)
+    {
+        match.XiDachTurnUserId = p.UserId;
+        match.XiDachTurnDeadline = DateTime.UtcNow + XiDachTurnTimeout;
+        match.Status = MatchStatus.XiDachPlaying;
+    }
+
+    /// <summary>Sang pha so điểm: nhà cái lần lượt bấm "So" từng player còn lại. Nếu không còn ai → kết thúc.</summary>
+    private static void EnterXiDachCompare(Match match)
+    {
+        match.XiDachTurnUserId = null;
+        match.XiDachTurnDeadline = null;
+        bool anyUnsettled = match.Players.Any(p => !p.IsXiDachDealer && !p.XiDachSettled);
+        if (!anyUnsettled)
+        {
+            EndXiDachRound(match);
+            return;
+        }
+        match.Status = MatchStatus.XiDachCompare;
+    }
+
+    /// <summary>Kết thúc round xì dách: chốt nốt cặp còn lại, gán delta, sang WaitingNextRound.</summary>
+    private static void EndXiDachRound(Match match)
+    {
+        SettleAllXiDachPairs(match);
+        foreach (var p in match.Players) p.XiDachRevealed = true;
+        match.XiDachTurnUserId = null;
+        match.XiDachTurnDeadline = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>Player/nhà cái rút thêm 1 lá. Validate: đúng lượt, đang pha rút, chưa quắc, chưa đủ 5 lá.</summary>
+    public Match DrawXiDachCard(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.XiDachPlaying)
+                throw new InvalidOperationException("Không trong pha rút bài xì dách.");
+            if (match.XiDachTurnUserId != userId)
+                throw new InvalidOperationException("Chưa tới lượt bạn.");
+            var p = match.Players.First(x => x.UserId == userId);
+            if (p.Hand.Count >= XiDachEngine.MaxCards)
+                throw new InvalidOperationException("Đã đủ 5 lá, không rút thêm.");
+
+            // Rút 1 lá ngẫu nhiên từ phần còn lại của bộ (loại các lá đã chia).
+            DrawOneCard(match, p);
+
+            // Sau khi rút: nếu quắc / đủ 5 lá → tự kết thúc lượt người này.
+            if (XiDachEngine.IsBust(p.Hand) || p.Hand.Count >= XiDachEngine.MaxCards
+                || XiDachEngine.Classify(p.Hand) is XiDachEngine.HandKind.XiDach or XiDachEngine.HandKind.XiVang)
+            {
+                AdvanceXiDachTurn(match, startFromBeginning: false);
+            }
+            else
+            {
+                // Còn rút tiếp được → reset deadline cho cùng người.
+                match.XiDachTurnDeadline = DateTime.UtcNow + XiDachTurnTimeout;
+            }
+            return match;
+        }
+    }
+
+    /// <summary>Player/nhà cái "dừng" rút. Validate: đúng lượt, được phép dừng (đạt ngưỡng).</summary>
+    public Match StandXiDach(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.XiDachPlaying)
+                throw new InvalidOperationException("Không trong pha rút bài xì dách.");
+            if (match.XiDachTurnUserId != userId)
+                throw new InvalidOperationException("Chưa tới lượt bạn.");
+            var p = match.Players.First(x => x.UserId == userId);
+            if (!XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
+                throw new InvalidOperationException(p.IsXiDachDealer
+                    ? "Nhà cái phải đạt 15 điểm mới được dừng."
+                    : "Phải đạt 16 điểm mới được dừng.");
+            p.XiDachStood = true;
+            AdvanceXiDachTurn(match, startFromBeginning: false);
+            return match;
+        }
+    }
+
+    /// <summary>Nhà cái bấm "So" với 1 player trong pha XiDachCompare → chốt cặp đó. Hết người → kết thúc round.</summary>
+    public Match CompareXiDachPlayer(Guid roomId, Guid dealerUserId, Guid targetUserId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.XiDachCompare)
+                throw new InvalidOperationException("Không trong pha so điểm xì dách.");
+            if (match.XiDachDealerId != dealerUserId)
+                throw new InvalidOperationException("Chỉ Nhà Cái được so điểm.");
+            var dealer = match.Players.First(p => p.IsXiDachDealer);
+            var target = match.Players.FirstOrDefault(p => p.UserId == targetUserId && !p.IsXiDachDealer)
+                ?? throw new InvalidOperationException("Không tìm thấy người chơi để so.");
+            if (target.XiDachSettled)
+                throw new InvalidOperationException("Đã so người này rồi.");
+
+            SettleXiDachPair(match, dealer, target);
+
+            // Hết người chưa so → kết thúc round.
+            if (!match.Players.Any(p => !p.IsXiDachDealer && !p.XiDachSettled))
+                EndXiDachRound(match);
+            return match;
+        }
+    }
+
+    /// <summary>Timer: hết 60s lượt rút → tự xử (rút nếu buộc rút; dừng nếu được phép; nếu không thì rút).</summary>
+    public Match? AutoAdvanceXiDach(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.XiDachPlaying) return null;
+            if (match.XiDachTurnUserId is not Guid uid) return null;
+            var p = match.Players.First(x => x.UserId == uid);
+            if (XiDachEngine.CanStand(p.Hand, p.IsXiDachDealer))
+                p.XiDachStood = true;                       // được dừng → auto dừng
+            else if (p.Hand.Count < XiDachEngine.MaxCards)
+                DrawOneCard(match, p);                       // buộc rút → auto rút 1 lá
+            AdvanceXiDachTurn(match, startFromBeginning: false);
+            return match;
+        }
+    }
+
+    /// <summary>Rút 1 lá ngẫu nhiên CHƯA có trên tay ai (build deck mới, loại các lá đang dùng).</summary>
+    private static void DrawOneCard(Match match, MatchPlayer p)
+    {
+        var used = new HashSet<(int, int)>(match.Players.SelectMany(x => x.Hand).Select(c => (c.Rank, (int)c.Suit)));
+        var remaining = Deck.Build().Where(c => !used.Contains((c.Rank, (int)c.Suit))).ToList();
+        if (remaining.Count == 0) return;
+        var card = remaining[Random.Shared.Next(remaining.Count)];
+        p.Hand.Add(card);
     }
 
     private static void SetupFirstTurn(Match match)
@@ -989,10 +1245,12 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
-            if (match.IsFestivalRound)
-                throw new InvalidOperationException("Đang trong round lễ hội rồi.");
+            if (match.IsFestivalRound || match.IsXiDachRound)
+                throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
             if (match.FestivalScheduled)
                 throw new InvalidOperationException("Đã có người tổ chức lễ hội cho round sau.");
+            if (match.XiDachScheduledUserId.HasValue)
+                throw new InvalidOperationException("Round sau đã là Sát Phạt rồi.");
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
             if (player.HasUsedFestival)
@@ -1027,6 +1285,34 @@ public class MatchManager
 
             match.StarOfHopeScheduledUserId = userId;
             player.HasUsedStarOfHope = true;
+            return match;
+        }
+    }
+
+    /// <summary>
+    /// Player tổ chức "Sát Phạt": round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Bất kỳ lúc nào trong
+    /// round InProgress. Chỉ 1 người/round (XiDachScheduledUserId), mỗi người 1 lần/TRẬN (HasUsedXiDach).
+    /// Loại trừ lẫn nhau với lễ hội (1 round chỉ 1 biến thể).
+    /// </summary>
+    public Match ActivateXiDach(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.IsFestivalRound || match.IsXiDachRound)
+                throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
+            if (match.XiDachScheduledUserId.HasValue)
+                throw new InvalidOperationException("Đã có người tổ chức Sát Phạt cho round sau.");
+            if (match.FestivalScheduled)
+                throw new InvalidOperationException("Round sau đã là lễ hội rồi.");
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.HasUsedXiDach)
+                throw new InvalidOperationException("Bạn đã dùng quyền Sát Phạt trong trận này.");
+
+            match.XiDachScheduledUserId = userId;
+            player.HasUsedXiDach = true;
             return match;
         }
     }
@@ -1196,11 +1482,20 @@ public class MatchManager
 
     public IEnumerable<Match> AllFestivalReveal() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.FestivalReveal);
 
+    public IEnumerable<Match> AllXiDachPlaying() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.XiDachPlaying);
+
     public int[] ComputeRoundScores(Match match)
     {
         // Returns score for each player in seat order
         var n = match.Players.Count;
         var scores = new int[n];
+
+        // Sát Phạt (Xì Dách): điểm đã tính sẵn vào XiDachDelta khi chốt từng cặp. Zero-sum (nhà cái gánh tổng).
+        if (match.IsXiDachRound)
+        {
+            for (int i = 0; i < n; i++) scores[i] = match.Players[i].XiDachDelta;
+            return scores;
+        }
 
         // Lễ hội (Cào Rùa): mỗi loser -2, pot = 2×(số loser) chia đều cho winner(s). Zero-sum.
         if (match.IsFestivalRound)
@@ -1591,6 +1886,11 @@ public class MatchManager
                     ? p.Hand.Select(c => new Dtos.CardDto(c.Rank, (int)c.Suit)).ToList()
                     : null;
                 string? festLabel = match.IsFestivalRound ? CaoRuaEngine.Label(p.Hand) : null;
+                List<Dtos.CardDto>? xdCards = match.IsXiDachRound
+                    ? p.Hand.Select(c => new Dtos.CardDto(c.Rank, (int)c.Suit)).ToList()
+                    : null;
+                string? xdLabel = match.IsXiDachRound ? XiDachEngine.Label(p.Hand) : null;
+                int xdTotal = match.IsXiDachRound ? XiDachEngine.Total(p.Hand) : 0;
                 return new Dtos.RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -1618,11 +1918,15 @@ public class MatchManager
                     bd.StarDelta,
                     p.IsStarOfHope,
                     match.RoundChopDetails.TryGetValue(p.UserId, out var cd) ? cd.Labels : null,
-                    match.RoundChopDetails.TryGetValue(p.UserId, out var cd2) && cd2.IsCutter);
+                    match.RoundChopDetails.TryGetValue(p.UserId, out var cd2) && cd2.IsCutter,
+                    xdCards,
+                    xdLabel,
+                    p.IsXiDachDealer,
+                    xdTotal);
             })
             .ToList();
 
-        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound);
+        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound, match.IsXiDachRound);
         match.RoundHistory.Add(dto);
         return dto;
     }
@@ -1635,6 +1939,14 @@ public class MatchManager
     {
         int n = match.Players.Count;
         var result = new RoundScoreBreakdown[n];
+
+        // Sát Phạt (Xì Dách): toàn bộ điểm vào Total (UI có component riêng FestivalResultRows tương đương).
+        if (match.IsXiDachRound)
+        {
+            for (int i = 0; i < n; i++)
+                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, 0, 0, match.Players[i].XiDachDelta);
+            return result;
+        }
 
         // Lễ hội (Cào Rùa): toàn bộ điểm cơ bản vào component Festival.
         if (match.IsFestivalRound)

@@ -336,6 +336,8 @@ export const MatchStatus = {
   PendingTrickCut: 4,
   VoteReset: 5,
   FestivalReveal: 6,
+  XiDachPlaying: 7,
+  XiDachCompare: 8,
 } as const;
 
 export interface MatchPlayerPublic {
@@ -358,6 +360,13 @@ export interface MatchPlayerPublic {
   festivalCardSlots: (CardDto | null)[] | null;
   hasUsedStarOfHope: boolean;
   isStarOfHope: boolean;
+  hasUsedXiDach: boolean;
+  isXiDachDealer: boolean;
+  xiDachStood: boolean;
+  xiDachSettled: boolean;
+  xiDachRevealed: boolean;
+  xiDachVisibleTotal: number;
+  xiDachVisibleCards: CardDto[] | null;
 }
 
 export interface MatchPublicState {
@@ -388,6 +397,11 @@ export interface MatchPublicState {
   festivalRevealDeadline: string | null;
   festivalAutoFlipDeadline: string | null;
   starOfHopeScheduledUserId: string | null;
+  xiDachScheduledUserId: string | null;
+  isXiDachRound: boolean;
+  xiDachDealerId: string | null;
+  xiDachTurnUserId: string | null;
+  xiDachTurnDeadline: string | null;
 }
 
 export interface PrivateHand {
@@ -424,6 +438,10 @@ export interface RoundResultEntry {
   isStar: boolean;
   chopLabels: string[] | null;
   chopIsCutter: boolean;
+  xiDachCards: CardDto[] | null;
+  xiDachLabel: string | null;
+  xiDachIsDealer: boolean;
+  xiDachTotal: number;
 }
 
 export interface HeldItems {
@@ -446,6 +464,7 @@ export interface RoundEnd {
   wasJudge: boolean;
   results: RoundResultEntry[];
   wasFestival: boolean;
+  wasXiDach: boolean;
 }
 
 export interface MatchEnd {

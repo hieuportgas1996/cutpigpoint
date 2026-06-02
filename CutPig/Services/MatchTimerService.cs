@@ -143,6 +143,25 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Xì Dách (Sát Phạt): hết 60s lượt rút → auto rút/dừng cho người đang tới lượt.
+                foreach (var match in _matches.AllXiDachPlaying())
+                {
+                    if (!match.XiDachTurnDeadline.HasValue || match.XiDachTurnDeadline.Value > now) continue;
+                    try
+                    {
+                        var resolved = _matches.AutoAdvanceXiDach(match.RoomId);
+                        if (resolved == null) continue;
+                        await _hub.Clients.Group($"room:{resolved.RoomId}").SendAsync("MatchState", BuildPublic(resolved), stoppingToken);
+                        await SendPrivateHandsAsync(resolved, stoppingToken); // tay vừa rút thêm lá → cập nhật private
+                        if (resolved.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(resolved, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "XiDach auto-advance failed for room {RoomId}", match.RoomId);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
@@ -214,7 +233,14 @@ public class MatchTimerService : BackgroundService
                     ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
                     : null,
                 p.HasUsedStarOfHope,
-                p.IsStarOfHope)).ToList(),
+                p.IsStarOfHope,
+                p.HasUsedXiDach,
+                p.IsXiDachDealer,
+                p.XiDachStood,
+                p.XiDachSettled,
+                p.XiDachRevealed,
+                (m.IsXiDachRound && p.XiDachRevealed) ? XiDachEngine.Total(p.Hand) : 0,
+                (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -230,6 +256,11 @@ public class MatchTimerService : BackgroundService
             m.FestivalOrganizerId,
             m.FestivalRevealDeadline,
             m.FestivalAutoFlipDeadline,
-            m.StarOfHopeScheduledUserId);
+            m.StarOfHopeScheduledUserId,
+            m.XiDachScheduledUserId,
+            m.IsXiDachRound,
+            m.XiDachDealerId,
+            m.XiDachTurnUserId,
+            m.XiDachTurnDeadline);
     }
 }

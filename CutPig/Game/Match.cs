@@ -9,6 +9,8 @@ public enum MatchStatus
     PendingTrickCut = 4,         // trick about to reset, but someone has 4-pair-run → giving them chance to cut
     VoteReset = 5,               // a player called a re-deal vote during trick 1; players are voting yes/no
     FestivalReveal = 6,          // round lễ hội: đã chia 3 lá, mỗi người đang nặn/lật bài trước khi tính điểm
+    XiDachPlaying = 7,           // round Sát Phạt (xì dách): players rồi nhà cái rút bài tuần tự
+    XiDachCompare = 8,           // round Sát Phạt: nhà cái lần lượt bấm "So" từng player còn lại
 }
 
 public class MatchPlayer
@@ -47,6 +49,20 @@ public class MatchPlayer
     public bool HasUsedStarOfHope { get; set; }
     /// <summary>True khi player này LÀ Ngôi Sao Hi Vọng của round HIỆN TẠI (điểm giao dịch với người này ×2). Reset ở DealRound.</summary>
     public bool IsStarOfHope { get; set; }
+
+    /// <summary>True khi player đã dùng quyền "Sát Phạt" (tổ chức xì dách) — 1 lần / TRẬN (giữ qua round).</summary>
+    public bool HasUsedXiDach { get; set; }
+    // ---- Xì Dách (Sát Phạt) round state — reset ở DealRound ----
+    /// <summary>True nếu player này là Nhà Cái của round xì dách hiện tại.</summary>
+    public bool IsXiDachDealer { get; set; }
+    /// <summary>True khi player đã "dừng" rút bài (chốt tay) trong round xì dách.</summary>
+    public bool XiDachStood { get; set; }
+    /// <summary>True khi cặp player↔nhà cái này đã được chốt điểm (xì dách/vàng lật sớm, hoặc nhà cái đã bấm So).</summary>
+    public bool XiDachSettled { get; set; }
+    /// <summary>Điểm round xì dách player này nhận (zero-sum với nhà cái). Lưu để build round-end.</summary>
+    public int XiDachDelta { get; set; }
+    /// <summary>True nếu bài player này đã được lật công khai (đặc biệt sớm / đã so).</summary>
+    public bool XiDachRevealed { get; set; }
     /// <summary>True nếu player này thắng round lễ hội (bài cào mạnh nhất) — dùng cho hiển thị/lịch sử.</summary>
     public bool FestivalWinner { get; set; }
     /// <summary>Các index lá bài Cào Rùa player đã lật (0..2) — lật bất kỳ thứ tự nào. Mỗi người tự lật bài mình.</summary>
@@ -102,6 +118,17 @@ public class Match
 
     /// <summary>UserId người đã kích hoạt "Ngôi Sao Hi Vọng" → round KẾ TIẾP người này là star (điểm ×2). Chỉ 1 người/round được kích. Null = chưa ai.</summary>
     public Guid? StarOfHopeScheduledUserId { get; set; }
+
+    /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
+    public Guid? XiDachScheduledUserId { get; set; }
+    /// <summary>True khi round HIỆN TẠI là round Sát Phạt (Xì Dách) thay vì Tiến Lên.</summary>
+    public bool IsXiDachRound { get; set; }
+    /// <summary>UserId Nhà Cái của round Xì Dách hiện tại (để hiển thị + so điểm).</summary>
+    public Guid? XiDachDealerId { get; set; }
+    /// <summary>UserId người đang tới lượt rút bài trong round Xì Dách (null khi không ở pha rút).</summary>
+    public Guid? XiDachTurnUserId { get; set; }
+    /// <summary>Hết hạn lượt rút bài Xì Dách (60s/lượt). Timer auto-rút/dừng khi qua hạn.</summary>
+    public DateTime? XiDachTurnDeadline { get; set; }
     /// <summary>Hết hạn pha nặn bài: khi mọi người lật hết 3 lá → set now+5s để xem rồi mới resolve.</summary>
     public DateTime? FestivalRevealDeadline { get; set; }
     /// <summary>Hết hạn auto-lật: nếu sau 60s vẫn còn lá chưa lật → tự lật hết.</summary>

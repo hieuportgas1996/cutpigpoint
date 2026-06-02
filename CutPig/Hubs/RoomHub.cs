@@ -683,6 +683,66 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task ActivateXiDach()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.ActivateXiDach(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task DrawXiDachCard()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.DrawXiDachCard(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        await SendPrivateHandsAsync(match);
+        if (match.Status == MatchStatus.WaitingNextRound) await EmitRoundEndAsync(match);
+    }
+
+    public async Task StandXiDach()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.StandXiDach(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        if (match.Status == MatchStatus.WaitingNextRound) await EmitRoundEndAsync(match);
+    }
+
+    public async Task CompareXiDach(Guid targetUserId)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.CompareXiDachPlayer(roomId.Value, auth.Value.UserId, targetUserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        if (match.Status == MatchStatus.WaitingNextRound) await EmitRoundEndAsync(match);
+    }
+
     public async Task FlipFestivalCard(bool flipAll, int cardIndex)
     {
         var auth = await AuthenticateAsync();
@@ -795,7 +855,14 @@ public class RoomHub : Hub
                     ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
                     : null,
                 p.HasUsedStarOfHope,
-                p.IsStarOfHope)).ToList(),
+                p.IsStarOfHope,
+                p.HasUsedXiDach,
+                p.IsXiDachDealer,
+                p.XiDachStood,
+                p.XiDachSettled,
+                p.XiDachRevealed,
+                (m.IsXiDachRound && p.XiDachRevealed) ? XiDachEngine.Total(p.Hand) : 0,
+                (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -811,7 +878,12 @@ public class RoomHub : Hub
             m.FestivalOrganizerId,
             m.FestivalRevealDeadline,
             m.FestivalAutoFlipDeadline,
-            m.StarOfHopeScheduledUserId);
+            m.StarOfHopeScheduledUserId,
+            m.XiDachScheduledUserId,
+            m.IsXiDachRound,
+            m.XiDachDealerId,
+            m.XiDachTurnUserId,
+            m.XiDachTurnDeadline);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

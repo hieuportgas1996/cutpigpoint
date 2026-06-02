@@ -223,6 +223,41 @@ Mô hình "đối tiền theo cặp" (giống tiền thật TLMN):
 
 **Lưu ý**: dùng **base THẬT của game** (về trắng sole winner = +6/−2) rồi ×2 → +12/−4. Combo thưởng/phạt vẫn tính bình thường **trước** khi ×2.
 
+## Sát Phạt (Xì Dách)
+
+Mỗi người chơi có **1 lần / trận** để tổ chức "Sát Phạt" (giống Lễ hội / Ngôi Sao). Kích trong round → round **KẾ TIẾP** là **Xì Dách**, người kích làm **Nhà Cái**. Chỉ 1 người/round; loại trừ lẫn nhau với lễ hội.
+
+### Chia bài & điểm lá
+- Nhà cái chia **2 lá/người** (kể cả nhà cái), bài bí mật (chỉ mình xem).
+- Điểm lá: **2..10 = mặt**; **J/Q/K = 10**; **A = 10 nếu tay 2-3 lá / 1 nếu tay 4-5 lá** (tính lại mỗi lần rút).
+
+### Rút bài (tuần tự: players trước, nhà cái sau)
+- **Player**: tổng < 16 → **buộc rút**; ≥ 16 → được dừng hoặc rút tiếp. Tối đa **5 lá**. > 21 = **Quắc** (thua).
+- **Nhà cái**: tổng < 15 → buộc rút; ≥ 15 → được dừng. Tối đa 5 lá. > 21 = Quắc.
+- **60 giây/lượt**, hết giờ tự xử (được dừng → dừng; buộc rút → rút 1 lá).
+
+### Bài đặc biệt (yếu → mạnh)
+**Quắc (>21) < điểm thường 16..21 < Ngũ Linh < Xì Dách < Xì Vàng**
+- **Xì Dách** = A + (10/J/Q/K) ở đúng 2 lá.
+- **Xì Vàng** = A + A ở đúng 2 lá (điểm ×2).
+- **Ngũ Linh** = 5 lá tổng ≤ 21 (điểm ×2). Ngũ Linh tổng cao thắng Ngũ Linh tổng thấp.
+- Player có Xì Dách/Vàng ngay 2 lá → lật + **chốt cặp với nhà cái ngay** (người khác chơi tiếp). Nhà cái Xì Dách/Vàng → lật hết, **ăn toàn bộ → kết thúc round**.
+
+### So điểm (Nhà Cái vs từng Player) — zero-sum mỗi cặp
+- Nhà cái dừng rút → **chủ động bấm "So" từng player**, lật bài công khai.
+- Thắng/thua thường: **±2**. Bên thắng là **Ngũ Linh / Xì Vàng → ×2 (±4)**.
+- **Bằng điểm = hoà (0)**. **Cả 2 quắc = hoà (0)**. Nhà cái quắc → thua mọi player **không** quắc. Cả 2 cùng Xì Dách/Vàng → **Player thắng**.
+
+| Kết quả | Điểm |
+|---|---|
+| Nhà cái thắng | Nhà cái +2 (±4 nếu đặc biệt), player ngược lại |
+| Player thắng | Player +2 (±4 nếu đặc biệt), nhà cái ngược lại |
+| Hoà / cả 2 quắc | Cả hai 0 |
+
+**Ví dụ** (P1 = Nhà Cái, 15 điểm): P2 quắc(22) → P2 −2 / P1 +2; P3 = 16 → P3 +2 / P1 −2; P4 = 15 → hoà. Tổng: P1 0, P2 −2, P3 +2, P4 0.
+
+Điểm cộng dồn `TotalScore` như mọi ván. **Không** áp Ngôi Sao Hi Vọng (2 tính năng độc lập).
+
 ## Trận đấu nhiều ván
 
 - Một **phòng** = một **trận**, gồm nhiều **ván** liên tiếp.

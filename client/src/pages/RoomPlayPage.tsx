@@ -54,6 +54,20 @@ function parseSticker(text: string): typeof STICKERS[number] | null {
   return STICKER_BY_CODE[code] ?? null;
 }
 
+// Tổng điểm tay Xì Dách (mirror server XiDachEngine): 3..10 = mặt; J/Q/K = 10; "2"(15) = 2;
+// A(14) = 10 nếu tay 2-3 lá / 1 nếu 4-5 lá. Tính theo SỐ LÁ hiện tại.
+function xiDachHandTotal(hand: Card[]): number {
+  const n = hand.length;
+  return hand.reduce((sum, c) => {
+    let v: number;
+    if (c.rank === 14) v = n <= 3 ? 10 : 1;       // A
+    else if (c.rank === 15) v = 2;                 // "2"
+    else if (c.rank >= 11) v = 10;                 // J/Q/K
+    else v = c.rank;                                // 2..10
+    return sum + v;
+  }, 0);
+}
+
 function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value: number }> {
   const parts: Array<{ label: string; value: number }> = [];
   if (r.whiteWinDelta !== 0) parts.push({ label: '🌟 Về trắng', value: r.whiteWinDelta });
@@ -193,6 +207,36 @@ function FestivalResultRows({ round, myUserId }: { round: RoundEnd; myUserId: st
   );
 }
 
+function XiDachResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  // Nhà cái lên đầu, rồi players.
+  const rows = [...round.results].sort((a, b) => (b.xiDachIsDealer ? 1 : 0) - (a.xiDachIsDealer ? 1 : 0));
+  return (
+    <div className="match-end-list festival-list">
+      {rows.map(r => (
+        <div key={r.userId} className={`match-end-row festival-row ${r.xiDachIsDealer ? 'festival-winner' : ''}`}>
+          <span className="rank-tag">{r.xiDachIsDealer ? '🏦' : '🎴'}</span>
+          <div className="match-end-name">
+            <div>
+              {r.xiDachIsDealer && <b>Nhà Cái · </b>}
+              {r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}
+            </div>
+            <div className="festival-cards">
+              {(r.xiDachCards ?? []).map((c, i) => (
+                <CardSvg key={i} card={cardFromDto(c)} size="sm" />
+              ))}
+            </div>
+            <div className="festival-label">{r.xiDachLabel}</div>
+          </div>
+          <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+            {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+          </span>
+          <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function RoomPlayPage() {
   const { id: code } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -203,6 +247,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
+    activateXiDach, drawXiDachCard, standXiDach, compareXiDach,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -227,6 +272,8 @@ export default function RoomPlayPage() {
   const lastFestivalAnnouncedRef = useRef<string | null>(null);
   const lastStarAnnouncedRef = useRef<string | null>(null);
   const [starConfirmOpen, setStarConfirmOpen] = useState(false);
+  const lastXiDachAnnouncedRef = useRef<string | null>(null);
+  const [xiDachConfirmOpen, setXiDachConfirmOpen] = useState(false);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -378,7 +425,7 @@ export default function RoomPlayPage() {
   const [delayedRoundEnd, setDelayedRoundEnd] = useState<RoundEnd | null>(null);
   useEffect(() => {
     if (!roundEnd) { setDelayedRoundEnd(null); return; }
-    if (roundEnd.wasWhiteWin || roundEnd.wasFestival) { setDelayedRoundEnd(roundEnd); return; }
+    if (roundEnd.wasWhiteWin || roundEnd.wasFestival || roundEnd.wasXiDach) { setDelayedRoundEnd(roundEnd); return; }
     const t = setTimeout(() => setDelayedRoundEnd(roundEnd), 2000);
     return () => clearTimeout(t);
   }, [roundEnd]);
@@ -539,6 +586,8 @@ export default function RoomPlayPage() {
   const canScheduleFestival = matchState?.status === MatchStatus.InProgress
     && !matchState.festivalScheduled
     && !matchState.isFestivalRound
+    && !matchState.isXiDachRound
+    && !matchState.xiDachScheduledUserId
     && !myHasUsedFestival;
   const festivalScheduled = matchState?.festivalScheduled ?? false;
   const festivalOrganizerName = matchState?.festivalOrganizerId
@@ -551,10 +600,47 @@ export default function RoomPlayPage() {
   const canActivateStar = matchState?.status === MatchStatus.InProgress
     && !starScheduledUserId
     && !matchState.isFestivalRound
+    && !matchState.isXiDachRound
     && !myHasUsedStar;
   const starScheduledName = starScheduledUserId
     ? matchState?.players.find(p => p.userId === starScheduledUserId)?.displayName ?? ''
     : '';
+
+  // Sát Phạt (Xì Dách): kích được nếu đang chơi, chưa ai kích, chưa round đặc biệt, chưa dùng quyền, round sau chưa là lễ hội.
+  const myHasUsedXiDach = me?.hasUsedXiDach ?? false;
+  const xiDachScheduledUserId = matchState?.xiDachScheduledUserId ?? null;
+  const canActivateXiDach = matchState?.status === MatchStatus.InProgress
+    && !xiDachScheduledUserId
+    && !matchState.isFestivalRound
+    && !matchState.isXiDachRound
+    && !matchState.festivalScheduled
+    && !myHasUsedXiDach;
+  const xiDachScheduledName = xiDachScheduledUserId
+    ? matchState?.players.find(p => p.userId === xiDachScheduledUserId)?.displayName ?? ''
+    : '';
+
+  // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
+  const isXiDachRound = matchState?.isXiDachRound ?? false;
+  const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
+  const isXiDachCompare = matchState?.status === MatchStatus.XiDachCompare;
+  const xiDachDealerId = matchState?.xiDachDealerId ?? null;
+  const iAmDealer = xiDachDealerId === myUserId;
+  const xiDachTurnUserId = matchState?.xiDachTurnUserId ?? null;
+  const isMyXiDachTurn = isXiDachPlaying && xiDachTurnUserId === myUserId;
+  const xiDachTurnName = xiDachTurnUserId
+    ? (xiDachTurnUserId === myUserId ? 'Bạn' : matchState?.players.find(p => p.userId === xiDachTurnUserId)?.displayName ?? '')
+    : '';
+  const xiDachTurnLeftSec = matchState?.xiDachTurnDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.xiDachTurnDeadline).getTime() - now) / 1000))
+    : 0;
+  // Tổng điểm tay MÌNH (từ private hand) — để biết được rút/dừng.
+  const myXiDachTotal = isXiDachRound ? xiDachHandTotal(myHand) : 0;
+  const myXiDachCount = myHand.length;
+  // Được dừng: đạt ngưỡng (nhà cái 15, player 16) và chưa quắc.
+  const myCanStand = isMyXiDachTurn && myXiDachTotal <= 21
+    && myXiDachTotal >= (iAmDealer ? 15 : 16);
+  const myMustDraw = isMyXiDachTurn && myXiDachTotal < (iAmDealer ? 15 : 16) && myXiDachCount < 5;
+  const myCanDraw = isMyXiDachTurn && myXiDachCount < 5 && myXiDachTotal <= 21;
 
   // Pha nặn bài lễ hội (FestivalReveal) — hiện bài Cào Rùa NGAY TẠI SEAT mỗi người (không modal).
   const isFestivalReveal = matchState?.status === MatchStatus.FestivalReveal;
@@ -611,6 +697,16 @@ export default function RoomPlayPage() {
     const who = starScheduledUserId === myUserId ? 'Bạn' : starScheduledName;
     toast.push('info', `⭐ ${who} đã kích Ngôi Sao Hi Vọng — round sau điểm giao dịch với ${starScheduledUserId === myUserId ? 'bạn' : 'họ'} sẽ ×2!`);
   }, [starScheduledUserId, matchState?.roundNumber]);
+
+  // Thông báo (mọi người) khi có người tổ chức Sát Phạt — round sau là Xì Dách, người đó làm Nhà Cái.
+  useEffect(() => {
+    if (!xiDachScheduledUserId) return;
+    const key = `${matchState?.roundNumber}|${xiDachScheduledUserId}`;
+    if (lastXiDachAnnouncedRef.current === key) return;
+    lastXiDachAnnouncedRef.current = key;
+    const who = xiDachScheduledUserId === myUserId ? 'Bạn' : xiDachScheduledName;
+    toast.push('info', `🃏 ${who} đã tổ chức Sát Phạt — round sau chơi Xì Dách, ${xiDachScheduledUserId === myUserId ? 'bạn' : 'họ'} làm Nhà Cái!`);
+  }, [xiDachScheduledUserId, matchState?.roundNumber]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -753,6 +849,27 @@ export default function RoomPlayPage() {
     setStarConfirmOpen(false);
     // Toast thông báo do effect starScheduledUserId lo (cho cả mọi người), tránh double-toast ở đây.
     try { await activateStarOfHope(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleActivateXiDach() {
+    setXiDachConfirmOpen(false);
+    try { await activateXiDach(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleDrawXiDach() {
+    try { await drawXiDachCard(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleStandXiDach() {
+    try { await standXiDach(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleCompareXiDach(targetUserId: string) {
+    try { await compareXiDach(targetUserId); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -923,12 +1040,57 @@ export default function RoomPlayPage() {
                     )}
                   </div>
                 )}
+                {isXiDachRound && (
+                  <div className="seat-xidach">
+                    {player.isXiDachDealer && <div className="seat-xidach-dealer">🏦 NHÀ CÁI</div>}
+                    {xiDachTurnUserId === player.userId && isXiDachPlaying && (
+                      <div className={`tlmn-seat-timer ${xiDachTurnLeftSec <= 10 ? 'low' : ''}`}>⏱ {xiDachTurnLeftSec}s</div>
+                    )}
+                    <div className="seat-xidach-cards">
+                      {(isMe ? myHand : (player.xiDachVisibleCards ? player.xiDachVisibleCards.map(cardFromDto) : [])).map((c, i) => (
+                        <CardSvg key={i} card={c} size="sm" />
+                      ))}
+                      {/* Đối thủ chưa lật → hiện lưng bài theo số lá */}
+                      {!isMe && !player.xiDachRevealed && Array.from({ length: player.cardsLeft }).map((_, i) => (
+                        <CardSvg key={`b${i}`} faceDown size="sm" />
+                      ))}
+                    </div>
+                    <div className="seat-xidach-meta">
+                      {isMe
+                        ? <span className="seat-xidach-total">{myXiDachTotal} điểm · {myXiDachCount} lá</span>
+                        : player.xiDachRevealed
+                          ? <span className="seat-xidach-total">{player.xiDachVisibleTotal} điểm</span>
+                          : <span className="muted">{player.cardsLeft} lá</span>}
+                      {player.xiDachStood && !player.xiDachSettled && <span className="seat-xidach-stood">DỪNG</span>}
+                      {player.xiDachSettled && <span className="seat-xidach-settled">✓ đã so</span>}
+                    </div>
+                    {/* Nhà cái bấm So từng player trong pha so điểm */}
+                    {iAmDealer && isXiDachCompare && !player.isXiDachDealer && !player.xiDachSettled && (
+                      <button className="tlmn-btn primary seat-xidach-compare" onClick={() => handleCompareXiDach(player.userId)}>
+                        So điểm
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
 
           <div className="play-area-cards">
-            {isFestivalReveal ? (
+            {isXiDachRound ? (
+              <div className="festival-reveal-center">
+                <div className="festival-reveal-title">🃏 Sát Phạt · Xì Dách</div>
+                <div className="festival-reveal-status">
+                  {isXiDachCompare
+                    ? (iAmDealer
+                        ? <>Bấm <b>“So điểm”</b> ở từng người để lật bài & tính điểm</>
+                        : <>Nhà cái đang so điểm từng người…</>)
+                    : isMyXiDachTurn
+                      ? <>Lượt của <b>bạn</b> — Rút hoặc Dừng ({xiDachTurnLeftSec}s)</>
+                      : <>Đang chờ <b>{xiDachTurnName || '...'}</b> rút bài… ({xiDachTurnLeftSec}s)</>}
+                </div>
+              </div>
+            ) : isFestivalReveal ? (
               <div className="festival-reveal-center" aria-hidden="true">
                 <div className="festival-reveal-title">🎉 Lễ hội của {festivalOrganizerName || '?'}</div>
                 <div className="festival-reveal-status">
@@ -969,7 +1131,9 @@ export default function RoomPlayPage() {
         </div>
 
         <div className="my-hand-area" ref={handAreaRef}>
-          {isFestivalReveal ? (
+          {isXiDachRound ? (
+            <div className="muted">🃏 Bài Xì Dách của bạn hiện tại chỗ ngồi phía trên — {myXiDachTotal} điểm</div>
+          ) : isFestivalReveal ? (
             <div className="muted">🎉 Nặn bài Cào Rùa tại chỗ ngồi của bạn phía trên</div>
           ) : myHand.length === 0 ? (
             <div className="muted">Bạn đã hết bài 🎉</div>
@@ -1011,6 +1175,36 @@ export default function RoomPlayPage() {
         </div>
 
         <div className="tlmn-controls">
+          {isXiDachRound ? (
+            isMyXiDachTurn ? (
+              <>
+                <button
+                  className="tlmn-btn primary"
+                  disabled={!myCanDraw}
+                  onClick={handleDrawXiDach}
+                  title={myXiDachCount >= 5 ? 'Đã đủ 5 lá' : myXiDachTotal > 21 ? 'Đã quắc' : 'Rút thêm 1 lá'}
+                >
+                  🃏 Rút bài ({myXiDachTotal})
+                </button>
+                <button
+                  className="tlmn-btn ghost"
+                  disabled={!myCanStand}
+                  onClick={handleStandXiDach}
+                  title={myCanStand ? 'Dừng & chốt tay' : `Phải đạt ${iAmDealer ? 15 : 16} điểm mới được dừng`}
+                >
+                  ✋ Dừng ({myXiDachTotal})
+                </button>
+                {myMustDraw && <span className="muted" style={{ alignSelf: 'center' }}>Chưa đủ điểm — phải rút</span>}
+              </>
+            ) : (
+              <span className="muted" style={{ alignSelf: 'center' }}>
+                {isXiDachCompare
+                  ? (iAmDealer ? 'Bấm “So điểm” ở từng người' : 'Nhà cái đang so điểm…')
+                  : `Đang chờ ${xiDachTurnName || '...'} rút bài…`}
+              </span>
+            )
+          ) : (
+          <>
           <button
             className="tlmn-btn primary"
             disabled={!canPlay}
@@ -1046,12 +1240,14 @@ export default function RoomPlayPage() {
           >
             {autoPass ? '⏸ Tắt qua lượt tự động' : '⏩ Qua lượt tự động'}
           </button>
-          {(canStartVoteReset || canSurrender || canScheduleFestival || canActivateStar) && (
+          </>
+          )}
+          {(canStartVoteReset || canSurrender || canScheduleFestival || canActivateStar || canActivateXiDach) && (
             <div className="tlmn-options" ref={optionsMenuRef}>
               <button
                 className={`tlmn-btn ghost ${optionsMenuOpen ? 'auto-pass-on' : ''}`}
                 onClick={() => setOptionsMenuOpen(o => !o)}
-                title="Tùy chọn: vote bỏ bài / đầu hàng / tổ chức lễ hội / Ngôi Sao Hi Vọng"
+                title="Tùy chọn: vote bỏ bài / đầu hàng / tổ chức lễ hội / Ngôi Sao Hi Vọng / Sát Phạt"
               >
                 ⋯ Tùy chọn
               </button>
@@ -1079,6 +1275,14 @@ export default function RoomPlayPage() {
                       onClick={() => { setOptionsMenuOpen(false); setStarConfirmOpen(true); }}
                     >
                       ⭐ Ngôi Sao Hi Vọng
+                    </button>
+                  )}
+                  {canActivateXiDach && (
+                    <button
+                      className="tlmn-options-item"
+                      onClick={() => { setOptionsMenuOpen(false); setXiDachConfirmOpen(true); }}
+                    >
+                      🃏 Sát Phạt (Xì Dách)
                     </button>
                   )}
                   {canSurrender && (
@@ -1156,6 +1360,21 @@ export default function RoomPlayPage() {
           </div>
         )}
 
+        {xiDachConfirmOpen && canActivateXiDach && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setXiDachConfirmOpen(false)}>
+            <div className="match-end-card" onClick={e => e.stopPropagation()}>
+              <h2>🃏 Tổ chức Sát Phạt?</h2>
+              <div className="next-round-countdown">
+                <b>Round kế tiếp</b> chơi <b>Xì Dách</b>, bạn làm <b>Nhà Cái</b>. Mỗi trận chỉ dùng <b>1 lần</b> — dùng rồi mất quyền vĩnh viễn.
+              </div>
+              <div className="match-end-actions">
+                <button className="tlmn-btn primary" onClick={handleActivateXiDach}>🃏 Tổ chức ngay</button>
+                <button className="tlmn-btn ghost" onClick={() => setXiDachConfirmOpen(false)}>Để sau</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isVoteResetPhase && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.45)' }}>
             <div className="match-end-card">
@@ -1197,10 +1416,12 @@ export default function RoomPlayPage() {
 
         {delayedRoundEnd && !matchEnd && (
           <div className="match-end-overlay">
-            {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival) && <Confetti active={true} />}
+            {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival || delayedRoundEnd.wasXiDach) && <Confetti active={true} />}
             <div className="match-end-card">
               <h2>
-                {delayedRoundEnd.wasFestival
+                {delayedRoundEnd.wasXiDach
+                  ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
+                  : delayedRoundEnd.wasFestival
                   ? `🎉 Lễ hội Cào Rùa — Ván ${delayedRoundEnd.roundNumber}`
                   : delayedRoundEnd.wasWhiteWin
                   ? '🌟 Có người về trắng!'
@@ -1208,7 +1429,9 @@ export default function RoomPlayPage() {
                   ? `⚖️ Phán xử — Ván ${delayedRoundEnd.roundNumber}`
                   : `🎉 Kết quả ván ${delayedRoundEnd.roundNumber}`}
               </h2>
-              {delayedRoundEnd.wasFestival
+              {delayedRoundEnd.wasXiDach
+                ? <XiDachResultRows round={delayedRoundEnd} myUserId={myUserId} />
+                : delayedRoundEnd.wasFestival
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
@@ -1266,7 +1489,10 @@ export default function RoomPlayPage() {
                   {[...roundHistory].reverse().map(r => {
                     const winner = r.results.find(x => x.finalRank === 1);
                     const festWinner = r.results.find(x => x.festivalWinner);
-                    const title = r.wasFestival
+                    const xdDealer = r.results.find(x => x.xiDachIsDealer);
+                    const title = r.wasXiDach
+                      ? `Ván ${r.roundNumber} · 🃏 Sát Phạt${xdDealer ? ` · Cái ${xdDealer.displayName}` : ''}`
+                      : r.wasFestival
                       ? `Ván ${r.roundNumber} · 🎉 Lễ hội${festWinner ? ` · ${festWinner.displayName} ăn` : ''}`
                       : r.wasWhiteWin
                       ? `Ván ${r.roundNumber} · 🌟 Về trắng`
@@ -1289,7 +1515,9 @@ export default function RoomPlayPage() {
                             ))}
                           </span>
                         </summary>
-                        {r.wasFestival
+                        {r.wasXiDach
+                          ? <XiDachResultRows round={r} myUserId={myUserId} />
+                          : r.wasFestival
                           ? <FestivalResultRows round={r} myUserId={myUserId} />
                           : <RoundResultRows round={r} myUserId={myUserId} />}
                       </details>
