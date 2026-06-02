@@ -184,6 +184,7 @@
   align-items: center;
   gap: 4px;
   margin: 8px 0;
+  pointer-events: auto; /* parent .play-area-cards có pointer-events:none — bật lại để click rút bài */
 }
 .xidach-deck.drawable {
   cursor: pointer;
@@ -471,4 +472,16 @@
   .tlmn-hand { bottom: 60px; height: 110px; }
   .tlmn-mai-corner { width: 90px; height: 90px; }
   .tlmn-play-area { min-width: 140px; }
+
+  /* Xì Dách + Cào Rùa (Lễ hội): thu nhỏ bài tại seat + bộ bài giữa cho vừa màn mobile */
+  .seat-xidach { margin-top: 4px; gap: 2px; }
+  .seat-xidach-cards { gap: 1px; transform: scale(0.82); }
+  .seat-xidach-dealer { font-size: 9px; padding: 1px 5px; }
+  .seat-xidach-meta { font-size: 10px; gap: 4px; }
+  .seat-xidach-compare { padding: 1px 8px !important; font-size: 11px !important; }
+  .seat-festival-cards { transform: scale(0.8); }
+  .xidach-deck { margin: 4px 0; transform: scale(0.85); }
+  .xidach-deck-hint { font-size: 11px; padding: 1px 9px; }
+  .festival-reveal-title { font-size: 16px; }
+  .festival-reveal-status { font-size: 12px; }
 }

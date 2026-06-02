@@ -958,8 +958,9 @@ export default function RoomPlayPage() {
           <MaiBranch corner="br" />
 
           {seatLayout.map(({ player, position }) => {
-            const isTurn = matchState.players[matchState.currentTurnSeatIndex]?.userId === player.userId
-              && matchState.status === MatchStatus.InProgress;
+            const isTurn = (matchState.players[matchState.currentTurnSeatIndex]?.userId === player.userId
+                && matchState.status === MatchStatus.InProgress)
+              || (isXiDachPlaying && xiDachTurnUserId === player.userId);
             const isMe = player.userId === myUserId;
             const bubble = seatBubbles[player.userId];
             const isStar = player.isStarOfHope;
@@ -1048,9 +1049,6 @@ export default function RoomPlayPage() {
                 {isXiDachRound && (
                   <div className="seat-xidach">
                     {player.isXiDachDealer && <div className="seat-xidach-dealer">🏦 NHÀ CÁI</div>}
-                    {xiDachTurnUserId === player.userId && isXiDachPlaying && (
-                      <div className={`tlmn-seat-timer ${xiDachTurnLeftSec <= 10 ? 'low' : ''}`}>⏱ {xiDachTurnLeftSec}s</div>
-                    )}
                     <div className="seat-xidach-cards">
                       {(isMe ? myHand : (player.xiDachVisibleCards ? player.xiDachVisibleCards.map(cardFromDto) : [])).map((c, i) => (
                         <CardSvg key={i} card={c} size="sm" />
@@ -1145,7 +1143,7 @@ export default function RoomPlayPage() {
 
         <div className="my-hand-area" ref={handAreaRef}>
           {isXiDachRound ? (
-            <div className="muted">🃏 {myXiDachTotal} điểm · {myXiDachCount} lá</div>
+            null
           ) : isFestivalReveal ? (
             <div className="muted">🎉 Nặn bài Cào Rùa tại chỗ ngồi của bạn phía trên</div>
           ) : myHand.length === 0 ? (
