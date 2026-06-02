@@ -115,7 +115,7 @@
 .seat-star-badge {
   position: absolute;
   top: -14px;
-  right: -8px;
+  left: -8px;
   font-size: 26px;
   z-index: 8;
   filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.9));
