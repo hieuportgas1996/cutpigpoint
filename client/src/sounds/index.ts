@@ -17,6 +17,15 @@ import soQuaUrl from './so-qua.mp3';
 import niceSoundUrl from './nice-sound.mp3';
 import saoMaDoUrl from './sao-ma-do.mp3';
 import quenChaNaUrl from './quen-cha-na.mp3';
+import chatChetMeUrl from './chat-chet-me.mp3';
+import khongGietUrl from './khong-giet.mp3';
+import boDiNhoUrl from './bo-di-nho.mp3';
+import muVoDichUrl from './mu-vo-dich.mp3';
+import dcmm1Url from './dcmm1.mp3';
+import siuuuuuUrl from './siuuuuu.mp3';
+import lozBaoUrl from './loz-bao.mp3';
+import lozThienUrl from './loz-thien.mp3';
+import lozDuyUrl from './loz-duy.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -37,6 +46,15 @@ export const SOUND_URLS = {
   niceSound: niceSoundUrl,
   saoMaDo: saoMaDoUrl,
   quenChaNa: quenChaNaUrl,
+  chatChetMe: chatChetMeUrl,
+  khongGiet: khongGietUrl,
+  boDiNho: boDiNhoUrl,
+  muVoDich: muVoDichUrl,
+  dcmm: dcmm1Url,
+  siuiii: siuuuuuUrl,
+  lozBao: lozBaoUrl,
+  lozThien: lozThienUrl,
+  lozDuy: lozDuyUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;
@@ -48,7 +66,7 @@ const SOUND_START_OFFSET: Partial<Record<SoundKey, number>> = {
 
 /** Sounds that should stop after a max duration (seconds) instead of playing to the end. */
 const SOUND_MAX_DURATION: Partial<Record<SoundKey, number>> = {
-  quenChaNa: 5,
+  quenChaNa: 7,
 };
 
 // Cache one HTMLAudioElement per key so we don't re-decode the file on every play.

@@ -30,6 +30,9 @@ const STICKERS: Array<{ code: string; emoji: string; label: string; hint: string
   { code: 'so-qua', emoji: '😱', label: 'Sợ quá sợ quá', hint: 'Sợ quá sợ quá' },
   { code: 'sao-ma-do', emoji: '🛡️', label: 'Sao mà đỡ được', hint: 'Sao mà đỡ được' },
   { code: 'khong-sao-ma', emoji: '😎', label: 'Không sao mà', hint: 'Không sao mà' },
+  { code: 'mu-vo-dich', emoji: '🔴', label: 'MU vô địch', hint: 'MU vô địch' },
+  { code: 'dcmm', emoji: '🤬', label: 'DCMM !!', hint: 'DCMM !!' },
+  { code: 'suiiii', emoji: '⚽', label: 'Suiiii', hint: 'Suiiii' },
 ];
 const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'sos': 'sos',
@@ -40,6 +43,12 @@ const STICKER_SOUND: Partial<Record<string, SoundKey>> = {
   'so-qua': 'soQua',
   'sao-ma-do': 'saoMaDo',
   'khong-sao-ma': 'quenChaNa',
+  'chop-it': 'chatChetMe',
+  'no-kill': 'khongGiet',
+  'go-away': 'boDiNho',
+  'mu-vo-dich': 'muVoDich',
+  'dcmm': 'dcmm',
+  'suiiii': 'siuiii',
 };
 const STICKER_VOLUME = 0.45;
 const STICKER_BY_CODE: Record<string, typeof STICKERS[number]> = STICKERS.reduce(
@@ -52,6 +61,31 @@ function parseSticker(text: string): typeof STICKERS[number] | null {
   if (!text.startsWith(STICKER_PREFIX)) return null;
   const code = text.slice(STICKER_PREFIX.length).trim();
   return STICKER_BY_CODE[code] ?? null;
+}
+
+// Âm thanh "troll" phát khi bấm vào avatar của người chơi có tên CHỨA từ khoá (không dấu, substring).
+// Thứ tự = thứ tự ưu tiên: 'thien' kiểm tra trước 'duy' (vd "Thiêns2Duyên" → Thiện chứ không phải Duy).
+const AVATAR_CLICK_SOUNDS: Array<{ match: string; sound: SoundKey }> = [
+  { match: 'thien', sound: 'lozThien' },
+  { match: 'duy', sound: 'lozDuy' },
+  { match: 'bao', sound: 'lozBao' },
+];
+
+// Bỏ dấu tiếng Việt + thường hoá để so chuỗi: "Thiêns2Duyên" → "thiens2duyen".
+function stripAccents(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase();
+}
+
+function avatarClickSound(displayName: string): SoundKey | null {
+  const norm = stripAccents(displayName);
+  for (const entry of AVATAR_CLICK_SOUNDS) {
+    if (norm.includes(entry.match)) return entry.sound;
+  }
+  return null;
 }
 
 // Tổng điểm tay Xì Dách (mirror server XiDachEngine): 3..10 = mặt; J/Q/K = 10; "2"(15) = 2.
@@ -1012,7 +1046,14 @@ export default function RoomPlayPage() {
               <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''} ${isStar ? 'is-star' : ''}`}>
                 {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
                 {isStar && <div className="seat-star-badge" title="Ngôi Sao Hi Vọng — điểm giao dịch ×2">⭐</div>}
-                <div className="tlmn-avatar">
+                <div
+                  className="tlmn-avatar"
+                  onClick={() => {
+                    const snd = avatarClickSound(player.displayName);
+                    if (snd) playSound(snd, STICKER_VOLUME);
+                  }}
+                  style={avatarClickSound(player.displayName) ? { cursor: 'pointer' } : undefined}
+                >
                   {player.hasAvatar
                     ? <img src={api.userAvatarUrl(player.userId)} alt={player.displayName} />
                     : player.displayName.charAt(0).toUpperCase()}
