@@ -26,6 +26,7 @@ import siuuuuuUrl from './siuuuuu.mp3';
 import lozBaoUrl from './loz-bao.mp3';
 import lozThienUrl from './loz-thien.mp3';
 import lozDuyUrl from './loz-duy.mp3';
+import danDoUrl from './dan-do.mp3';
 
 export const SOUND_URLS = {
   backgroundLobby: backgroundLobbyUrl,
@@ -55,6 +56,7 @@ export const SOUND_URLS = {
   lozBao: lozBaoUrl,
   lozThien: lozThienUrl,
   lozDuy: lozDuyUrl,
+  danDo: danDoUrl,
 } as const;
 
 export type SoundKey = keyof typeof SOUND_URLS;

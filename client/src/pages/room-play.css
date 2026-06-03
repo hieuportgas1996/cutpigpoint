@@ -672,6 +672,7 @@
 .tlmn-root .tlmn-seat .seat-sticker.sticker-mu-vo-dich { border-color: #da291c; box-shadow: 0 0 24px rgba(218,41,28,0.55), 0 10px 24px rgba(0,0,0,0.5); }
 .tlmn-root .tlmn-seat .seat-sticker.sticker-dcmm { border-color: #f43f5e; box-shadow: 0 0 24px rgba(244,63,94,0.55), 0 10px 24px rgba(0,0,0,0.5); }
 .tlmn-root .tlmn-seat .seat-sticker.sticker-suiiii { border-color: #22c55e; box-shadow: 0 0 24px rgba(34,197,94,0.55), 0 10px 24px rgba(0,0,0,0.5); }
+.tlmn-root .tlmn-seat .seat-sticker.sticker-dan-do { border-color: #f97316; box-shadow: 0 0 24px rgba(249,115,22,0.55), 0 10px 24px rgba(0,0,0,0.5); }
 
 .tlmn-root .tlmn-seat .seat-sticker-emoji {
   font-size: 42px;
