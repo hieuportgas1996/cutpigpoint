@@ -71,6 +71,7 @@ const AVATAR_CLICK_SOUNDS: Array<{ match: string; sound: SoundKey }> = [
   { match: 'thien', sound: 'lozThien' },
   { match: 'duy', sound: 'lozDuy' },
   { match: 'bao', sound: 'lozBao' },
+  { match: 'hieu', sound: 'lozHieu' },
 ];
 
 // Bỏ dấu tiếng Việt + thường hoá để so chuỗi: "Thiêns2Duyên" → "thiens2duyen".
