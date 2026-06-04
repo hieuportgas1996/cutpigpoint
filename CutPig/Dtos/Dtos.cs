@@ -109,7 +109,8 @@ public record MatchPublicStateDto(
     Guid? BreakOrganizerId = null,
     bool IsBreakRound = false,
     RpsStateDto? Rps = null,
-    DateTime? RpsChoiceDeadline = null);
+    DateTime? RpsChoiceDeadline = null,
+    DateTime? RpsRevealUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(

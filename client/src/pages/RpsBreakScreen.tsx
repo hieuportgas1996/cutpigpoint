@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { MatchPlayerPublic, RpsState, RpsMatchup } from '../api';
 import { RpsStage } from '../api';
 import { Avatar } from '../ui/Avatar';
@@ -17,12 +17,13 @@ const STAGE_TITLE: Record<number, string> = {
 };
 
 export function RpsBreakScreen({
-  rps, players, myUserId, leftSec, onChoose,
+  rps, players, myUserId, leftSec, revealActive, onChoose,
 }: {
   rps: RpsState;
   players: MatchPlayerPublic[];
   myUserId: string;
   leftSec: number;
+  revealActive: boolean;   // server đang ở pha hiện kết quả 2s (rpsRevealUntil còn hạn)
   onChoose: (choice: number) => void;
 }) {
   const nameOf = useMemo(() => {
@@ -42,24 +43,15 @@ export function RpsBreakScreen({
     : rps.stage === RpsStage.ThirdPlace ? rps.thirdPlace
     : rps.final;
 
-  // Animation lắc-rồi-lật: phát khi vừa có kết quả ván mới (hasLast + chữ ký ván đổi).
-  // signature = stage + số ván đã chốt + tổng thắng → mỗi lần resolve là duy nhất.
-  const sig = `${rps.stage}|${cur?.winsA ?? 0}|${cur?.winsB ?? 0}|${cur?.hasLast ? 1 : 0}|${cur?.lastChoiceA ?? 0}|${cur?.lastChoiceB ?? 0}|${done ? 'd' : ''}`;
+  // Pha hiện kết quả do SERVER điều khiển (revealActive, 2s): dấu ? LẮC ~0.6s rồi LẬT hiện kéo/búa/bao.
+  // Đồng bộ mọi client. Khi hết reveal (server qua ván kế) → idle, về ? chờ chọn.
   const [phase, setPhase] = useState<'idle' | 'shake' | 'reveal'>('idle');
-  const lastSigRef = useRef<string>(sig);
   useEffect(() => {
-    if (done) { setPhase('idle'); return; }
-    if (sig === lastSigRef.current) return;
-    lastSigRef.current = sig;
-    if (cur?.hasLast) {
-      setPhase('shake');
-      const t1 = setTimeout(() => setPhase('reveal'), 650);  // lắc 0.65s rồi lật
-      const t2 = setTimeout(() => setPhase('idle'), 1900);   // giữ kết quả ~1.25s rồi về ❔ chờ ván kế
-      return () => { clearTimeout(t1); clearTimeout(t2); };
-    } else {
-      setPhase('idle');
-    }
-  }, [sig, cur?.hasLast, done]);
+    if (done || !revealActive) { setPhase('idle'); return; }
+    setPhase('shake');
+    const t = setTimeout(() => setPhase('reveal'), 600); // lắc 0.6s rồi lật, giữ tới hết reveal (server ~2s)
+    return () => clearTimeout(t);
+  }, [revealActive, done]);
 
   const iAmA = !done && cur.playerAId === myUserId;
   const iAmB = !done && cur.playerBId === myUserId;
@@ -90,14 +82,14 @@ export function RpsBreakScreen({
     );
   }
 
-  // Trong pha shake/reveal hiện lá của ván VỪA chốt; ngược lại ẩn (❔ hoặc ✅ khi đã chọn).
+  // Pha chọn: dấu ? THẲNG (đậm hơn nếu đã chọn). Pha shake: ? lắc. Pha reveal: lật hiện kéo/búa/bao.
   const showLast = phase === 'shake' || phase === 'reveal';
-  function fistContent(chosen: boolean, lastChoice: number, side: 'left' | 'right') {
+  function fistContent(chosen: boolean, lastChoice: number) {
     if (showLast && cur.hasLast) {
-      if (phase === 'shake') return <span className={`rps-fist shaking ${side}`}>✊</span>;
-      return <span className={`rps-fist revealed ${side}`}>{CHOICE_EMOJI[lastChoice] ?? '❔'}</span>;
+      if (phase === 'shake') return <span className="rps-mark shaking">?</span>;
+      return <span className="rps-fist revealed">{CHOICE_EMOJI[lastChoice] ?? '?'}</span>;
     }
-    return <span className={`rps-fist ${chosen ? 'chosen' : 'waiting'} ${side}`}>{chosen ? '✊' : '❔'}</span>;
+    return <span className={`rps-mark ${chosen ? 'chosen' : 'waiting'}`}>?</span>;
   }
 
   const draw = phase === 'reveal' && cur.lastOutcome === 0;
@@ -121,7 +113,7 @@ export function RpsBreakScreen({
           <div className={`rps-side left ${iAmA ? 'me' : ''}`}>
             <Avatar name={nameOf[cur.playerAId] ?? '?'} hasAvatar={avatarOf[cur.playerAId]} playerId={cur.playerAId} size="sm" />
             <div className="rps-side-name">{nameOf[cur.playerAId] ?? '?'}</div>
-            {fistContent(cur.aChosen, cur.lastChoiceA, 'left')}
+            {fistContent(cur.aChosen, cur.lastChoiceA)}
           </div>
 
           <div className="rps-center">
@@ -133,7 +125,7 @@ export function RpsBreakScreen({
           <div className={`rps-side right ${iAmB ? 'me' : ''}`}>
             <Avatar name={nameOf[cur.playerBId] ?? '?'} hasAvatar={avatarOf[cur.playerBId]} playerId={cur.playerBId} size="sm" />
             <div className="rps-side-name">{nameOf[cur.playerBId] ?? '?'}</div>
-            {fistContent(cur.bChosen, cur.lastChoiceB, 'right')}
+            {fistContent(cur.bChosen, cur.lastChoiceB)}
           </div>
         </div>
 

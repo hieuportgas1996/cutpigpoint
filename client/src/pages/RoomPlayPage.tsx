@@ -719,6 +719,9 @@ export default function RoomPlayPage() {
   const rpsLeftSec = matchState?.rpsChoiceDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.rpsChoiceDeadline).getTime() - now) / 1000))
     : 0;
+  const rpsRevealActive = matchState?.rpsRevealUntil
+    ? new Date(matchState.rpsRevealUntil).getTime() > now
+    : false;
 
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
@@ -1566,6 +1569,7 @@ export default function RoomPlayPage() {
             players={matchState.players}
             myUserId={myUserId}
             leftSec={rpsLeftSec}
+            revealActive={rpsRevealActive}
             onChoose={handleRps}
           />
         )}

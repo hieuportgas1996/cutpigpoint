@@ -150,8 +150,10 @@ public class Match
     public bool IsBreakRound { get; set; }
     /// <summary>State bracket Oẳn Tù Xì của round giải lao hiện tại (null khi không phải round giải lao).</summary>
     public RpsTournament? Rps { get; set; }
-    /// <summary>Hết hạn 10s chọn kéo/búa/bao của ván Oẳn Tù Xì hiện tại; hết → server tự random cho ai chưa chọn.</summary>
+    /// <summary>Hết hạn 20s chọn kéo/búa/bao của ván Oẳn Tù Xì hiện tại; hết → server tự random cho ai chưa chọn. Null trong pha hiện kết quả.</summary>
     public DateTime? RpsChoiceDeadline { get; set; }
+    /// <summary>Pha HIỆN KẾT QUẢ ván Oẳn Tù Xì vừa chốt: giữ 2s cho mọi người xem rồi mới qua ván/giai đoạn kế (hoặc finalize). Null khi đang ở pha chọn.</summary>
+    public DateTime? RpsRevealUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

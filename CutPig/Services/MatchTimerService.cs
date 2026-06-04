@@ -170,10 +170,12 @@ public class MatchTimerService : BackgroundService
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
 
-                // Giải Lao (Oẳn Tù Xì): hết 20s chọn → auto random cho ai chưa chọn rồi chốt ván.
+                // Giải Lao (Oẳn Tù Xì): hết 20s chọn → auto random rồi chốt ván (vào pha hiện kết quả 2s);
+                // hết 2s hiện kết quả → qua ván/giai đoạn kế (hoặc finalize giải → WaitingNextRound).
                 foreach (var match in _matches.AllBreakRps().ToList())
                 {
-                    if (_matches.TryAutoResolveRps(match.RoomId))
+                    bool changed = _matches.TryAutoResolveRps(match.RoomId) || _matches.TryFinalizeRpsReveal(match.RoomId);
+                    if (changed)
                     {
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                         if (match.Status == MatchStatus.WaitingNextRound)

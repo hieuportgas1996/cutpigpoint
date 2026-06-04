@@ -442,6 +442,7 @@ export interface MatchPublicState {
   isBreakRound: boolean;
   rps: RpsState | null;
   rpsChoiceDeadline: string | null;
+  rpsRevealUntil: string | null;
 }
 
 export interface PrivateHand {

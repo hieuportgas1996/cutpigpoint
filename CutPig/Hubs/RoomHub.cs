@@ -963,7 +963,8 @@ public class RoomHub : Hub
             m.BreakOrganizerId,
             m.IsBreakRound,
             BuildRpsState(m.Rps),
-            m.RpsChoiceDeadline);
+            m.RpsChoiceDeadline,
+            m.RpsRevealUntil);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)

@@ -17,6 +17,7 @@ public class MatchManager
     public const int GambleStreakThreshold = 5; // số ván về Nhất liên tiếp để được mời "Liều Ăn Nhiều"
     public static TimeSpan GambleOfferTimeout { get; } = TimeSpan.FromSeconds(30); // hết hạn lời mời liều → auto từ chối
     public static TimeSpan RpsChoiceTimeout { get; } = TimeSpan.FromSeconds(20);    // 20s chọn kéo/búa/bao MỖI ván giải lao
+    public static TimeSpan RpsRevealTimeout { get; } = TimeSpan.FromSeconds(2);     // 2s xem kết quả ván RPS trước khi qua ván kế
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
@@ -98,6 +99,7 @@ public class MatchManager
         match.IsBreakRound = false;
         match.Rps = null;
         match.RpsChoiceDeadline = null;
+        match.RpsRevealUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -308,26 +310,31 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Chốt ván Oẳn Tù Xì hiện tại + tiến bracket. Hòa → đánh lại (reset choices, deadline mới).
-    /// Cặp xong → AdvanceStage; giải xong → tính FinalRanking + scoring + WaitingNextRound (emit round-end).
+    /// Chốt ván Oẳn Tù Xì hiện tại (ghi Last* + cập nhật điểm) rồi vào PHA HIỆN KẾT QUẢ 2s (RpsRevealUntil).
+    /// KHÔNG advance/mở ván kế ngay — để mọi người xem kết quả; timer FinalizeRpsReveal lo phần sau.
     /// </summary>
     private static void ResolveRpsGameAndAdvance(Match match)
     {
+        var cur = match.Rps!.Current;
+        cur.ResolveCurrentGame(); // hòa → reset choices không tăng điểm; có người thắng → +1 / set WinnerId
+        match.RpsChoiceDeadline = null;                                  // dừng pha chọn
+        match.RpsRevealUntil = DateTime.UtcNow + RpsRevealTimeout;       // giữ 2s xem kết quả
+    }
+
+    /// <summary>
+    /// Hết 2s hiện kết quả: tiến bracket. Cặp xong → AdvanceStage (giải xong → FinalizeBreakRound);
+    /// chưa xong (kể cả hòa) → mở ván kế với deadline chọn mới.
+    /// </summary>
+    private static void FinalizeRpsReveal(Match match)
+    {
         var t = match.Rps!;
         var cur = t.Current;
-        cur.ResolveCurrentGame(); // hòa → reset choices, không tăng điểm
-
+        match.RpsRevealUntil = null;
         if (cur.IsDone)
         {
-            bool done = t.AdvanceStage();
-            if (done)
-            {
-                FinalizeBreakRound(match);
-                return;
-            }
+            if (t.AdvanceStage()) { FinalizeBreakRound(match); return; }
         }
-        // Ván/giai đoạn kế: mở deadline mới 10s.
-        match.RpsChoiceDeadline = DateTime.UtcNow + RpsChoiceTimeout;
+        match.RpsChoiceDeadline = DateTime.UtcNow + RpsChoiceTimeout;    // ván/giai đoạn kế
     }
 
     /// <summary>Giải lao xong: gán FinalRank theo FinalRanking (1..4) + chuyển WaitingNextRound (scoring ở ComputeRoundScores).</summary>
@@ -340,6 +347,7 @@ public class MatchManager
             if (p != null) p.FinalRank = rank + 1;
         }
         match.RpsChoiceDeadline = null;
+        match.RpsRevealUntil = null;
         match.Status = MatchStatus.WaitingNextRound;
         match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
@@ -359,6 +367,22 @@ public class MatchManager
             if (cur.ChoiceA == RpsChoice.None) cur.ChoiceA = RpsEngine.RandomChoice(Random.Shared);
             if (cur.ChoiceB == RpsChoice.None) cur.ChoiceB = RpsEngine.RandomChoice(Random.Shared);
             ResolveRpsGameAndAdvance(match);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Timer: hết 2s pha hiện kết quả Oẳn Tù Xì → tiến ván/giai đoạn kế (hoặc finalize giải).
+    /// Trả về true nếu vừa xử lý. Có thể chuyển status → WaitingNextRound (ván cuối).
+    /// </summary>
+    public bool TryFinalizeRpsReveal(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakRps || match.Rps == null)
+                return false;
+            if (!match.RpsRevealUntil.HasValue || match.RpsRevealUntil.Value > DateTime.UtcNow) return false;
+            FinalizeRpsReveal(match);
             return true;
         }
     }
@@ -2250,7 +2274,7 @@ public class MatchManager
 
     /// <summary>
     /// Cập nhật streak về Nhất sau khi round kết thúc + tự đặt lời mời "Liều Ăn Nhiều" khi đủ ngưỡng.
-    /// - Round biến tấu (lễ hội / xì dách): KHÔNG đụng streak (không tăng, không reset) — KHÔNG tính vào chuỗi.
+    /// - Round biến tấu (lễ hội / xì dách / giải lao RPS): KHÔNG đụng streak (không tăng, không reset) — KHÔNG tính vào chuỗi.
     /// - Round TLMN thường / về trắng / phán xử: về Nhất (FinalRank==1) → streak++ (cap ở ngưỡng), ngược lại → 0.
     /// - Player đạt streak == ngưỡng (5) → set GambleOfferUserId rồi RESET streak người đó về 0 (chuỗi tối đa 5).
     ///   Nếu round KẾ là biến tấu / đã có lời mời / lịch liều → HOÃN (chưa set, giữ streak ở 5) → mời ở round thường kế.
@@ -2259,7 +2283,7 @@ public class MatchManager
     {
         // Round biến tấu KHÔNG đụng streak (không tăng, không reset) — nhưng VẪN re-check lời mời bên dưới
         // để nếu có streak treo qua round biến tấu thì mời lại ở round thường kế.
-        if (!match.IsFestivalRound && !match.IsXiDachRound)
+        if (!match.IsFestivalRound && !match.IsXiDachRound && !match.IsBreakRound)
         {
             foreach (var p in match.Players)
             {

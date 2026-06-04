@@ -57,34 +57,44 @@
 .rps-side-name { font-size: 13px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rps-side.me .rps-side-name { color: #ffe26b; }
 
+/* Dấu ? THẲNG ĐỨNG khi chờ/chọn + lắc khi sắp lật */
+.rps-mark {
+  display: inline-block;
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.25);
+  border: 2px solid rgba(212,164,74,0.5);
+  color: #d4a44a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rps-mark.waiting { opacity: 0.6; }
+.rps-mark.chosen { opacity: 1; color: #ffe26b; border-color: #ffe26b; box-shadow: 0 0 12px rgba(255,210,80,0.4); }
+.rps-mark.shaking { color: #ffe26b; border-color: #ffe26b; animation: rps-shake 0.16s ease-in-out infinite; }
+@keyframes rps-shake {
+  0%,100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-12px) rotate(6deg); }
+}
+
 .rps-fist {
+  display: inline-block;
   font-size: 58px;
   line-height: 1;
-  display: inline-block;
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
 }
-/* Nằm ngang đối nhau: trái xoay cho hướng sang phải, phải lật gương */
-.rps-fist.left { transform: rotate(90deg); }
-.rps-fist.right { transform: rotate(-90deg) scaleY(-1); }
-.rps-fist.waiting { opacity: 0.45; }
-.rps-fist.chosen { opacity: 0.8; }
-
-/* Lắc trước khi lật (oẳn-tù-xì-ra) */
-.rps-fist.shaking.left { animation: rps-shake-l 0.18s ease-in-out infinite; }
-.rps-fist.shaking.right { animation: rps-shake-r 0.18s ease-in-out infinite; }
-@keyframes rps-shake-l {
-  0%,100% { transform: rotate(90deg) translateY(0); }
-  50% { transform: rotate(90deg) translateY(-12px); }
-}
-@keyframes rps-shake-r {
-  0%,100% { transform: rotate(-90deg) scaleY(-1) translateY(0); }
-  50% { transform: rotate(-90deg) scaleY(-1) translateY(-12px); }
-}
 .rps-fist.revealed { animation: rps-reveal 0.32s ease; }
-.rps-fist.revealed.left { transform: rotate(0deg); }
-.rps-fist.revealed.right { transform: rotate(0deg) scaleX(-1); }
 @keyframes rps-reveal {
-  0% { transform: scale(0.5); }
+  0% { transform: scale(0.4) rotate(-10deg); }
   60% { transform: scale(1.25); }
   100% { transform: scale(1); }
 }
