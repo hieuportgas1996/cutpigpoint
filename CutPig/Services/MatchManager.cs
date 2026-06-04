@@ -17,7 +17,7 @@ public class MatchManager
     public const int GambleStreakThreshold = 5; // số ván về Nhất liên tiếp để được mời "Liều Ăn Nhiều"
     public static TimeSpan GambleOfferTimeout { get; } = TimeSpan.FromSeconds(30); // hết hạn lời mời liều → auto từ chối
     public static TimeSpan RpsChoiceTimeout { get; } = TimeSpan.FromSeconds(20);    // 20s chọn kéo/búa/bao MỖI ván giải lao
-    public static TimeSpan RpsRevealTimeout { get; } = TimeSpan.FromSeconds(2);     // 2s xem kết quả ván RPS trước khi qua ván kế
+    public static TimeSpan RpsRevealTimeout { get; } = TimeSpan.FromSeconds(4);     // 4s xem kết quả ván RPS (lắc ~0.7s + lật + ngắm) trước khi qua ván kế
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách

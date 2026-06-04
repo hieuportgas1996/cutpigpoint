@@ -43,11 +43,11 @@ export function RpsBreakScreen({
     : rps.stage === RpsStage.ThirdPlace ? rps.thirdPlace
     : rps.final;
 
-  // Pha hiện kết quả: dấu ? LẮC ~0.6s rồi LẬT hiện kéo/búa/bao. Kích hoạt khi server vào pha reveal
-  // (revealActive) HOẶC khi vừa có kết quả ván mới (chữ ký lastChoice/wins đổi) — bắt cả 2 để chắc chắn
-  // hiển thị dù `now` ticker (1s) có trễ. Giữ tự lo ~2s (khớp server) rồi về idle.
+  // Pha hiện kết quả (server giữ ~4s): dấu ? LẮC ~0.9s → LẬT hiện kéo/búa/bao (tỉ số GIỮ CŨ) →
+  // ~0.8s sau mới NHẢY tỉ số mới ('score'). Kích hoạt khi server vào pha reveal (revealActive) HOẶC khi
+  // vừa có kết quả ván mới (chữ ký đổi) — bắt cả 2 để chắc chắn hiển thị dù `now` ticker (1s) trễ.
   const sig = `${rps.stage}|${cur?.winsA ?? 0}|${cur?.winsB ?? 0}|${cur?.lastChoiceA ?? 0}|${cur?.lastChoiceB ?? 0}|${cur?.hasLast ? 1 : 0}`;
-  const [phase, setPhase] = useState<'idle' | 'shake' | 'reveal'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'shake' | 'reveal' | 'score'>('idle');
   const lastSigRef = useRef<string>('');
   useEffect(() => {
     if (done) { setPhase('idle'); return; }
@@ -55,8 +55,8 @@ export function RpsBreakScreen({
     lastSigRef.current = sig;
     if (revealActive || justResolved) {
       setPhase('shake');
-      const t1 = setTimeout(() => setPhase('reveal'), 600);
-      const t2 = setTimeout(() => setPhase('idle'), 2000);  // hết ~2s về ? (khớp reveal server)
+      const t1 = setTimeout(() => setPhase('reveal'), 900);  // lắc 0.9s rồi lật
+      const t2 = setTimeout(() => setPhase('score'), 1700);  // 0.8s sau khi lật mới nhảy tỉ số
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
     setPhase('idle');
@@ -91,8 +91,8 @@ export function RpsBreakScreen({
     );
   }
 
-  // Pha chọn: dấu ? THẲNG (đậm hơn nếu đã chọn). Pha shake: ? lắc. Pha reveal: lật hiện kéo/búa/bao.
-  const showLast = phase === 'shake' || phase === 'reveal';
+  // Lật bài hiện trong shake/reveal/score. Pha shake: ? lắc; reveal+score: hiện kéo/búa/bao.
+  const showLast = phase === 'shake' || phase === 'reveal' || phase === 'score';
   function fistContent(chosen: boolean, lastChoice: number) {
     if (showLast && cur.hasLast) {
       if (phase === 'shake') return <span className="rps-mark shaking">?</span>;
@@ -101,7 +101,16 @@ export function RpsBreakScreen({
     return <span className={`rps-mark ${chosen ? 'chosen' : 'waiting'}`}>?</span>;
   }
 
-  const draw = phase === 'reveal' && cur.lastOutcome === 0;
+  // Tỉ số HIỂN THỊ: trong shake/reveal vẫn là tỉ số CŨ (trước ván vừa lật); chỉ NHẢY khi 'score'/'idle'.
+  // Server đã +1 vào wins, nên trừ ngược kết quả ván vừa rồi (lastOutcome) để ra tỉ số cũ.
+  const beforeScore = phase === 'shake' || phase === 'reveal';
+  let dispA = cur.winsA, dispB = cur.winsB;
+  if (beforeScore && cur.hasLast) {
+    if (cur.lastOutcome === 1) dispA = Math.max(0, cur.winsA - 1);
+    else if (cur.lastOutcome === 2) dispB = Math.max(0, cur.winsB - 1);
+  }
+  const scoreBump = phase === 'score';
+  const draw = (phase === 'reveal' || phase === 'score') && cur.lastOutcome === 0;
 
   return (
     <div className="rps-overlay">
@@ -126,7 +135,7 @@ export function RpsBreakScreen({
           </div>
 
           <div className="rps-center">
-            <div className="rps-score">{cur.winsA} <i>:</i> {cur.winsB}</div>
+            <div className={`rps-score ${scoreBump ? 'bump' : ''}`}>{dispA} <i>:</i> {dispB}</div>
             <div className="rps-vs">VS</div>
             {draw && <div className="rps-draw">🤝 Hòa — đánh lại!</div>}
           </div>
