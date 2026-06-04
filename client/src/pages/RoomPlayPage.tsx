@@ -1077,9 +1077,15 @@ export default function RoomPlayPage() {
             const bubble = seatBubbles[player.userId];
             const isStar = player.isStarOfHope;
             const isGambling = player.isGambling;
+            const streak = player.winStreak ?? 0;
             return (
               <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''} ${isStar ? 'is-star' : ''} ${isGambling ? 'is-gambling' : ''}`}>
                 {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
+                {streak > 0 && (
+                  <div className="seat-streak-badge" title={`Thắng ${streak} ván liên tiếp`}>
+                    {'🏆'.repeat(streak)}
+                  </div>
+                )}
                 {isStar && <div className="seat-star-badge" title="Ngôi Sao Hi Vọng — điểm giao dịch ×2">⭐</div>}
                 {isGambling && <div className="seat-gamble-badge" title="Liều Ăn Nhiều — điểm thắng/thua ×3, mất quyền đi đầu">🔥</div>}
                 <div

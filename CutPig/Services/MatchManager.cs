@@ -185,8 +185,10 @@ public class MatchManager
         if (anyWhiteWin)
             match.WhiteWinDeadline = DateTime.UtcNow + WhiteWinChoiceTimeout;
 
-        // Liều Ăn Nhiều: tiêu cờ đã đồng ý liều → round NÀY người đó liều. Đánh đổi: mất quyền đi
-        // trước, ép luật 3♠ (ai cầm 3♠ đi đầu). Áp TRƯỚC SetupFirstTurn để firstSeat theo 3♠.
+        // Liều Ăn Nhiều: tiêu cờ đã đồng ý liều → round NÀY người đó liều. Đánh đổi: CHỈ KHI người liều
+        // chính là người về Nhất ván trước (PreviousRoundWinnerId) thì mới mất quyền đi đầu, ép luật 3♠
+        // (ai cầm 3♠ đi đầu). Nếu Nhất ván trước là người khác → người đó đi đầu bình thường (không ép 3♠).
+        // Áp TRƯỚC SetupFirstTurn để firstSeat tính đúng.
         if (match.GambleScheduledUserId is Guid gambleId)
         {
             var gambler = match.Players.FirstOrDefault(p => p.UserId == gambleId);
@@ -194,7 +196,8 @@ public class MatchManager
             {
                 gambler.IsGambling = true;
                 match.IsGambleRound = true;
-                match.EnforceThreeSpadesOpening = true; // người liều mất quyền đi đầu → 3♠ đi đầu
+                if (match.PreviousRoundWinnerId == gambleId)
+                    match.EnforceThreeSpadesOpening = true; // người liều là winner ván trước → mất quyền đi đầu
             }
             match.GambleScheduledUserId = null;
         }

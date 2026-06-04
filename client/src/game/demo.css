@@ -175,6 +175,22 @@
   font-weight: 700;
 }
 
+/* Chuỗi thắng (win streak) — N cúp ở GIỮA TRÊN seat, mỗi ván Nhất liên tiếp +1 cúp */
+.seat-streak-badge {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -3px;
+  white-space: nowrap;
+  z-index: 7;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6));
+  pointer-events: none;
+}
+
 /* Xì Dách (Sát Phạt) — info tại seat */
 .seat-xidach {
   position: absolute;
