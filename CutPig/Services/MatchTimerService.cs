@@ -170,7 +170,7 @@ public class MatchTimerService : BackgroundService
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
 
-                // Giải Lao (Oẳn Tù Xì): hết 10s chọn → auto random cho ai chưa chọn rồi chốt ván.
+                // Giải Lao (Oẳn Tù Xì): hết 20s chọn → auto random cho ai chưa chọn rồi chốt ván.
                 foreach (var match in _matches.AllBreakRps().ToList())
                 {
                     if (_matches.TryAutoResolveRps(match.RoomId))
@@ -218,68 +218,6 @@ public class MatchTimerService : BackgroundService
         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), ct);
     }
 
-    private static MatchPublicStateDto BuildPublic(Match m)
-    {
-        return new MatchPublicStateDto(
-            m.Id,
-            m.RoomId,
-            (int)m.Status,
-            m.RoundNumber,
-            m.CurrentTurnSeatIndex,
-            m.CurrentTrickOwnerId,
-            m.CurrentTrick?.Cards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
-            m.TurnDeadline,
-            m.NextRoundAt,
-            m.HostUserId,
-            m.Players.Select(p => new MatchPlayerDto(
-                p.UserId,
-                p.DisplayName,
-                p.SeatIndex,
-                p.Hand.Count,
-                p.FinalRank,
-                p.PassedThisTrick,
-                p.TotalScore,
-                p.WhiteWinReason,
-                p.WhiteWinAccepted,
-                p.HasAvatar,
-                p.Surrendered,
-                p.VoteResetChoice,
-                p.HasUsedVoteReset,
-                p.HasUsedFestival,
-                p.FestivalWinner,
-                p.FestivalRevealedIdx.Count,
-                m.IsFestivalRound
-                    ? p.Hand.Select((c, i) => p.FestivalRevealedIdx.Contains(i) ? new CardDto(c.Rank, (int)c.Suit) : (CardDto?)null).ToList()
-                    : null,
-                p.HasUsedStarOfHope,
-                p.IsStarOfHope,
-                p.HasUsedXiDach,
-                p.IsXiDachDealer,
-                p.XiDachStood,
-                p.XiDachSettled,
-                p.XiDachRevealed,
-                (m.IsXiDachRound && p.XiDachRevealed) ? XiDachEngine.Total(p.Hand) : 0,
-                (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null)).ToList(),
-            m.WhiteWinDeadline,
-            m.TrickCutDeadline,
-            m.PendingTrickWinnerId,
-            m.TrickCutCandidates.Count > 0 ? new List<Guid>(m.TrickCutCandidates) : null,
-            m.LastWonTrickCards?.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),
-            m.LastWonTrickWinnerId,
-            m.ShowOpponentCardCount,
-            m.VoteResetDeadline,
-            m.VoteResetInitiatorId,
-            m.PastFirstTrick,
-            m.FestivalScheduled,
-            m.IsFestivalRound,
-            m.FestivalOrganizerId,
-            m.FestivalRevealDeadline,
-            m.FestivalAutoFlipDeadline,
-            m.StarOfHopeScheduledUserId,
-            m.XiDachScheduledUserId,
-            m.IsXiDachRound,
-            m.XiDachDealerId,
-            m.XiDachTurnUserId,
-            m.XiDachTurnDeadline);
-    }
+    // Dùng chung builder với RoomHub để tránh lệch field (bug cũ: bản copy riêng ở đây thiếu RPS/gamble).
+    private static MatchPublicStateDto BuildPublic(Match m) => Hubs.RoomHub.BuildMatchPublic(m);
 }

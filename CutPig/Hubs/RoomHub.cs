@@ -887,7 +887,9 @@ public class RoomHub : Hub
         _chat.Clear(match.RoomId);
     }
 
-    private static MatchPublicStateDto BuildMatchPublic(Match m)
+    /// <summary>Build public match state DTO. PUBLIC STATIC để MatchTimerService dùng chung — KHÔNG duplicate
+    /// (bug cũ: timer có bản copy riêng thiếu field RPS/gamble → client treo ở round đặc biệt).</summary>
+    public static MatchPublicStateDto BuildMatchPublic(Match m)
     {
         return new MatchPublicStateDto(
             m.Id,
