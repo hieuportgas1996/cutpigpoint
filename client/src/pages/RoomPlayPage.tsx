@@ -690,8 +690,11 @@ export default function RoomPlayPage() {
     : '';
 
   // Liều Ăn Nhiều: lời mời tự hiện cho NGƯỜI ĐƯỢC MỜI (đủ 5 ván về Nhất liên tiếp). Đồng ý/Từ chối.
+  // CHỈ hiện khi ván n+1 ĐÃ deal & đang chơi (InProgress) — không hiện ở màn round-end ván n (WaitingNextRound),
+  // tức chỉ sau khi host bấm "Bắt đầu ngay" hoặc timer tự qua ván n+1.
   const gambleOfferUserId = matchState?.gambleOfferUserId ?? null;
-  const iAmOfferedGamble = gambleOfferUserId != null && gambleOfferUserId === myUserId;
+  const iAmOfferedGamble = gambleOfferUserId != null && gambleOfferUserId === myUserId
+    && matchState?.status === MatchStatus.InProgress;
   const gambleOfferLeftSec = matchState?.gambleOfferDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.gambleOfferDeadline).getTime() - now) / 1000))
     : 0;
