@@ -683,6 +683,26 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task RespondGamble(bool accept)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try
+        {
+            match = _matches.RespondGamble(roomId.Value, auth.Value.UserId, accept);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task ActivateXiDach()
     {
         var auth = await AuthenticateAsync();
@@ -877,7 +897,9 @@ public class RoomHub : Hub
                 p.XiDachSettled,
                 p.XiDachRevealed,
                 (m.IsXiDachRound && p.XiDachRevealed) ? XiDachEngine.Total(p.Hand) : 0,
-                (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null)).ToList(),
+                (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null,
+                p.WinStreak,
+                p.IsGambling)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -898,7 +920,10 @@ public class RoomHub : Hub
             m.IsXiDachRound,
             m.XiDachDealerId,
             m.XiDachTurnUserId,
-            m.XiDachTurnDeadline);
+            m.XiDachTurnDeadline,
+            m.GambleOfferUserId,
+            m.GambleScheduledUserId,
+            m.IsGambleRound);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

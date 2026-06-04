@@ -14,6 +14,7 @@ public class MatchManager
     public static TimeSpan TrickCutTimeout { get; } = TimeSpan.FromSeconds(5);
     public static TimeSpan VoteResetTimeout { get; } = TimeSpan.FromSeconds(20);
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
+    public const int GambleStreakThreshold = 5; // số ván về Nhất liên tiếp để được mời "Liều Ăn Nhiều"
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
@@ -91,6 +92,7 @@ public class MatchManager
         match.RoundChopExtra.Clear();
         match.RoundChopDetails.Clear();
         match.JudgeTriggered = false;
+        match.IsGambleRound = false;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -116,6 +118,7 @@ public class MatchManager
             p.XiDachDelta = 0;
             p.XiDachBaseDelta = 0;
             p.XiDachRevealed = false;
+            p.IsGambling = false;
             // HasUsedVoteReset / HasUsedFestival / HasUsedStarOfHope / HasUsedXiDach KHÔNG reset ở đây:
             // quyền là 1 lần / TRẬN (giữ qua các round), chỉ false mặc định khi MatchPlayer tạo trong Create.
         }
@@ -181,6 +184,20 @@ public class MatchManager
         // Hết trick 1 / hết 60s → cửa sổ đóng (CloseWhiteWinWindow xoá WhiteWinReason).
         if (anyWhiteWin)
             match.WhiteWinDeadline = DateTime.UtcNow + WhiteWinChoiceTimeout;
+
+        // Liều Ăn Nhiều: tiêu cờ đã đồng ý liều → round NÀY người đó liều. Đánh đổi: mất quyền đi
+        // trước, ép luật 3♠ (ai cầm 3♠ đi đầu). Áp TRƯỚC SetupFirstTurn để firstSeat theo 3♠.
+        if (match.GambleScheduledUserId is Guid gambleId)
+        {
+            var gambler = match.Players.FirstOrDefault(p => p.UserId == gambleId);
+            if (gambler != null)
+            {
+                gambler.IsGambling = true;
+                match.IsGambleRound = true;
+                match.EnforceThreeSpadesOpening = true; // người liều mất quyền đi đầu → 3♠ đi đầu
+            }
+            match.GambleScheduledUserId = null;
+        }
 
         SetupFirstTurn(match);
     }
@@ -1314,6 +1331,8 @@ public class MatchManager
             throw new InvalidOperationException("Round sau đã là Sát Phạt rồi.");
         if (match.StarOfHopeScheduledUserId.HasValue)
             throw new InvalidOperationException("Round sau đã có Ngôi Sao Hi Vọng rồi.");
+        if (match.GambleScheduledUserId.HasValue)
+            throw new InvalidOperationException("Round sau đã có người Liều Ăn Nhiều rồi.");
     }
 
     public Match ScheduleFestival(Guid roomId, Guid userId)
@@ -1354,6 +1373,33 @@ public class MatchManager
 
             match.StarOfHopeScheduledUserId = userId;
             player.HasUsedStarOfHope = true;
+            return match;
+        }
+    }
+
+    /// <summary>
+    /// Người đang được mời "Liều Ăn Nhiều" (GambleOfferUserId) chọn Đồng ý/Từ chối.
+    /// accept=true → đặt lịch liều round KẾ TIẾP (TLMN thường gần nhất); accept=false → bỏ lời mời.
+    /// Chỉ hợp lệ khi match đang chờ ván mới (WaitingNextRound) và đúng người được mời.
+    /// </summary>
+    public Match RespondGamble(Guid roomId, Guid userId, bool accept)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match))
+                throw new InvalidOperationException("Trận không tồn tại.");
+            if (match.GambleOfferUserId != userId)
+                throw new InvalidOperationException("Bạn không có lời mời liều nào.");
+
+            match.GambleOfferUserId = null;
+            if (accept)
+            {
+                // Không cho liều nếu round sau đã là biến tấu (an toàn — UpdateWinStreaks đã hoãn lời mời
+                // trong trường hợp này, nhưng chặn lần nữa phòng race).
+                if (match.FestivalScheduled || match.XiDachScheduledUserId.HasValue || match.StarOfHopeScheduledUserId.HasValue)
+                    throw new InvalidOperationException("Round sau đã là round đặc biệt, không thể liều.");
+                match.GambleScheduledUserId = userId;
+            }
             return match;
         }
     }
@@ -1667,47 +1713,55 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Ngôi Sao Hi Vọng: nhân ×2 mọi GIAO DỊCH điểm liên quan tới player star (cả 2 chiều thắng/thua),
-    /// các giao dịch không dính star giữ nguyên. Mô hình "đôi đối xứng theo hạng": phân tách điểm ván
-    /// thành các giao dịch theo cặp (base rank: Nhất↔Bét, Nhì↔Ba; chop: cutter↔victim; held: chót↔kế trên;
-    /// 3♠/về-trắng/phán-xử: theo cặp tương ứng), rồi nhân đôi cặp nào chứa star.
-    ///
-    /// Cách làm: xây ma trận giao dịch T[from,to] (from trả to amount ≥ 0) sao cho
-    /// base[i] = Σ_j (T[j,i] − T[i,j]). Sau đó với mỗi cặp (star, j): cộng thêm chính giao dịch đó 1 lần
-    /// nữa (×2). Vì T zero-sum theo cặp nên kết quả vẫn zero-sum. Phần phi-zero-sum (đui 3♠ khi n&lt;4)
-    /// xử lý riêng: nhân đôi delta của star trực tiếp.
-    ///
-    /// Nếu không có star trong round → trả về scores nguyên vẹn (không đổi hành vi cũ).
+    /// Ngôi Sao Hi Vọng (×2) và Liều Ăn Nhiều (×3) dùng CHUNG mô hình: nhân hệ số mọi GIAO DỊCH điểm
+    /// dính 1 player đặc biệt (cả 2 chiều thắng/thua), các giao dịch không dính giữ nguyên. Star ×2,
+    /// Liều ×3. Hai cái loại trừ lẫn nhau (1 round chỉ 1). Xem <see cref="ApplyPairwiseMultiplier"/>.
     /// </summary>
     private static int[] ApplyStarOfHopeDoubling(Match match, int[] scores)
     {
         int n = match.Players.Count;
-        int starIdx = -1;
-        for (int i = 0; i < n; i++) if (match.Players[i].IsStarOfHope) { starIdx = i; break; }
-        if (starIdx < 0) return scores;
+        // Liều Ăn Nhiều: ×3 cho người liều (ưu tiên, loại trừ với star).
+        for (int i = 0; i < n; i++) if (match.Players[i].IsGambling) return ApplyPairwiseMultiplier(match, scores, i, 3);
+        // Ngôi Sao Hi Vọng: ×2 cho star.
+        for (int i = 0; i < n; i++) if (match.Players[i].IsStarOfHope) return ApplyPairwiseMultiplier(match, scores, i, 2);
+        return scores;
+    }
+
+    /// <summary>
+    /// Nhân hệ số <paramref name="multiplier"/> mọi giao dịch điểm dính player <paramref name="specialIdx"/>.
+    /// Mô hình "đối tiền theo cặp": phân tách điểm ván thành ma trận giao dịch T[from,to] (from trả to ≥0)
+    /// sao cho base[i] = Σ_j (T[j,i] − T[i,j]) (base rank Nhất↔Bét / Nhì↔Ba; chop cutter↔victim; held
+    /// chót↔kế trên; 3♠ / về trắng / phán xử theo cặp tương ứng). Mỗi cặp (special, j) được nhân lên
+    /// multiplier lần (cộng thêm (multiplier−1) lần chính nó). Vì T zero-sum theo cặp nên kết quả vẫn
+    /// zero-sum. Phần phi-zero-sum (residual, vd đui 3♠ khi n&lt;4) chỉ nhân hệ số phần của special.
+    /// </summary>
+    private static int[] ApplyPairwiseMultiplier(Match match, int[] scores, int specialIdx, int multiplier)
+    {
+        int n = match.Players.Count;
+        if (specialIdx < 0 || multiplier <= 1) return scores;
 
         var t = BuildTransactionMatrix(match, scores, out int[] residual);
 
-        // Reconcile: đảm bảo Σ_j(T[j,i]−T[i,j]) + residual[i] == scores[i]. Phần lệch (nếu có do làm
-        // tròn / case hiếm) dồn vào residual để không bao giờ sai tổng — residual chỉ ×2 cho star.
+        // Reconcile: residual hấp thụ toàn bộ phần không theo cặp để không bao giờ sai tổng.
         for (int i = 0; i < n; i++)
         {
             int pairNet = 0;
             for (int j = 0; j < n; j++) pairNet += t[j, i] - t[i, j];
-            residual[i] = scores[i] - pairNet; // residual hấp thụ toàn bộ phần không theo cặp
+            residual[i] = scores[i] - pairNet;
         }
 
+        int extraFactor = multiplier - 1; // ×2 → +1 lần; ×3 → +2 lần.
         var result = (int[])scores.Clone();
-        // Nhân đôi mọi giao dịch theo cặp dính star: cộng thêm 1 lần nữa (net j→star).
+        // Nhân hệ số mọi giao dịch theo cặp dính special: cộng thêm extraFactor lần (net j→special).
         for (int j = 0; j < n; j++)
         {
-            if (j == starIdx) continue;
-            int extraToStar = t[j, starIdx] - t[starIdx, j]; // dương = j trả star
-            result[starIdx] += extraToStar;
-            result[j] -= extraToStar;
+            if (j == specialIdx) continue;
+            int netToSpecial = t[j, specialIdx] - t[specialIdx, j]; // dương = j trả special
+            result[specialIdx] += extraFactor * netToSpecial;
+            result[j] -= extraFactor * netToSpecial;
         }
-        // Phần residual (phi-zero-sum, vd đui 3♠ với n<4): nhân đôi phần của star.
-        result[starIdx] += residual[starIdx];
+        // Phần residual (phi-zero-sum, vd đui 3♠ với n<4): nhân hệ số phần của special.
+        result[specialIdx] += extraFactor * residual[specialIdx];
         return result;
     }
 
@@ -1936,6 +1990,8 @@ public class MatchManager
         for (int i = 0; i < match.Players.Count; i++)
             match.Players[i].TotalScore += roundScores[i];
 
+        UpdateWinStreaks(match);
+
         var entries = match.Players
             .OrderBy(p => p.FinalRank ?? int.MaxValue)
             .Select(p =>
@@ -1986,7 +2042,9 @@ public class MatchManager
                     xdCards,
                     xdLabel,
                     p.IsXiDachDealer,
-                    xdTotal);
+                    xdTotal,
+                    bd.GambleDelta,
+                    p.IsGambling);
             })
             .ToList();
 
@@ -1995,7 +2053,38 @@ public class MatchManager
         return dto;
     }
 
-    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total, int Festival = 0, int StarDelta = 0);
+    /// <summary>
+    /// Cập nhật streak về Nhất sau khi round kết thúc + tự đặt lời mời "Liều Ăn Nhiều" khi đủ ngưỡng.
+    /// - Round biến tấu (lễ hội / xì dách): KHÔNG đụng streak (không tăng, không reset).
+    /// - Round TLMN thường / về trắng / phán xử: về Nhất (FinalRank==1) → streak++, ngược lại → 0.
+    /// - Player đạt streak ≥ ngưỡng + hiện chưa có ai được mời/đã đặt lịch liều → set GambleOfferUserId.
+    ///   Nếu round KẾ là biến tấu (FestivalScheduled / XiDach / Star đã đặt) thì GIỮ lời mời (hoãn) —
+    ///   DealRound chỉ tiêu GambleScheduledUserId ở round thường nên lời mời tự chờ tới round TLMN gần nhất.
+    /// </summary>
+    private static void UpdateWinStreaks(Match match)
+    {
+        // Round biến tấu KHÔNG đụng streak (không tăng, không reset) — nhưng VẪN re-check lời mời bên dưới
+        // để nếu có streak treo qua round biến tấu thì mời lại ở round thường kế.
+        if (!match.IsFestivalRound && !match.IsXiDachRound)
+        {
+            foreach (var p in match.Players)
+            {
+                if (p.FinalRank == 1) p.WinStreak++;
+                else p.WinStreak = 0;
+            }
+        }
+
+        // Chỉ mời khi hiện không có lời mời / lịch liều / biến tấu nào đang treo (1 lời mời/lúc).
+        // Nếu round KẾ đã là biến tấu (festival/xì dách/star đã đặt) → KHÔNG mời (hoãn); lần round-end
+        // sau (sau khi biến tấu resolve) sẽ mời lại vì streak vẫn còn.
+        if (match.GambleOfferUserId.HasValue || match.GambleScheduledUserId.HasValue) return;
+        if (match.FestivalScheduled || match.XiDachScheduledUserId.HasValue || match.StarOfHopeScheduledUserId.HasValue) return;
+
+        var hot = match.Players.FirstOrDefault(p => p.WinStreak >= GambleStreakThreshold);
+        if (hot != null) match.GambleOfferUserId = hot.UserId;
+    }
+
+    public record RoundScoreBreakdown(int BaseRank, int Chop, int ThreeOfSpades, int Judge, int WhiteWin, int HeldPenalty, int Total, int Festival = 0, int StarDelta = 0, int GambleDelta = 0);
 
     /// <summary>Per-player breakdown of the round score by component (for UI display). StarDelta = phần
     /// chênh do Ngôi Sao Hi Vọng ×2 (doubled total − base total); các component khác là điểm CƠ BẢN.</summary>
@@ -2130,15 +2219,30 @@ public class MatchManager
     }
 
     /// <summary>Gắn StarDelta = (điểm đã ×2) − (tổng base) vào mỗi breakdown; Total cập nhật thành điểm ×2.
-    /// Không star → StarDelta = 0, Total giữ nguyên.</summary>
+    /// Không star → StarDelta = 0, Total giữ nguyên. Star &amp; Liều loại trừ lẫn nhau nên xử lý riêng.</summary>
     private RoundScoreBreakdown[] ApplyStarDeltaToBreakdowns(Match match, RoundScoreBreakdown[] bases)
     {
+        if (match.IsGambleRound)
+            return ApplyGambleDeltaToBreakdowns(match, bases);
         if (!match.Players.Any(p => p.IsStarOfHope)) return bases;
         var doubled = ComputeRoundScores(match);
         for (int i = 0; i < bases.Length; i++)
         {
             int starDelta = doubled[i] - bases[i].Total;
             bases[i] = bases[i] with { StarDelta = starDelta, Total = doubled[i] };
+        }
+        return bases;
+    }
+
+    /// <summary>Gắn GambleDelta = (điểm sau liều ×3) − (tổng base) vào mỗi breakdown; Total = điểm sau liều.
+    /// Người liều: GambleDelta = phần thay đổi do ×3; người khác: GambleDelta = phần bù họ gánh/nhận.</summary>
+    private RoundScoreBreakdown[] ApplyGambleDeltaToBreakdowns(Match match, RoundScoreBreakdown[] bases)
+    {
+        var final = ComputeRoundScores(match);
+        for (int i = 0; i < bases.Length; i++)
+        {
+            int gambleDelta = final[i] - bases[i].Total;
+            bases[i] = bases[i] with { GambleDelta = gambleDelta, Total = final[i] };
         }
         return bases;
     }

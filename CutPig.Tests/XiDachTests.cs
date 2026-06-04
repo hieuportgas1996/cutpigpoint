@@ -283,7 +283,9 @@ public class XiDachTests
             var uid = match.XiDachTurnUserId!.Value;
             var p = match.Players.First(x => x.UserId == uid);
             bool isDealer = p.IsXiDachDealer;
-            if (XiDachEngine.CanStand(p.Hand, isDealer))
+            // Đã quắc (IsBust) hoặc đủ 5 lá → KHÔNG rút thêm được nữa → phải "Dừng" để qua lượt.
+            // (Người quắc 5 lá có CanStand=false nhưng StandXiDach vẫn cho dừng vì IsBust.)
+            if (XiDachEngine.IsBust(p.Hand) || p.Hand.Count >= XiDachEngine.MaxCards || XiDachEngine.CanStand(p.Hand, isDealer))
                 mgr.StandXiDach(roomId, uid);
             else
                 mgr.DrawXiDachCard(roomId, uid);

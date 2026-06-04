@@ -52,6 +52,12 @@ public class MatchPlayer
 
     /// <summary>True khi player đã dùng quyền "Sát Phạt" (tổ chức xì dách) — 1 lần / TRẬN (giữ qua round).</summary>
     public bool HasUsedXiDach { get; set; }
+
+    // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
+    /// <summary>Số ván về Nhất LIÊN TIẾP gần nhất (về trắng/phán-xử thắng cũng = Nhất). Reset 0 khi không về Nhất. Round biến tấu (lễ hội/xì dách) KHÔNG đụng. Giữ qua round.</summary>
+    public int WinStreak { get; set; }
+    /// <summary>True khi player này LÀ người liều của round HIỆN TẠI (điểm thắng ×2 +6 / điểm thua ×2). Reset ở DealRound.</summary>
+    public bool IsGambling { get; set; }
     // ---- Xì Dách (Sát Phạt) round state — reset ở DealRound ----
     /// <summary>True nếu player này là Nhà Cái của round xì dách hiện tại.</summary>
     public bool IsXiDachDealer { get; set; }
@@ -120,6 +126,14 @@ public class Match
 
     /// <summary>UserId người đã kích hoạt "Ngôi Sao Hi Vọng" → round KẾ TIẾP người này là star (điểm ×2). Chỉ 1 người/round được kích. Null = chưa ai.</summary>
     public Guid? StarOfHopeScheduledUserId { get; set; }
+
+    // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
+    /// <summary>UserId người vừa đạt streak ≥5 và ĐANG được mời liều (chưa Đồng ý/Từ chối). Nếu round KẾ là biến tấu (lễ hội/xì dách/star) thì giữ lời mời, hoãn sang round TLMN thường gần nhất. Null = không có lời mời.</summary>
+    public Guid? GambleOfferUserId { get; set; }
+    /// <summary>UserId người đã ĐỒNG Ý liều → round KẾ TIẾP (TLMN thường) người này liều: ×2 +6 nếu thắng / ×2 nếu thua, mất quyền đi trước. Tiêu ở DealRound. Null = chưa ai.</summary>
+    public Guid? GambleScheduledUserId { get; set; }
+    /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>
+    public bool IsGambleRound { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

@@ -29,6 +29,7 @@ interface UseRoomConnectionResult {
   flipFestivalCard: (flipAll: boolean, cardIndex: number) => Promise<void>;
   activateStarOfHope: () => Promise<void>;
   activateXiDach: () => Promise<void>;
+  respondGamble: (accept: boolean) => Promise<void>;
   drawXiDachCard: () => Promise<void>;
   standXiDach: () => Promise<void>;
   compareXiDach: (targetUserId: string) => Promise<void>;
@@ -254,6 +255,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('ActivateXiDach');
   }, []);
 
+  const respondGamble = useCallback(async (accept: boolean) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('RespondGamble', accept);
+  }, []);
+
   const drawXiDachCard = useCallback(async () => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -317,7 +324,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

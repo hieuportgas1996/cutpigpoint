@@ -367,6 +367,8 @@ export interface MatchPlayerPublic {
   xiDachRevealed: boolean;
   xiDachVisibleTotal: number;
   xiDachVisibleCards: CardDto[] | null;
+  winStreak: number;
+  isGambling: boolean;
 }
 
 export interface MatchPublicState {
@@ -402,6 +404,9 @@ export interface MatchPublicState {
   xiDachDealerId: string | null;
   xiDachTurnUserId: string | null;
   xiDachTurnDeadline: string | null;
+  gambleOfferUserId: string | null;
+  gambleScheduledUserId: string | null;
+  isGambleRound: boolean;
 }
 
 export interface PrivateHand {
@@ -442,6 +447,8 @@ export interface RoundResultEntry {
   xiDachLabel: string | null;
   xiDachIsDealer: boolean;
   xiDachTotal: number;
+  gambleDelta: number;
+  isGamble: boolean;
 }
 
 export interface HeldItems {

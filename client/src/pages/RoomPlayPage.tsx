@@ -169,6 +169,10 @@ function scoreBreakdownParts(r: RoundResultEntry): Array<{ label: string; value:
   if (r.starDelta !== 0) {
     parts.push({ label: '⭐ Ngôi sao ×2', value: r.starDelta });
   }
+  if (r.gambleDelta !== 0) {
+    const label = r.isGamble ? '🔥 Liều ×3' : '🔥 Bù người liều';
+    parts.push({ label, value: r.gambleDelta });
+  }
   return parts;
 }
 
@@ -184,7 +188,7 @@ function RoundResultRows({ round, myUserId }: { round: RoundEnd; myUserId: strin
               {r.whiteWinReason ? '★' : RANK_LABEL[r.finalRank] ?? `#${r.finalRank}`}
             </span>
             <div className="match-end-name">
-              <div>{r.isStar && '⭐ '}{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+              <div>{r.isStar && '⭐ '}{r.isGamble && '🔥 '}{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
               {r.whiteWinReason && <div className="white-win-reason">{r.whiteWinReason}</div>}
               {held.length > 0 && (
                 <div className="held-items">
@@ -310,7 +314,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -337,6 +341,7 @@ export default function RoomPlayPage() {
   const [starConfirmOpen, setStarConfirmOpen] = useState(false);
   const lastXiDachAnnouncedRef = useRef<string | null>(null);
   const [xiDachConfirmOpen, setXiDachConfirmOpen] = useState(false);
+  const lastGambleAnnouncedRef = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -653,6 +658,7 @@ export default function RoomPlayPage() {
     && !matchState.festivalScheduled
     && !matchState.xiDachScheduledUserId
     && !matchState.starOfHopeScheduledUserId
+    && !matchState.gambleScheduledUserId
     && !matchState.isFestivalRound
     && !matchState.isXiDachRound;
   const canScheduleFestival = matchState?.status === MatchStatus.InProgress
@@ -682,6 +688,15 @@ export default function RoomPlayPage() {
   const xiDachScheduledName = xiDachScheduledUserId
     ? matchState?.players.find(p => p.userId === xiDachScheduledUserId)?.displayName ?? ''
     : '';
+
+  // Liều Ăn Nhiều: lời mời tự hiện cho NGƯỜI ĐƯỢC MỜI (đủ 5 ván về Nhất liên tiếp). Đồng ý/Từ chối.
+  const gambleOfferUserId = matchState?.gambleOfferUserId ?? null;
+  const iAmOfferedGamble = gambleOfferUserId != null && gambleOfferUserId === myUserId;
+  const gambleScheduledUserId = matchState?.gambleScheduledUserId ?? null;
+  const gambleScheduledName = gambleScheduledUserId
+    ? (gambleScheduledUserId === myUserId ? 'Bạn' : matchState?.players.find(p => p.userId === gambleScheduledUserId)?.displayName ?? '')
+    : '';
+  const myWinStreak = me?.winStreak ?? 0;
 
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
@@ -788,6 +803,16 @@ export default function RoomPlayPage() {
     const who = xiDachScheduledUserId === myUserId ? 'Bạn' : xiDachScheduledName;
     toast.push('info', `🃏 ${who} đã tổ chức Sát Phạt — round sau chơi Xì Dách, ${xiDachScheduledUserId === myUserId ? 'bạn' : 'họ'} làm Nhà Cái!`);
   }, [xiDachScheduledUserId, matchState?.roundNumber]);
+
+  // Thông báo (mọi người) khi có người ĐỒNG Ý liều ăn nhiều — round sau người đó liều (×2 +6 / ×2).
+  useEffect(() => {
+    if (!gambleScheduledUserId) return;
+    const key = `${matchState?.roundNumber}|${gambleScheduledUserId}`;
+    if (lastGambleAnnouncedRef.current === key) return;
+    lastGambleAnnouncedRef.current = key;
+    const who = gambleScheduledUserId === myUserId ? 'Bạn' : gambleScheduledName;
+    toast.push('info', `🔥 ${who} quyết định LIỀU ĂN NHIỀU — round sau điểm thắng/thua của ${gambleScheduledUserId === myUserId ? 'bạn' : 'họ'} ×3!`);
+  }, [gambleScheduledUserId, matchState?.roundNumber]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -939,6 +964,12 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleRespondGamble(accept: boolean) {
+    // Toast (cho mọi người) khi accept do effect gambleScheduledUserId lo; ở đây chỉ gọi.
+    try { await respondGamble(accept); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   async function handleDrawXiDach() {
     try { await drawXiDachCard(); }
     catch (e) { toast.push('error', (e as Error).message); }
@@ -1045,10 +1076,12 @@ export default function RoomPlayPage() {
             const isMe = player.userId === myUserId;
             const bubble = seatBubbles[player.userId];
             const isStar = player.isStarOfHope;
+            const isGambling = player.isGambling;
             return (
-              <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''} ${isStar ? 'is-star' : ''}`}>
+              <div key={player.userId} className={`tlmn-seat tlmn-seat-${position} ${isTurn ? 'is-turn' : ''} ${isStar ? 'is-star' : ''} ${isGambling ? 'is-gambling' : ''}`}>
                 {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
                 {isStar && <div className="seat-star-badge" title="Ngôi Sao Hi Vọng — điểm giao dịch ×2">⭐</div>}
+                {isGambling && <div className="seat-gamble-badge" title="Liều Ăn Nhiều — điểm thắng/thua ×3, mất quyền đi đầu">🔥</div>}
                 <div
                   className="tlmn-avatar"
                   onClick={() => {
@@ -1466,6 +1499,25 @@ export default function RoomPlayPage() {
               <div className="match-end-actions">
                 <button className="tlmn-btn primary" onClick={handleActivateXiDach}>🃏 Tổ chức ngay</button>
                 <button className="tlmn-btn ghost" onClick={() => setXiDachConfirmOpen(false)}>Để sau</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {iAmOfferedGamble && (
+          <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.55)' }}>
+            <div className="match-end-card gamble-offer" onClick={e => e.stopPropagation()}>
+              <h2>🔥 Bạn đang thắng liên tiếp {myWinStreak} ván!</h2>
+              <div className="next-round-countdown">
+                Bạn có muốn <b>liều ăn nhiều</b> không?
+                <div className="gamble-terms">
+                  <div>🔥 Mọi điểm bạn <b>thắng/thua</b> ván sau sẽ <b>×3</b> (cả 2 chiều).</div>
+                  <div>⚠️ Đánh đổi: bạn <b>mất lượt đi trước</b> — người cầm <b>3♠</b> đi đầu ván này.</div>
+                </div>
+              </div>
+              <div className="match-end-actions">
+                <button className="tlmn-btn primary" onClick={() => handleRespondGamble(true)}>🔥 Đồng ý</button>
+                <button className="tlmn-btn ghost" onClick={() => handleRespondGamble(false)}>Từ chối</button>
               </div>
             </div>
           </div>
