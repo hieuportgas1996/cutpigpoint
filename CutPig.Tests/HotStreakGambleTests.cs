@@ -265,6 +265,23 @@ public class HotStreakGambleTests
     }
 
     [Fact]
+    public void Offer_SetsDeadline_AndBlocksAutoDeal()
+    {
+        // Đạt 5 → set offer + GambleOfferDeadline + NextRoundAt=null (chặn auto-deal tới khi trả lời).
+        var (m, ids) = MakeMatch(4);
+        m.NextRoundAt = System.DateTime.UtcNow.AddSeconds(20); // giả lập đã hẹn deal
+        m.Players[0].FinalRank = 1;
+        m.Players[1].FinalRank = 2;
+        m.Players[2].FinalRank = 3;
+        m.Players[3].FinalRank = 4;
+        for (int r = 0; r < MatchManager.GambleStreakThreshold; r++) _mgr.BuildRoundEndDto(m);
+
+        Assert.Equal(ids[0], m.GambleOfferUserId);
+        Assert.NotNull(m.GambleOfferDeadline);
+        Assert.Null(m.NextRoundAt); // auto-deal bị chặn
+    }
+
+    [Fact]
     public void Streak_FestivalRound_DoesNotTouchStreakNorOffer()
     {
         var (m, _) = MakeMatch(4);

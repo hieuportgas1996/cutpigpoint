@@ -130,6 +130,8 @@ public class Match
     // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
     /// <summary>UserId người vừa đạt streak ≥5 và ĐANG được mời liều (chưa Đồng ý/Từ chối). Nếu round KẾ là biến tấu (lễ hội/xì dách/star) thì giữ lời mời, hoãn sang round TLMN thường gần nhất. Null = không có lời mời.</summary>
     public Guid? GambleOfferUserId { get; set; }
+    /// <summary>Hết hạn lời mời liều (chặn deal ván kế tới khi trả lời / hết hạn auto-từ-chối). Set khi tạo offer; null khi không có.</summary>
+    public DateTime? GambleOfferDeadline { get; set; }
     /// <summary>UserId người đã ĐỒNG Ý liều → round KẾ TIẾP (TLMN thường) người này liều: ×2 +6 nếu thắng / ×2 nếu thua, mất quyền đi trước. Tiêu ở DealRound. Null = chưa ai.</summary>
     public Guid? GambleScheduledUserId { get; set; }
     /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>

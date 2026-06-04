@@ -407,6 +407,7 @@ export interface MatchPublicState {
   gambleOfferUserId: string | null;
   gambleScheduledUserId: string | null;
   isGambleRound: boolean;
+  gambleOfferDeadline: string | null;
 }
 
 export interface PrivateHand {

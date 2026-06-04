@@ -692,11 +692,13 @@ export default function RoomPlayPage() {
   // Liều Ăn Nhiều: lời mời tự hiện cho NGƯỜI ĐƯỢC MỜI (đủ 5 ván về Nhất liên tiếp). Đồng ý/Từ chối.
   const gambleOfferUserId = matchState?.gambleOfferUserId ?? null;
   const iAmOfferedGamble = gambleOfferUserId != null && gambleOfferUserId === myUserId;
+  const gambleOfferLeftSec = matchState?.gambleOfferDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.gambleOfferDeadline).getTime() - now) / 1000))
+    : 0;
   const gambleScheduledUserId = matchState?.gambleScheduledUserId ?? null;
   const gambleScheduledName = gambleScheduledUserId
     ? (gambleScheduledUserId === myUserId ? 'Bạn' : matchState?.players.find(p => p.userId === gambleScheduledUserId)?.displayName ?? '')
     : '';
-  const myWinStreak = me?.winStreak ?? 0;
 
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
@@ -1513,7 +1515,7 @@ export default function RoomPlayPage() {
         {iAmOfferedGamble && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.55)' }}>
             <div className="match-end-card gamble-offer" onClick={e => e.stopPropagation()}>
-              <h2>🔥 Bạn đang thắng liên tiếp {myWinStreak} ván!</h2>
+              <h2>🔥 Bạn đang thắng liên tiếp 5 ván!</h2>
               <div className="next-round-countdown">
                 Bạn có muốn <b>liều ăn nhiều</b> không?
                 <div className="gamble-terms">
@@ -1523,7 +1525,7 @@ export default function RoomPlayPage() {
               </div>
               <div className="match-end-actions">
                 <button className="tlmn-btn primary" onClick={() => handleRespondGamble(true)}>🔥 Đồng ý</button>
-                <button className="tlmn-btn ghost" onClick={() => handleRespondGamble(false)}>Từ chối</button>
+                <button className="tlmn-btn ghost" onClick={() => handleRespondGamble(false)}>Từ chối ({gambleOfferLeftSec}s)</button>
               </div>
             </div>
           </div>
@@ -1568,7 +1570,7 @@ export default function RoomPlayPage() {
           </div>
         )}
 
-        {delayedRoundEnd && !matchEnd && (
+        {delayedRoundEnd && !matchEnd && !iAmOfferedGamble && (
           <div className="match-end-overlay">
             {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival || delayedRoundEnd.wasXiDach) && <Confetti active={true} />}
             <div className="match-end-card">
@@ -1589,13 +1591,21 @@ export default function RoomPlayPage() {
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
-                <div className="next-round-countdown">
-                  🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
-                </div>
-                {isHost && (
+                {gambleOfferUserId ? (
+                  <div className="next-round-countdown">
+                    🔥 Đang chờ <b>{matchState.players.find(p => p.userId === gambleOfferUserId)?.displayName ?? '?'}</b> quyết định Liều Ăn Nhiều…
+                  </div>
+                ) : (
                   <>
-                    <button className="tlmn-btn primary" onClick={handleStartNextRoundNow}>▶ Bắt đầu ngay</button>
-                    <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
+                    <div className="next-round-countdown">
+                      🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
+                    </div>
+                    {isHost && (
+                      <>
+                        <button className="tlmn-btn primary" onClick={handleStartNextRoundNow}>▶ Bắt đầu ngay</button>
+                        <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

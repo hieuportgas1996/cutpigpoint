@@ -102,7 +102,8 @@ public record MatchPublicStateDto(
     DateTime? XiDachTurnDeadline = null,
     Guid? GambleOfferUserId = null,
     Guid? GambleScheduledUserId = null,
-    bool IsGambleRound = false);
+    bool IsGambleRound = false,
+    DateTime? GambleOfferDeadline = null);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

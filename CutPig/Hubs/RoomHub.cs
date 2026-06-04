@@ -923,7 +923,8 @@ public class RoomHub : Hub
             m.XiDachTurnDeadline,
             m.GambleOfferUserId,
             m.GambleScheduledUserId,
-            m.IsGambleRound);
+            m.IsGambleRound,
+            m.GambleOfferDeadline);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
