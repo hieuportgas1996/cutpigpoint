@@ -1591,21 +1591,13 @@ export default function RoomPlayPage() {
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
-                {gambleOfferUserId ? (
-                  <div className="next-round-countdown">
-                    🔥 Đang chờ <b>{matchState.players.find(p => p.userId === gambleOfferUserId)?.displayName ?? '?'}</b> quyết định Liều Ăn Nhiều…
-                  </div>
-                ) : (
+                <div className="next-round-countdown">
+                  🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
+                </div>
+                {isHost && (
                   <>
-                    <div className="next-round-countdown">
-                      🎴 Ván tiếp sau <b>{nextRoundLeftSec}s</b>…
-                    </div>
-                    {isHost && (
-                      <>
-                        <button className="tlmn-btn primary" onClick={handleStartNextRoundNow}>▶ Bắt đầu ngay</button>
-                        <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
-                      </>
-                    )}
+                    <button className="tlmn-btn primary" onClick={handleStartNextRoundNow}>▶ Bắt đầu ngay</button>
+                    <button className="tlmn-btn ghost" onClick={handleEndMatch}>Kết thúc trận</button>
                   </>
                 )}
               </div>

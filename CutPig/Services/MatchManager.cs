@@ -64,15 +64,6 @@ public class MatchManager
             if (match.Status != MatchStatus.WaitingNextRound)
                 throw new InvalidOperationException("Ván trước chưa kết thúc.");
 
-            // Có lời mời Liều Ăn Nhiều đang treo → CHẶN deal ván kế tới khi người đó trả lời (hoặc hết hạn).
-            // Host bấm "Bắt đầu ngay" → báo lỗi; auto-timer (hostUserId==null) → bỏ qua, không deal.
-            if (match.GambleOfferUserId.HasValue)
-            {
-                if (hostUserId.HasValue)
-                    throw new InvalidOperationException("Đang chờ người chơi quyết định Liều Ăn Nhiều.");
-                return match; // timer chờ
-            }
-
             DealRound(match, isFirstRound: false);
             return match;
         }
@@ -1391,9 +1382,9 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Người đang được mời "Liều Ăn Nhiều" (GambleOfferUserId) chọn Đồng ý/Từ chối.
-    /// accept=true → đặt lịch liều round KẾ TIẾP (TLMN thường gần nhất); accept=false → bỏ lời mời.
-    /// Chỉ hợp lệ khi match đang chờ ván mới (WaitingNextRound) và đúng người được mời.
+    /// Người đang được mời "Liều Ăn Nhiều" (GambleOfferUserId) chọn Đồng ý/Từ chối. Lời mời hiện trong
+    /// ván n+1 (ván ngay sau khi đạt streak) — ván n+1 chơi BÌNH THƯỜNG; accept=true → ván n+2 mới là ván
+    /// liều (GambleScheduledUserId). accept=false → bỏ lời mời. Trả lời bất kỳ lúc nào (InProgress/WaitingNextRound).
     /// </summary>
     public Match RespondGamble(Guid roomId, Guid userId, bool accept)
     {
@@ -1412,11 +1403,8 @@ public class MatchManager
                 // trong trường hợp này, nhưng chặn lần nữa phòng race).
                 if (match.FestivalScheduled || match.XiDachScheduledUserId.HasValue || match.StarOfHopeScheduledUserId.HasValue)
                     throw new InvalidOperationException("Round sau đã là round đặc biệt, không thể liều.");
-                match.GambleScheduledUserId = userId;
+                match.GambleScheduledUserId = userId; // ván KẾ TIẾP (n+2) sẽ là ván liều
             }
-            // Đã trả lời → mở lại auto-deal ván kế (StartNextRound sẽ deal vì offer đã clear).
-            if (match.Status == MatchStatus.WaitingNextRound)
-                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
             return match;
         }
     }
@@ -1601,9 +1589,12 @@ public class MatchManager
 
     public IEnumerable<Match> AllWaitingNextRound() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.WaitingNextRound);
 
+    /// <summary>Mọi match đang có lời mời Liều Ăn Nhiều treo (để timer scan hết hạn). Offer có thể treo ở ván n+1 (InProgress) hoặc lúc chờ ván mới.</summary>
+    public IEnumerable<Match> AllWithGambleOffer() => _matchesByRoom.Values.Where(m => m.GambleOfferUserId.HasValue);
+
     /// <summary>
-    /// Timer: hết hạn lời mời liều (GambleOfferDeadline qua) → auto TỪ CHỐI (clear offer) để ván kế được deal.
-    /// Trả về true nếu vừa expire (caller broadcast lại MatchState). Không deal ngay — để timer auto-next lo.
+    /// Timer: hết hạn lời mời liều (GambleOfferDeadline qua) mà chưa trả lời → auto TỪ CHỐI (clear offer).
+    /// Trả về true nếu vừa expire (caller broadcast lại MatchState). Không đụng deal — ván n+1 vẫn chạy bình thường.
     /// </summary>
     public bool TryExpireGambleOffer(Guid roomId)
     {
@@ -1614,8 +1605,6 @@ public class MatchManager
             if (match.GambleOfferDeadline.Value > DateTime.UtcNow) return false;
             match.GambleOfferUserId = null;
             match.GambleOfferDeadline = null;
-            if (match.Status == MatchStatus.WaitingNextRound)
-                match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
             return true;
         }
     }
@@ -2115,12 +2104,13 @@ public class MatchManager
         if (match.GambleOfferUserId.HasValue || match.GambleScheduledUserId.HasValue) return;
         if (match.FestivalScheduled || match.XiDachScheduledUserId.HasValue || match.StarOfHopeScheduledUserId.HasValue) return;
 
+        // Mời người đạt streak. Lời mời hiện ở ván KẾ (n+1) — ván n+1 vẫn chơi BÌNH THƯỜNG (không chặn deal);
+        // đồng ý → ván n+2 mới là ván liều. Lời mời sống tối đa GambleOfferTimeout rồi auto từ chối.
         var hot = match.Players.FirstOrDefault(p => p.WinStreak >= GambleStreakThreshold);
         if (hot != null)
         {
             match.GambleOfferUserId = hot.UserId;
             match.GambleOfferDeadline = DateTime.UtcNow + GambleOfferTimeout;
-            match.NextRoundAt = null;     // CHẶN auto-deal ván kế tới khi trả lời lời mời (StartNextRound bỏ qua khi offer treo)
             hot.WinStreak = 0;            // đạt 5 → mời xong reset chuỗi về 0 (chuỗi sao bắt đầu đếm lại từ đầu)
         }
     }

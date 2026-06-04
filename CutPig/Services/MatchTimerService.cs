@@ -162,10 +162,10 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
-                // Hết hạn lời mời Liều Ăn Nhiều → auto từ chối (mở lại auto-deal ván kế).
-                foreach (var match in _matches.AllWaitingNextRound().ToList())
+                // Hết hạn lời mời Liều Ăn Nhiều (offer có thể treo ở ván n+1 đang chơi HOẶC lúc chờ ván mới)
+                // → auto từ chối. Không chặn deal: ván n+1 vẫn chạy bình thường.
+                foreach (var match in _matches.AllWithGambleOffer().ToList())
                 {
-                    if (!match.GambleOfferUserId.HasValue) continue;
                     if (_matches.TryExpireGambleOffer(match.RoomId))
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
@@ -173,7 +173,6 @@ public class MatchTimerService : BackgroundService
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
-                    if (match.GambleOfferUserId.HasValue) continue; // còn lời mời treo → chưa deal
                     if (!match.NextRoundAt.HasValue || match.NextRoundAt.Value > now) continue;
                     try
                     {

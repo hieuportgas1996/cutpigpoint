@@ -265,11 +265,12 @@ public class HotStreakGambleTests
     }
 
     [Fact]
-    public void Offer_SetsDeadline_AndBlocksAutoDeal()
+    public void Offer_SetsDeadline_DoesNotBlockNextRound()
     {
-        // Đạt 5 → set offer + GambleOfferDeadline + NextRoundAt=null (chặn auto-deal tới khi trả lời).
+        // Đạt 5 → set offer + GambleOfferDeadline; KHÔNG đụng NextRoundAt (ván n+1 chơi bình thường).
         var (m, ids) = MakeMatch(4);
-        m.NextRoundAt = System.DateTime.UtcNow.AddSeconds(20); // giả lập đã hẹn deal
+        var when = System.DateTime.UtcNow.AddSeconds(20);
+        m.NextRoundAt = when; // giả lập đã hẹn deal ván n+1
         m.Players[0].FinalRank = 1;
         m.Players[1].FinalRank = 2;
         m.Players[2].FinalRank = 3;
@@ -278,7 +279,7 @@ public class HotStreakGambleTests
 
         Assert.Equal(ids[0], m.GambleOfferUserId);
         Assert.NotNull(m.GambleOfferDeadline);
-        Assert.Null(m.NextRoundAt); // auto-deal bị chặn
+        Assert.Equal(when, m.NextRoundAt); // KHÔNG bị chặn — ván n+1 vẫn deal đúng hẹn
     }
 
     [Fact]
