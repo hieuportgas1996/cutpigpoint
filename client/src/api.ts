@@ -338,7 +338,35 @@ export const MatchStatus = {
   FestivalReveal: 6,
   XiDachPlaying: 7,
   XiDachCompare: 8,
+  BreakRps: 9,
 } as const;
+
+export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
+export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
+
+export interface RpsMatchup {
+  playerAId: string;
+  playerBId: string;
+  winTarget: number;
+  winsA: number;
+  winsB: number;
+  winnerId: string | null;
+  loserId: string | null;
+  aChosen: boolean;
+  bChosen: boolean;
+  lastChoiceA: number;
+  lastChoiceB: number;
+  lastOutcome: number; // 0 draw, 1 A, 2 B
+  hasLast: boolean;
+}
+export interface RpsState {
+  stage: number;
+  round1A: RpsMatchup;
+  round1B: RpsMatchup;
+  thirdPlace: RpsMatchup;
+  final: RpsMatchup;
+  finalRanking: string[];
+}
 
 export interface MatchPlayerPublic {
   userId: string;
@@ -369,6 +397,7 @@ export interface MatchPlayerPublic {
   xiDachVisibleCards: CardDto[] | null;
   winStreak: number;
   isGambling: boolean;
+  hasUsedBreak: boolean;
 }
 
 export interface MatchPublicState {
@@ -408,6 +437,11 @@ export interface MatchPublicState {
   gambleScheduledUserId: string | null;
   isGambleRound: boolean;
   gambleOfferDeadline: string | null;
+  breakScheduled: boolean;
+  breakOrganizerId: string | null;
+  isBreakRound: boolean;
+  rps: RpsState | null;
+  rpsChoiceDeadline: string | null;
 }
 
 export interface PrivateHand {
@@ -473,6 +507,7 @@ export interface RoundEnd {
   results: RoundResultEntry[];
   wasFestival: boolean;
   wasXiDach: boolean;
+  wasBreak: boolean;
 }
 
 export interface MatchEnd {

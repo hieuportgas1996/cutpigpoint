@@ -1,0 +1,135 @@
+.rps-break-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 30%, rgba(90,50,15,0.55), rgba(0,0,0,0.78));
+  padding: 16px;
+}
+
+.rps-break-card {
+  width: min(560px, 96vw);
+  max-height: 94vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, #3a2410, #2a1808);
+  border: 2px solid #d4a44a;
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+  padding: 18px 20px 16px;
+  color: #f6e7c8;
+  text-align: center;
+}
+
+.rps-break-head h2 { margin: 0 0 4px; font-size: 22px; color: #ffe26b; }
+.rps-stage { font-size: 13px; color: #e8c98a; opacity: 0.9; margin-bottom: 12px; font-weight: 600; }
+
+/* Bracket tổng quan */
+.rps-bracket {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.rps-bracket-cell {
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(212,164,74,0.35);
+  border-radius: 10px;
+  padding: 6px 6px 7px;
+}
+.rps-bracket-label { font-size: 10px; letter-spacing: 0.5px; color: #d4a44a; text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
+.rps-bracket-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+.rps-bracket-row .rps-bracket-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70px; }
+.rps-bracket-row .rps-bracket-score { font-weight: 800; min-width: 14px; }
+.rps-bracket-row.win { background: rgba(108,196,108,0.22); color: #b6f0b6; font-weight: 700; }
+.rps-bracket-row.lose { opacity: 0.5; }
+
+/* Arena cặp đang đấu */
+.rps-arena {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rps-hand { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rps-hand-name { font-size: 13px; font-weight: 700; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rps-hand.is-me .rps-hand-name { color: #ffe26b; }
+.rps-hand-emoji {
+  font-size: 52px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+  transition: transform 0.15s;
+}
+.rps-hand-emoji.revealed { animation: rps-pop 0.3s ease; }
+.rps-hand-emoji.ready { transform: scale(0.9); }
+.rps-hand-emoji.waiting { opacity: 0.55; }
+@keyframes rps-pop { 0% { transform: scale(0.5) rotate(-12deg); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+.rps-vs { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 90px; }
+.rps-vs-text { font-size: 13px; color: #d4a44a; font-weight: 800; letter-spacing: 1px; }
+.rps-score-big { font-size: 26px; font-weight: 900; color: #fff; }
+.rps-score-big span { color: #d4a44a; margin: 0 2px; }
+.rps-target { font-size: 11px; color: #e8c98a; opacity: 0.85; }
+.rps-draw { font-size: 13px; color: #ffd166; font-weight: 700; margin-top: 2px; animation: rps-pop 0.3s ease; }
+
+/* Khu chọn */
+.rps-pick { margin-top: 6px; }
+.rps-pick-label { font-size: 14px; margin-bottom: 8px; }
+.rps-pick-buttons { display: flex; justify-content: center; gap: 14px; }
+.rps-pick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 84px;
+  padding: 12px 0 8px;
+  background: linear-gradient(160deg, #5a3c16, #3e2810);
+  border: 2px solid #d4a44a;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+  color: #f6e7c8;
+}
+.rps-pick-btn:hover { transform: translateY(-3px) scale(1.05); border-color: #ffe26b; box-shadow: 0 8px 20px rgba(255,210,80,0.35); }
+.rps-pick-btn:active { transform: scale(0.96); }
+.rps-pick-emoji { font-size: 40px; line-height: 1; }
+.rps-pick-cap { font-size: 13px; font-weight: 700; }
+.rps-pick-waiting { font-size: 15px; color: #ffd166; font-weight: 700; padding: 10px 0; }
+.rps-spectate { font-size: 14px; color: #e8c98a; padding: 10px 0; }
+.rps-legend { font-size: 12px; color: #b89a6a; margin-top: 12px; opacity: 0.85; }
+
+/* Kết quả cuối */
+.rps-ranking { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 10px; }
+.rps-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(212,164,74,0.3);
+}
+.rps-rank-row.rank-1 { background: linear-gradient(110deg, rgba(255,210,80,0.25), rgba(0,0,0,0.25)); border-color: #ffd166; }
+.rps-rank-medal { font-size: 22px; width: 28px; }
+.rps-rank-name { flex: 1; text-align: left; font-weight: 700; font-size: 15px; }
+.rps-rank-delta { font-weight: 900; font-size: 16px; }
+.rps-rank-delta.pos { color: #7be07b; }
+.rps-rank-delta.neg { color: #ff8a8a; }
+.rps-done-hint { font-size: 12px; color: #c9a86a; opacity: 0.85; margin-top: 6px; }
+
+@media (max-width: 560px) {
+  .rps-hand-emoji { font-size: 40px; }
+  .rps-pick-btn { width: 72px; }
+  .rps-pick-emoji { font-size: 34px; }
+  .rps-bracket { gap: 5px; }
+  .rps-bracket-row .rps-bracket-name { max-width: 50px; }
+}

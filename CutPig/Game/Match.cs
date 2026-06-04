@@ -11,6 +11,7 @@ public enum MatchStatus
     FestivalReveal = 6,          // round lễ hội: đã chia 3 lá, mỗi người đang nặn/lật bài trước khi tính điểm
     XiDachPlaying = 7,           // round Sát Phạt (xì dách): players rồi nhà cái rút bài tuần tự
     XiDachCompare = 8,           // round Sát Phạt: nhà cái lần lượt bấm "So" từng player còn lại
+    BreakRps = 9,                // round Giải lao: giải đấu Oẳn Tù Xì (kéo búa bao) bracket 4 người
 }
 
 public class MatchPlayer
@@ -52,6 +53,9 @@ public class MatchPlayer
 
     /// <summary>True khi player đã dùng quyền "Sát Phạt" (tổ chức xì dách) — 1 lần / TRẬN (giữ qua round).</summary>
     public bool HasUsedXiDach { get; set; }
+
+    /// <summary>True khi player đã dùng quyền "Giải lao zui zẻ" — 1 lần / TRẬN (giữ qua round).</summary>
+    public bool HasUsedBreak { get; set; }
 
     // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
     /// <summary>Số ván về Nhất LIÊN TIẾP gần nhất (về trắng/phán-xử thắng cũng = Nhất). Reset 0 khi không về Nhất. Round biến tấu (lễ hội/xì dách) KHÔNG đụng. Giữ qua round.</summary>
@@ -136,6 +140,18 @@ public class Match
     public Guid? GambleScheduledUserId { get; set; }
     /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>
     public bool IsGambleRound { get; set; }
+
+    // ---- Giải Lao Zui Zẻ (Oẳn Tù Xì bracket) ----
+    /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là giải đấu Oẳn Tù Xì. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
+    public bool BreakScheduled { get; set; }
+    /// <summary>UserId người tổ chức giải lao (hiển thị + toast).</summary>
+    public Guid? BreakOrganizerId { get; set; }
+    /// <summary>True khi round HIỆN TẠI là round giải lao (Oẳn Tù Xì).</summary>
+    public bool IsBreakRound { get; set; }
+    /// <summary>State bracket Oẳn Tù Xì của round giải lao hiện tại (null khi không phải round giải lao).</summary>
+    public RpsTournament? Rps { get; set; }
+    /// <summary>Hết hạn 10s chọn kéo/búa/bao của ván Oẳn Tù Xì hiện tại; hết → server tự random cho ai chưa chọn.</summary>
+    public DateTime? RpsChoiceDeadline { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

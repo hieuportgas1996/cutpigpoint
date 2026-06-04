@@ -7,6 +7,7 @@ import { CardSvg } from '../game/CardSvg';
 import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { ChampionTrophy } from '../game/effects/ChampionTrophy';
+import { RpsBreakScreen } from './RpsBreakScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -314,7 +315,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -342,6 +343,7 @@ export default function RoomPlayPage() {
   const lastXiDachAnnouncedRef = useRef<string | null>(null);
   const [xiDachConfirmOpen, setXiDachConfirmOpen] = useState(false);
   const lastGambleAnnouncedRef = useRef<string | null>(null);
+  const lastBreakAnnouncedRef = useRef<string | null>(null);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -703,6 +705,22 @@ export default function RoomPlayPage() {
     ? (gambleScheduledUserId === myUserId ? 'Bạn' : matchState?.players.find(p => p.userId === gambleScheduledUserId)?.displayName ?? '')
     : '';
 
+  // Giải Lao (Oẳn Tù Xì): đặt lịch được nếu đang chơi, chưa biến tấu, chưa dùng quyền, đủ 4 người.
+  const myHasUsedBreak = me?.hasUsedBreak ?? false;
+  const canScheduleBreak = matchState?.status === MatchStatus.InProgress
+    && noSpecialScheduled
+    && !myHasUsedBreak
+    && (matchState?.players.length === 4);
+  const breakScheduled = matchState?.breakScheduled ?? false;
+  const breakOrganizerName = matchState?.breakOrganizerId
+    ? matchState.players.find(p => p.userId === matchState.breakOrganizerId)?.displayName ?? ''
+    : '';
+  const isBreakRound = matchState?.status === MatchStatus.BreakRps;
+  const rps = matchState?.rps ?? null;
+  const rpsLeftSec = matchState?.rpsChoiceDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.rpsChoiceDeadline).getTime() - now) / 1000))
+    : 0;
+
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
@@ -818,6 +836,16 @@ export default function RoomPlayPage() {
     const who = gambleScheduledUserId === myUserId ? 'Bạn' : gambleScheduledName;
     toast.push('info', `🔥 ${who} quyết định LIỀU ĂN NHIỀU — round sau điểm thắng/thua của ${gambleScheduledUserId === myUserId ? 'bạn' : 'họ'} ×3!`);
   }, [gambleScheduledUserId, matchState?.roundNumber]);
+
+  // Thông báo (mọi người) khi có người tổ chức Giải lao — round sau là Oẳn Tù Xì.
+  useEffect(() => {
+    if (!breakScheduled) return;
+    const key = `${matchState?.roundNumber}|${matchState?.breakOrganizerId ?? ''}`;
+    if (lastBreakAnnouncedRef.current === key) return;
+    lastBreakAnnouncedRef.current = key;
+    const who = matchState?.breakOrganizerId === myUserId ? 'Bạn' : breakOrganizerName;
+    toast.push('info', `🎮 ${who} đã tổ chức Giải lao zui zẻ — round sau đấu Oẳn Tù Xì!`);
+  }, [breakScheduled, matchState?.breakOrganizerId, matchState?.roundNumber]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -972,6 +1000,16 @@ export default function RoomPlayPage() {
   async function handleRespondGamble(accept: boolean) {
     // Toast (cho mọi người) khi accept do effect gambleScheduledUserId lo; ở đây chỉ gọi.
     try { await respondGamble(accept); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleScheduleBreak() {
+    try { await scheduleBreak(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleRps(choice: number) {
+    try { await submitRpsChoice(choice); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -1382,7 +1420,7 @@ export default function RoomPlayPage() {
           </button>
           </>
           )}
-          {(canStartVoteReset || canSurrender || canScheduleFestival || canActivateStar || canActivateXiDach) && (
+          {(canStartVoteReset || canSurrender || canScheduleFestival || canActivateStar || canActivateXiDach || canScheduleBreak) && (
             <div className="tlmn-options" ref={optionsMenuRef}>
               <button
                 className={`tlmn-btn ghost ${optionsMenuOpen ? 'auto-pass-on' : ''}`}
@@ -1423,6 +1461,14 @@ export default function RoomPlayPage() {
                       onClick={() => { setOptionsMenuOpen(false); setXiDachConfirmOpen(true); }}
                     >
                       🃏 Tổ chức Sát Phạt
+                    </button>
+                  )}
+                  {canScheduleBreak && (
+                    <button
+                      className="tlmn-options-item"
+                      onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(); }}
+                    >
+                      🎮 Giải lao zui zẻ
                     </button>
                   )}
                   {canSurrender && (
@@ -1515,6 +1561,16 @@ export default function RoomPlayPage() {
           </div>
         )}
 
+        {isBreakRound && rps && (
+          <RpsBreakScreen
+            rps={rps}
+            players={matchState.players}
+            myUserId={myUserId}
+            leftSec={rpsLeftSec}
+            onChoose={handleRps}
+          />
+        )}
+
         {iAmOfferedGamble && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.55)' }}>
             <div className="match-end-card gamble-offer" onClick={e => e.stopPropagation()}>
@@ -1576,10 +1632,12 @@ export default function RoomPlayPage() {
 
         {delayedRoundEnd && !matchEnd && !iAmOfferedGamble && (
           <div className="match-end-overlay">
-            {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival || delayedRoundEnd.wasXiDach) && <Confetti active={true} />}
+            {(delayedRoundEnd.wasWhiteWin || delayedRoundEnd.wasFestival || delayedRoundEnd.wasXiDach || delayedRoundEnd.wasBreak) && <Confetti active={true} />}
             <div className="match-end-card">
               <h2>
-                {delayedRoundEnd.wasXiDach
+                {delayedRoundEnd.wasBreak
+                  ? `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`
+                  : delayedRoundEnd.wasXiDach
                   ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
                   : delayedRoundEnd.wasFestival
                   ? `🎉 Lễ hội Cào Rùa — Ván ${delayedRoundEnd.roundNumber}`

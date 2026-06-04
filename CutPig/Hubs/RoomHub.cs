@@ -703,6 +703,37 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task ScheduleBreak()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.ScheduleBreak(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task SubmitRpsChoice(int choice)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitRpsChoice(roomId.Value, auth.Value.UserId, (GameEngine.RpsChoice)choice); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Nếu giải lao vừa kết thúc → emit round-end (bảng xếp hạng + điểm).
+        if (match.Status == MatchStatus.WaitingNextRound)
+            await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
+    }
+
     public async Task ActivateXiDach()
     {
         var auth = await AuthenticateAsync();
@@ -899,7 +930,8 @@ public class RoomHub : Hub
                 (m.IsXiDachRound && p.XiDachRevealed) ? XiDachEngine.Total(p.Hand) : 0,
                 (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null,
                 p.WinStreak,
-                p.IsGambling)).ToList(),
+                p.IsGambling,
+                p.HasUsedBreak)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,
@@ -924,7 +956,22 @@ public class RoomHub : Hub
             m.GambleOfferUserId,
             m.GambleScheduledUserId,
             m.IsGambleRound,
-            m.GambleOfferDeadline);
+            m.GambleOfferDeadline,
+            m.BreakScheduled,
+            m.BreakOrganizerId,
+            m.IsBreakRound,
+            BuildRpsState(m.Rps),
+            m.RpsChoiceDeadline);
+    }
+
+    private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
+    {
+        if (t == null) return null;
+        static RpsMatchupDto M(GameEngine.RpsMatchup m) => new(
+            m.PlayerAId, m.PlayerBId, m.WinTarget, m.WinsA, m.WinsB, m.WinnerId, m.LoserId,
+            m.ChoiceA != GameEngine.RpsChoice.None, m.ChoiceB != GameEngine.RpsChoice.None,
+            (int)m.LastChoiceA, (int)m.LastChoiceB, (int)m.LastOutcome, m.HasLast);
+        return new RpsStateDto((int)t.Stage, M(t.Round1A), M(t.Round1B), M(t.ThirdPlace), M(t.Final), new List<Guid>(t.FinalRanking));
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

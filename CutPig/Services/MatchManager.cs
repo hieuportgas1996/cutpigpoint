@@ -16,6 +16,7 @@ public class MatchManager
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
     public const int GambleStreakThreshold = 5; // số ván về Nhất liên tiếp để được mời "Liều Ăn Nhiều"
     public static TimeSpan GambleOfferTimeout { get; } = TimeSpan.FromSeconds(30); // hết hạn lời mời liều → auto từ chối
+    public static TimeSpan RpsChoiceTimeout { get; } = TimeSpan.FromSeconds(10);    // 10s chọn kéo/búa/bao mỗi ván giải lao
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
@@ -94,6 +95,9 @@ public class MatchManager
         match.RoundChopDetails.Clear();
         match.JudgeTriggered = false;
         match.IsGambleRound = false;
+        match.IsBreakRound = false;
+        match.Rps = null;
+        match.RpsChoiceDeadline = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -137,6 +141,16 @@ public class MatchManager
             if (star != null) star.IsStarOfHope = true;
             match.StarOfHopeScheduledUserId = null;
         }
+
+        // Round Giải Lao (Oẳn Tù Xì): tiêu cờ BreakScheduled → round này là giải đấu kéo búa bao.
+        match.IsBreakRound = match.BreakScheduled;
+        match.BreakScheduled = false;
+        if (match.IsBreakRound)
+        {
+            DealBreakRound(match);
+            return;
+        }
+        match.BreakOrganizerId = null; // round thường: xoá người tổ chức giải lao
 
         // Round Sát Phạt (Xì Dách): tiêu cờ XiDachScheduledUserId → round này là xì dách, người đó là Nhà Cái.
         match.IsXiDachRound = match.XiDachScheduledUserId.HasValue;
@@ -216,6 +230,137 @@ public class MatchManager
             p.WhiteWinAccepted = null;
         }
         match.WhiteWinDeadline = null;
+    }
+
+    /// <summary>
+    /// Deal round "Giải Lao" Oẳn Tù Xì: cần ĐÚNG 4 người. Xáo trộn ngẫu nhiên 4 userId → bracket
+    /// (V1/V2 BO3, V3 hạng-3 BO3, V4 final BO5). Vào status BreakRps, mở ván Oẳn Tù Xì đầu tiên (V1)
+    /// với deadline 10s. KHÔNG đụng PreviousRoundWinnerId (giữ người Nhất round trước cho round TLMN kế).
+    /// </summary>
+    private static void DealBreakRound(Match match)
+    {
+        var seeds = match.Players.Select(p => p.UserId).ToList();
+        // Xáo trộn Fisher-Yates để ghép cặp ngẫu nhiên.
+        for (int i = seeds.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (seeds[i], seeds[j]) = (seeds[j], seeds[i]);
+        }
+        match.Rps = RpsTournament.Create(seeds);
+        match.Status = MatchStatus.BreakRps;
+        match.RpsChoiceDeadline = DateTime.UtcNow + RpsChoiceTimeout;
+    }
+
+    /// <summary>
+    /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là giải đấu Oẳn Tù Xì. Bất kỳ lúc nào trong round
+    /// InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ khi đủ 4 người.
+    /// Loại trừ lẫn nhau với các biến tấu khác (1 round 1 biến thể).
+    /// </summary>
+    public Match ScheduleBreak(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
+                throw new InvalidOperationException("Ván chưa bắt đầu.");
+            if (match.Players.Count != 4)
+                throw new InvalidOperationException("Giải lao Oẳn Tù Xì cần đúng 4 người.");
+            EnsureNoSpecialScheduled(match);
+            var player = match.Players.FirstOrDefault(p => p.UserId == userId)
+                ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (player.HasUsedBreak)
+                throw new InvalidOperationException("Bạn đã dùng quyền Giải lao trong trận này.");
+
+            match.BreakScheduled = true;
+            match.BreakOrganizerId = userId;
+            player.HasUsedBreak = true;
+            return match;
+        }
+    }
+
+    /// <summary>
+    /// Player chọn kéo/búa/bao trong ván Oẳn Tù Xì hiện tại (chỉ 2 người của cặp đang đấu được chọn).
+    /// Khi cả 2 đã chọn → chốt ván (ResolveRpsGameAndAdvance). Trả về match đã cập nhật.
+    /// </summary>
+    public Match SubmitRpsChoice(Guid roomId, Guid userId, RpsChoice choice)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakRps || match.Rps == null)
+                throw new InvalidOperationException("Không trong pha Giải lao Oẳn Tù Xì.");
+            if (choice == RpsChoice.None)
+                throw new InvalidOperationException("Lựa chọn không hợp lệ.");
+            var cur = match.Rps.Current;
+            if (userId == cur.PlayerAId)
+            {
+                if (cur.ChoiceA != RpsChoice.None) throw new InvalidOperationException("Bạn đã chọn rồi.");
+                cur.ChoiceA = choice;
+            }
+            else if (userId == cur.PlayerBId)
+            {
+                if (cur.ChoiceB != RpsChoice.None) throw new InvalidOperationException("Bạn đã chọn rồi.");
+                cur.ChoiceB = choice;
+            }
+            else throw new InvalidOperationException("Chưa tới lượt cặp của bạn.");
+
+            if (cur.BothChosen) ResolveRpsGameAndAdvance(match);
+            return match;
+        }
+    }
+
+    /// <summary>
+    /// Chốt ván Oẳn Tù Xì hiện tại + tiến bracket. Hòa → đánh lại (reset choices, deadline mới).
+    /// Cặp xong → AdvanceStage; giải xong → tính FinalRanking + scoring + WaitingNextRound (emit round-end).
+    /// </summary>
+    private static void ResolveRpsGameAndAdvance(Match match)
+    {
+        var t = match.Rps!;
+        var cur = t.Current;
+        cur.ResolveCurrentGame(); // hòa → reset choices, không tăng điểm
+
+        if (cur.IsDone)
+        {
+            bool done = t.AdvanceStage();
+            if (done)
+            {
+                FinalizeBreakRound(match);
+                return;
+            }
+        }
+        // Ván/giai đoạn kế: mở deadline mới 10s.
+        match.RpsChoiceDeadline = DateTime.UtcNow + RpsChoiceTimeout;
+    }
+
+    /// <summary>Giải lao xong: gán FinalRank theo FinalRanking (1..4) + chuyển WaitingNextRound (scoring ở ComputeRoundScores).</summary>
+    private static void FinalizeBreakRound(Match match)
+    {
+        var ranking = match.Rps!.FinalRanking; // [hạng1, hạng2, hạng3, hạng4]
+        for (int rank = 0; rank < ranking.Count; rank++)
+        {
+            var p = match.Players.FirstOrDefault(x => x.UserId == ranking[rank]);
+            if (p != null) p.FinalRank = rank + 1;
+        }
+        match.RpsChoiceDeadline = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>
+    /// Timer: hết hạn 10s chọn Oẳn Tù Xì → tự random cho ai CHƯA chọn rồi chốt ván. Trả về true nếu vừa xử lý
+    /// (caller broadcast lại). Có thể kết thúc giải (status → WaitingNextRound) nếu đây là ván cuối.
+    /// </summary>
+    public bool TryAutoResolveRps(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakRps || match.Rps == null)
+                return false;
+            if (!match.RpsChoiceDeadline.HasValue || match.RpsChoiceDeadline.Value > DateTime.UtcNow) return false;
+            var cur = match.Rps.Current;
+            if (cur.ChoiceA == RpsChoice.None) cur.ChoiceA = RpsEngine.RandomChoice(Random.Shared);
+            if (cur.ChoiceB == RpsChoice.None) cur.ChoiceB = RpsEngine.RandomChoice(Random.Shared);
+            ResolveRpsGameAndAdvance(match);
+            return true;
+        }
     }
 
     /// <summary>
@@ -1336,7 +1481,7 @@ public class MatchManager
     /// </summary>
     private static void EnsureNoSpecialScheduled(Match match)
     {
-        if (match.IsFestivalRound || match.IsXiDachRound)
+        if (match.IsFestivalRound || match.IsXiDachRound || match.IsBreakRound)
             throw new InvalidOperationException("Đang trong round đặc biệt rồi.");
         if (match.FestivalScheduled)
             throw new InvalidOperationException("Round sau đã là Lễ hội rồi.");
@@ -1346,6 +1491,8 @@ public class MatchManager
             throw new InvalidOperationException("Round sau đã có Ngôi Sao Hi Vọng rồi.");
         if (match.GambleScheduledUserId.HasValue)
             throw new InvalidOperationException("Round sau đã có người Liều Ăn Nhiều rồi.");
+        if (match.BreakScheduled)
+            throw new InvalidOperationException("Round sau đã là Giải lao rồi.");
     }
 
     public Match ScheduleFestival(Guid roomId, Guid userId)
@@ -1628,11 +1775,25 @@ public class MatchManager
 
     public IEnumerable<Match> AllXiDachPlaying() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.XiDachPlaying);
 
+    public IEnumerable<Match> AllBreakRps() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakRps);
+
     public int[] ComputeRoundScores(Match match)
     {
         // Returns score for each player in seat order
         var n = match.Players.Count;
         var scores = new int[n];
+
+        // Giải Lao (Oẳn Tù Xì): theo hạng bracket 1..4 → +2/+1/-1/-2. Zero-sum. KHÔNG áp star/liều.
+        if (match.IsBreakRound)
+        {
+            int[] breakTable = { 2, 1, -1, -2 };
+            for (int i = 0; i < n; i++)
+            {
+                int rank = (match.Players[i].FinalRank ?? n) - 1;
+                scores[i] = breakTable[Math.Clamp(rank, 0, breakTable.Length - 1)];
+            }
+            return scores;
+        }
 
         // Sát Phạt (Xì Dách): điểm đã tính sẵn vào XiDachDelta khi chốt từng cặp. Zero-sum (nhà cái gánh tổng).
         if (match.IsXiDachRound)
@@ -2082,7 +2243,7 @@ public class MatchManager
             })
             .ToList();
 
-        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound, match.IsXiDachRound);
+        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound, match.IsXiDachRound, match.IsBreakRound);
         match.RoundHistory.Add(dto);
         return dto;
     }
@@ -2132,6 +2293,15 @@ public class MatchManager
     {
         int n = match.Players.Count;
         var result = new RoundScoreBreakdown[n];
+
+        // Giải Lao (Oẳn Tù Xì): toàn bộ điểm hạng vào Total (UI hiện bảng xếp hạng riêng).
+        if (match.IsBreakRound)
+        {
+            var breakScores = ComputeRoundScores(match);
+            for (int i = 0; i < n; i++)
+                result[i] = new RoundScoreBreakdown(0, 0, 0, 0, 0, 0, breakScores[i]);
+            return result;
+        }
 
         // Sát Phạt (Xì Dách): toàn bộ điểm vào Total (UI có component riêng FestivalResultRows tương đương).
         if (match.IsXiDachRound)

@@ -170,6 +170,17 @@ public class MatchTimerService : BackgroundService
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
 
+                // Giải Lao (Oẳn Tù Xì): hết 10s chọn → auto random cho ai chưa chọn rồi chốt ván.
+                foreach (var match in _matches.AllBreakRps().ToList())
+                {
+                    if (_matches.TryAutoResolveRps(match.RoomId))
+                    {
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                        if (match.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(match, stoppingToken);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
