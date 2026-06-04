@@ -509,7 +509,7 @@ export default function RoomPlayPage() {
     const key = `${delayedRoundEnd.matchId}|${delayedRoundEnd.roundNumber}`;
     if (lastVictoryRoundRef.current === key) return;
     lastVictoryRoundRef.current = key;
-    if (!delayedRoundEnd.wasWhiteWin) playSound('clapHand', 0.7);
+    if (!delayedRoundEnd.wasWhiteWin && !delayedRoundEnd.wasBreak) playSound('clapHand', 0.7);
   }, [delayedRoundEnd]);
 
   // Pháo hoa + victory NGAY khi có người về Nhất (finalRank=1 xuất hiện trong matchState),
@@ -517,7 +517,9 @@ export default function RoomPlayPage() {
   // KHÔNG ăn mừng/cúp C1 trong round lễ hội (Cào Rùa có winner riêng) hoặc khi về trắng
   // (white-win gán finalRank=1 cho NHIỀU người + có confetti/firework riêng → tránh nice-sound lặp).
   const anyWhiteWin = matchState?.players.some(p => p.whiteWinReason != null) ?? false;
-  const winnerUserId = (matchState && !matchState.isFestivalRound && !anyWhiteWin)
+  // KHÔNG ăn mừng C1/nice-sound trong round biến tấu (lễ hội / giải lao RPS): chúng gán finalRank=1
+  // cho người thắng biến tấu (không phải "về Nhất TLMN") + có màn kết quả riêng → tránh sound lặp.
+  const winnerUserId = (matchState && !matchState.isFestivalRound && !matchState.isBreakRound && !anyWhiteWin)
     ? (matchState.players.find(p => p.finalRank === 1)?.userId ?? null)
     : null;
   useEffect(() => {

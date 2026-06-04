@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MatchPlayerPublic, RpsState, RpsMatchup } from '../api';
 import { RpsStage } from '../api';
 import { Avatar } from '../ui/Avatar';
@@ -43,15 +43,24 @@ export function RpsBreakScreen({
     : rps.stage === RpsStage.ThirdPlace ? rps.thirdPlace
     : rps.final;
 
-  // Pha hiện kết quả do SERVER điều khiển (revealActive, 2s): dấu ? LẮC ~0.6s rồi LẬT hiện kéo/búa/bao.
-  // Đồng bộ mọi client. Khi hết reveal (server qua ván kế) → idle, về ? chờ chọn.
+  // Pha hiện kết quả: dấu ? LẮC ~0.6s rồi LẬT hiện kéo/búa/bao. Kích hoạt khi server vào pha reveal
+  // (revealActive) HOẶC khi vừa có kết quả ván mới (chữ ký lastChoice/wins đổi) — bắt cả 2 để chắc chắn
+  // hiển thị dù `now` ticker (1s) có trễ. Giữ tự lo ~2s (khớp server) rồi về idle.
+  const sig = `${rps.stage}|${cur?.winsA ?? 0}|${cur?.winsB ?? 0}|${cur?.lastChoiceA ?? 0}|${cur?.lastChoiceB ?? 0}|${cur?.hasLast ? 1 : 0}`;
   const [phase, setPhase] = useState<'idle' | 'shake' | 'reveal'>('idle');
+  const lastSigRef = useRef<string>('');
   useEffect(() => {
-    if (done || !revealActive) { setPhase('idle'); return; }
-    setPhase('shake');
-    const t = setTimeout(() => setPhase('reveal'), 600); // lắc 0.6s rồi lật, giữ tới hết reveal (server ~2s)
-    return () => clearTimeout(t);
-  }, [revealActive, done]);
+    if (done) { setPhase('idle'); return; }
+    const justResolved = cur?.hasLast && sig !== lastSigRef.current;
+    lastSigRef.current = sig;
+    if (revealActive || justResolved) {
+      setPhase('shake');
+      const t1 = setTimeout(() => setPhase('reveal'), 600);
+      const t2 = setTimeout(() => setPhase('idle'), 2000);  // hết ~2s về ? (khớp reveal server)
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    setPhase('idle');
+  }, [sig, revealActive, done]);
 
   const iAmA = !done && cur.playerAId === myUserId;
   const iAmB = !done && cur.playerBId === myUserId;
