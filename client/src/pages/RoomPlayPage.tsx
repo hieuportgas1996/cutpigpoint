@@ -483,11 +483,10 @@ export default function RoomPlayPage() {
   // phải biến mất để overlay nặn bài hiện ra (bug: player khác kẹt ở modal phán xử ván trước).
   useEffect(() => {
     if (!roundEnd) return;
-    if (matchState?.status === MatchStatus.InProgress
-      || matchState?.status === MatchStatus.WhiteWinChoice
-      || matchState?.status === MatchStatus.FestivalReveal
-      || matchState?.status === MatchStatus.XiDachPlaying
-      || matchState?.status === MatchStatus.XiDachCompare) {
+    // Ván mới đã bắt đầu (bất kỳ status nào KHÁC WaitingNextRound/Finished) → đóng modal kết quả ván cũ.
+    // Bao gồm BreakRps (Giải lao) — bug cũ: thiếu BreakRps → modal kết quả ván trước treo khi host qua ván.
+    const s = matchState?.status;
+    if (s != null && s !== MatchStatus.WaitingNextRound && s !== MatchStatus.Finished) {
       clearRoundEnd();
     }
   }, [matchState?.status, matchState?.roundNumber, roundEnd, clearRoundEnd]);
@@ -497,7 +496,7 @@ export default function RoomPlayPage() {
   const [delayedRoundEnd, setDelayedRoundEnd] = useState<RoundEnd | null>(null);
   useEffect(() => {
     if (!roundEnd) { setDelayedRoundEnd(null); return; }
-    if (roundEnd.wasWhiteWin || roundEnd.wasFestival || roundEnd.wasXiDach) { setDelayedRoundEnd(roundEnd); return; }
+    if (roundEnd.wasWhiteWin || roundEnd.wasFestival || roundEnd.wasXiDach || roundEnd.wasBreak) { setDelayedRoundEnd(roundEnd); return; }
     const t = setTimeout(() => setDelayedRoundEnd(roundEnd), 2000);
     return () => clearTimeout(t);
   }, [roundEnd]);
