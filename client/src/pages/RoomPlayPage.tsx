@@ -1517,8 +1517,8 @@ export default function RoomPlayPage() {
               <div className="next-round-countdown">
                 Bạn có muốn <b>liều ăn nhiều</b> không?
                 <div className="gamble-terms">
-                  <div>🔥 Mọi điểm bạn <b>thắng/thua</b> ván sau sẽ <b>×3</b> (cả 2 chiều).</div>
-                  <div>⚠️ Đánh đổi: bạn <b>mất lượt đi trước</b> — người cầm <b>3♠</b> đi đầu ván này.</div>
+                  <div>🔥 Điểm <b>thắng/thua</b> ván sau của bạn <b>×3</b>.</div>
+                  <div>⚠️ Đổi lại: bạn <b>nhường lượt đi đầu</b> cho người cầm <b>3♠</b>.</div>
                 </div>
               </div>
               <div className="match-end-actions">

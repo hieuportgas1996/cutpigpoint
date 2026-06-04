@@ -230,7 +230,7 @@ public class HotStreakGambleTests
     }
 
     [Fact]
-    public void Streak_FifthNhat_SetsGambleOffer()
+    public void Streak_FifthNhat_SetsGambleOffer_ThenResetsStreak()
     {
         var (m, ids) = MakeMatch(4);
         m.Players[0].FinalRank = 1;
@@ -242,10 +242,26 @@ public class HotStreakGambleTests
         {
             _mgr.BuildRoundEndDto(m);
             Assert.Null(m.GambleOfferUserId);
+            Assert.Equal(r + 1, m.Players[0].WinStreak);
         }
-        _mgr.BuildRoundEndDto(m);
-        Assert.Equal(5, m.Players[0].WinStreak);
+        _mgr.BuildRoundEndDto(m); // ván thứ 5
         Assert.Equal(ids[0], m.GambleOfferUserId);
+        // Đạt 5 → mời xong RESET chuỗi về 0 (chuỗi sao tối đa 5 rồi đếm lại).
+        Assert.Equal(0, m.Players[0].WinStreak);
+    }
+
+    [Fact]
+    public void Streak_CapsAtThreshold_WhenOfferDeferred()
+    {
+        // Lời mời bị treo (đã có 1 offer cho người khác) → streak người Nhất cap ở 5, không vượt.
+        var (m, ids) = MakeMatch(4);
+        m.GambleOfferUserId = ids[3]; // giả lập đã có lời mời treo cho P4
+        m.Players[0].FinalRank = 1;
+        m.Players[1].FinalRank = 2;
+        m.Players[2].FinalRank = 3;
+        m.Players[3].FinalRank = 4;
+        for (int r = 0; r < 8; r++) _mgr.BuildRoundEndDto(m); // thắng 8 ván liên tiếp
+        Assert.Equal(MatchManager.GambleStreakThreshold, m.Players[0].WinStreak); // cap ở 5
     }
 
     [Fact]
