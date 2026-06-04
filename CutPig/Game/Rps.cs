@@ -89,10 +89,10 @@ public class RpsMatchup
 
 /// <summary>
 /// Giải lao Oẳn Tù Xì bracket 4 người:
-///  - V1 (R1A): seed0 vs seed1, BO3
-///  - V2 (R1B): seed2 vs seed3, BO3
-///  - V3 (Loser bracket): thua V1 vs thua V2, BO3 → hạng 3 (thắng) & 4 (thua)
-///  - V4 (Final): thắng V1 vs thắng V2, BO5 → hạng 1 (thắng) & 2 (thua)
+///  - V1 (R1A): seed0 vs seed1, Bo3 (chạm 2 thắng)
+///  - V2 (R1B): seed2 vs seed3, Bo3 (chạm 2 thắng)
+///  - V3 (Loser bracket): thua V1 vs thua V2, Bo3 (chạm 2) → hạng 3 (thắng) & 4 (thua)
+///  - V4 (Final): thắng V1 vs thắng V2, Bo5 (chạm 3 thắng) → hạng 1 (thắng) & 2 (thua)
 /// </summary>
 public enum RpsStage
 {
@@ -126,11 +126,12 @@ public class RpsTournament
     /// <summary>Khởi tạo bracket từ 4 userId đã xáo trộn (seed0..3).</summary>
     public static RpsTournament Create(System.Collections.Generic.IReadOnlyList<System.Guid> seeds)
     {
+        // Bo3 → chạm 2 thắng; Bo5 → chạm 3 thắng.
         var t = new RpsTournament();
-        t.Round1A.PlayerAId = seeds[0]; t.Round1A.PlayerBId = seeds[1]; t.Round1A.WinTarget = 3;
-        t.Round1B.PlayerAId = seeds[2]; t.Round1B.PlayerBId = seeds[3]; t.Round1B.WinTarget = 3;
-        t.ThirdPlace.WinTarget = 3;
-        t.Final.WinTarget = 5;
+        t.Round1A.PlayerAId = seeds[0]; t.Round1A.PlayerBId = seeds[1]; t.Round1A.WinTarget = 2;
+        t.Round1B.PlayerAId = seeds[2]; t.Round1B.PlayerBId = seeds[3]; t.Round1B.WinTarget = 2;
+        t.ThirdPlace.WinTarget = 2;
+        t.Final.WinTarget = 3;
         return t;
     }
 

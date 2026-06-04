@@ -39,13 +39,13 @@ public class RpsTournamentTests
         Assert.Equal(RpsChoice.None, m.ChoiceA); // reset để đánh lại
     }
 
-    // ---- Best-of-3: chạm 3 thắng ----
+    // ---- Bo3: chạm 2 thắng ----
     [Fact]
-    public void BestOf3_FirstTo3Wins()
+    public void BestOf3_FirstTo2Wins()
     {
         var a = Guid.NewGuid(); var b = Guid.NewGuid();
-        var m = new RpsMatchup { PlayerAId = a, PlayerBId = b, WinTarget = 3 };
-        for (int i = 0; i < 3; i++)
+        var m = new RpsMatchup { PlayerAId = a, PlayerBId = b, WinTarget = 2 };
+        for (int i = 0; i < 2; i++)
         {
             m.ChoiceA = RpsChoice.Rock; m.ChoiceB = RpsChoice.Scissors; // A thắng
             m.ResolveCurrentGame();
@@ -53,7 +53,19 @@ public class RpsTournamentTests
         Assert.True(m.IsDone);
         Assert.Equal(a, m.WinnerId);
         Assert.Equal(b, m.LoserId);
-        Assert.Equal(3, m.WinsA);
+        Assert.Equal(2, m.WinsA);
+    }
+
+    // ---- Create: Bo3 target=2, Bo5 (final) target=3 ----
+    [Fact]
+    public void Create_WinTargets_2And3()
+    {
+        var seeds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var t = RpsTournament.Create(seeds);
+        Assert.Equal(2, t.Round1A.WinTarget);
+        Assert.Equal(2, t.Round1B.WinTarget);
+        Assert.Equal(2, t.ThirdPlace.WinTarget);
+        Assert.Equal(3, t.Final.WinTarget);
     }
 
     // ---- Bracket đầy đủ + xếp hạng ----
