@@ -785,6 +785,9 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
+                    // Nếu người này về Nhất (vd mọi người khác đầu hàng) → set winner ván để ván sau họ đi
+                    // đầu. Bug cũ: nhánh đầu hàng không set → PreviousRoundWinnerId stale, người khác đi đầu sai.
+                    if (match.FinishedCount == 1) match.PreviousRoundWinnerId = p.UserId;
                     if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                         p.StuckWithThreeOfSpades = true;
                 }
@@ -944,6 +947,9 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
+                    // Nếu người này về Nhất (vd mọi người khác đầu hàng) → set winner ván để ván sau họ đi
+                    // đầu. Bug cũ: nhánh đầu hàng không set → PreviousRoundWinnerId stale, người khác đi đầu sai.
+                    if (match.FinishedCount == 1) match.PreviousRoundWinnerId = p.UserId;
                     if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                         p.StuckWithThreeOfSpades = true;
                 }
@@ -1198,6 +1204,9 @@ public class MatchManager
                     match.FinishedCount++;
                     p.FinalRank = match.FinishedCount;
                     match.FinishOrder.Add(p.UserId);
+                    // Nếu người này về Nhất (vd mọi người khác đầu hàng) → set winner ván để ván sau họ đi
+                    // đầu. Bug cũ: nhánh đầu hàng không set → PreviousRoundWinnerId stale, người khác đi đầu sai.
+                    if (match.FinishedCount == 1) match.PreviousRoundWinnerId = p.UserId;
                     if (p.Hand.Count == 1 && p.Hand[0].Rank == 3 && p.Hand[0].Suit == Suit.Spades)
                         p.StuckWithThreeOfSpades = true;
                 }
