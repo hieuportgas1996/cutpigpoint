@@ -1520,10 +1520,11 @@ export default function RoomPlayPage() {
             <div className="match-end-card gamble-offer" onClick={e => e.stopPropagation()}>
               <h2>🔥 Bạn đang thắng liên tiếp 5 ván!</h2>
               <div className="next-round-countdown">
-                Bạn có muốn <b>liều ăn nhiều</b> không?
+                Bạn có muốn <b>liều ăn nhiều</b> ván tiếp theo không?
                 <div className="gamble-terms">
                   <div>🔥 Điểm <b>thắng/thua</b> ván sau của bạn <b>×3</b>.</div>
-                  <div>⚠️ Đổi lại: bạn <b>nhường lượt đi đầu</b> cho người cầm <b>3♠</b>.</div>
+                  <div>⚠️ Đổi lại: nếu bạn <b>về Nhất</b> thì ván reset, người cầm <b>3♠</b> đi đầu.</div>
+                  <div>✅ Nếu đồng ý, <b>Liều ăn nhiều</b> sẽ kích hoạt ở <b>ván sau</b>.</div>
                 </div>
               </div>
               <div className="match-end-actions">
