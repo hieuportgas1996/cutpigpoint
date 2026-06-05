@@ -37,20 +37,56 @@ public class MathBreakFlowTests
             .Invoke(null, new object[] { match });
 
     [Fact]
-    public void Schedule_Math_DealsPickPhase()
+    public void Schedule_PicksRandomGameFromPool_RemovesIt()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.Status = MatchStatus.InProgress;
-        mgr.ScheduleBreak(roomId, ids[0], BreakGameType.Math);
+        int before = match.BreakGamePool.Count; // 4 mặc định
+        mgr.ScheduleBreak(roomId, ids[0]); // gameType bỏ qua — server random
         Assert.True(match.BreakScheduled);
-        Assert.Equal(BreakGameType.Math, match.BreakScheduledType);
+        // Chọn 1 game hợp lệ trong pool ban đầu + rút khỏi pool.
+        Assert.Contains(match.BreakScheduledType, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory });
+        Assert.Equal(before - 1, match.BreakGamePool.Count);
+        Assert.Equal(ids[0], match.BreakOrganizerId);
+        Assert.True(match.Players[0].HasUsedBreak);
 
-        // Giả lập DealRound tiêu cờ → DealBreakMathRound (gọi trực tiếp private để tránh cả lifecycle round).
+        // Giả lập DealRound tiêu cờ → deal game tương ứng (test math path).
         match.IsBreakRound = true;
         match.BreakGame = BreakGameType.Math;
         Invoke("DealBreakMathRound", match);
         Assert.Equal(MatchStatus.BreakMathPick, match.Status);
         Assert.NotNull(match.MathPickDeadline);
+    }
+
+    [Fact]
+    public void Schedule_PoolDefaultsToFourEntries_RpsTwice()
+    {
+        var (_, match, _, _) = Setup();
+        Assert.Equal(4, match.BreakGamePool.Count);
+        Assert.Equal(2, match.BreakGamePool.Count(g => g == BreakGameType.Rps));
+        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Math));
+        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Memory));
+    }
+
+    [Fact]
+    public void Schedule_FourTimes_DrainsPoolWithoutDuplicateBeyondRps()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.Status = MatchStatus.InProgress;
+        var drawn = new List<BreakGameType>();
+        for (int i = 0; i < 4; i++)
+        {
+            // Reset cờ schedule giữa các lần (giả lập đã deal xong round trước).
+            match.BreakScheduled = false; match.BreakScheduledType = BreakGameType.None;
+            match.IsBreakRound = false; match.BreakGame = BreakGameType.None;
+            mgr.ScheduleBreak(roomId, ids[i]);
+            drawn.Add(match.BreakScheduledType);
+        }
+        Assert.Empty(match.BreakGamePool); // hết pool sau 4 lần
+        // 4 lần rút = đúng multiset [Rps,Rps,Math,Memory].
+        Assert.Equal(2, drawn.Count(g => g == BreakGameType.Rps));
+        Assert.Equal(1, drawn.Count(g => g == BreakGameType.Math));
+        Assert.Equal(1, drawn.Count(g => g == BreakGameType.Memory));
     }
 
     [Fact]

@@ -1134,8 +1134,9 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
-  async function handleScheduleBreak(gameType: number) {
-    try { await scheduleBreak(gameType); }
+  async function handleScheduleBreak() {
+    // Game do server random chọn từ pool (không truyền gameType nữa).
+    try { await scheduleBreak(); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -1603,27 +1604,13 @@ export default function RoomPlayPage() {
                     </button>
                   )}
                   {canScheduleBreak && (
-                    <>
-                      <div className="tlmn-options-group-label">🎮 Giải lao zui zẻ</div>
-                      <button
-                        className="tlmn-options-item sub"
-                        onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(1); }}
-                      >
-                        ✊ Oẳn Tù Xì
-                      </button>
-                      <button
-                        className="tlmn-options-item sub"
-                        onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(2); }}
-                      >
-                        🧮 Tính toán
-                      </button>
-                      <button
-                        className="tlmn-options-item sub"
-                        onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(3); }}
-                      >
-                        🧠 Trí nhớ
-                      </button>
-                    </>
+                    <button
+                      className="tlmn-options-item"
+                      onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(); }}
+                      title="Random 1 game giải lao (Oẳn Tù Xì / Tính toán / Trí nhớ) — chơi rồi không lặp lại"
+                    >
+                      🎮 Giải lao zui zẻ
+                    </button>
                   )}
                   {canSurrender && (
                     <button

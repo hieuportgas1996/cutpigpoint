@@ -301,11 +301,12 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là giải đấu Oẳn Tù Xì. Bất kỳ lúc nào trong round
-    /// InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ khi đủ 4 người.
-    /// Loại trừ lẫn nhau với các biến tấu khác (1 round 1 biến thể).
+    /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là 1 game giải lao RANDOM rút từ pool (chơi rồi mất khỏi pool).
+    /// Bất kỳ lúc nào trong round InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ đủ 4 người.
+    /// Loại trừ lẫn nhau với các biến tấu khác. Pool mặc định [Rps,Rps,Math,Memory]; hết → reset đầy lại.
+    /// (Tham số gameType BỎ QUA — giữ chữ ký cho tương thích hub; game do server random chọn.)
     /// </summary>
-    public Match ScheduleBreak(Guid roomId, Guid userId, BreakGameType gameType = BreakGameType.Rps)
+    public Match ScheduleBreak(Guid roomId, Guid userId, BreakGameType gameType = BreakGameType.None)
     {
         lock (LockFor(roomId))
         {
@@ -313,16 +314,21 @@ public class MatchManager
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
             if (match.Players.Count != 4)
                 throw new InvalidOperationException("Giải lao cần đúng 4 người.");
-            if (gameType != BreakGameType.Rps && gameType != BreakGameType.Math && gameType != BreakGameType.Memory)
-                throw new InvalidOperationException("Loại game giải lao không hợp lệ.");
             EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
             if (player.HasUsedBreak)
                 throw new InvalidOperationException("Bạn đã dùng quyền Giải lao trong trận này.");
 
+            // Random rút 1 game khỏi pool. Hết pool → nạp đầy lại rồi rút.
+            if (match.BreakGamePool.Count == 0)
+                match.BreakGamePool.AddRange(new[] { BreakGameType.Rps, BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory });
+            int pick = Random.Shared.Next(match.BreakGamePool.Count);
+            var chosen = match.BreakGamePool[pick];
+            match.BreakGamePool.RemoveAt(pick);
+
             match.BreakScheduled = true;
-            match.BreakScheduledType = gameType;
+            match.BreakScheduledType = chosen;
             match.BreakOrganizerId = userId;
             player.HasUsedBreak = true;
             return match;

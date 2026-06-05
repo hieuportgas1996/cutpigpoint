@@ -156,10 +156,16 @@ public class Match
     /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>
     public bool IsGambleRound { get; set; }
 
-    // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán) ----
+    // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán / Trí nhớ) ----
+    /// <summary>
+    /// Pool game giải lao CÒN LẠI trong trận. Bấm "Giải lao" → random rút 1 game khỏi pool (chơi rồi mất khỏi pool).
+    /// Khởi tạo [Rps, Rps, Math, Memory] (4 lượt = 4 player × 1 lần). Hết pool → reset đầy lại.
+    /// </summary>
+    public List<BreakGameType> BreakGamePool { get; set; } = new()
+        { BreakGameType.Rps, BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory };
     /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là 1 game giải lao. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
     public bool BreakScheduled { get; set; }
-    /// <summary>Loại game giải lao ĐÃ ĐẶT cho round kế (Rps/Math). None khi chưa đặt. Tiêu ở DealRound.</summary>
+    /// <summary>Loại game giải lao ĐÃ ĐẶT cho round kế (Rps/Math/Memory). None khi chưa đặt. Tiêu ở DealRound.</summary>
     public BreakGameType BreakScheduledType { get; set; } = BreakGameType.None;
     /// <summary>UserId người tổ chức giải lao (hiển thị + toast).</summary>
     public Guid? BreakOrganizerId { get; set; }
