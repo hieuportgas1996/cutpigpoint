@@ -8,6 +8,7 @@ import { MaiBranch } from '../game/effects/MaiBranch';
 import { Confetti } from '../game/effects/Confetti';
 import { ChampionTrophy } from '../game/effects/ChampionTrophy';
 import { RpsBreakScreen } from './RpsBreakScreen';
+import { MathBreakScreen } from './MathBreakScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -346,7 +347,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, submitMathNumber, submitMathAnswer, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -375,6 +376,10 @@ export default function RoomPlayPage() {
   const [xiDachConfirmOpen, setXiDachConfirmOpen] = useState(false);
   const lastGambleAnnouncedRef = useRef<string | null>(null);
   const lastBreakAnnouncedRef = useRef<string | null>(null);
+  // Giải lao Tính toán: client nhớ số mình chọn (pha chọn) + đáp án mình chọn câu hiện tại (server ẩn lúc trả lời).
+  const [mathMyPick, setMathMyPick] = useState<number | null>(null);
+  const [mathMyChoice, setMathMyChoice] = useState<number | null>(null);
+  const mathChoiceQuestionRef = useRef<number>(-1);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
   const [stickerOverlay, setStickerOverlay] = useState<{ id: string; code: string; emoji: string; label: string; sender: string; senderUserId: string } | null>(null);
@@ -760,6 +765,16 @@ export default function RoomPlayPage() {
     ? new Date(matchState.rpsRevealUntil).getTime() > now
     : false;
 
+  // Giải Lao (Tính toán): pha chọn số / trả lời quiz.
+  const isMathRound = matchState?.status === MatchStatus.BreakMathPick || matchState?.status === MatchStatus.BreakMathQuiz;
+  const math = matchState?.math ?? null;
+  const mathPickLeftSec = matchState?.mathPickDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.mathPickDeadline).getTime() - now) / 1000))
+    : 0;
+  const mathAnswerLeftSec = matchState?.mathAnswerDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.mathAnswerDeadline).getTime() - now) / 1000))
+    : 0;
+
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
@@ -836,6 +851,22 @@ export default function RoomPlayPage() {
     passTurn().catch(() => undefined);
   }, [autoPass, isMyTurn, trickCombo, matchState?.roundNumber, matchState?.currentTurnSeatIndex]);
 
+  // Giải lao Tính toán: reset lựa chọn đáp án của mình khi sang CÂU MỚI (currentQuestion đổi) hoặc rời round.
+  useEffect(() => {
+    const q = matchState?.math?.currentQuestion ?? -1;
+    if (mathChoiceQuestionRef.current !== q) {
+      mathChoiceQuestionRef.current = q;
+      setMathMyChoice(null);
+    }
+  }, [matchState?.math?.currentQuestion, matchState?.status]);
+
+  // Reset số đã chọn khi KHÔNG còn ở round Tính toán (sang round khác / ván mới).
+  useEffect(() => {
+    if (matchState?.status !== MatchStatus.BreakMathPick && matchState?.status !== MatchStatus.BreakMathQuiz) {
+      setMathMyPick(null);
+    }
+  }, [matchState?.status]);
+
   // Thông báo (mọi người) khi có người tổ chức lễ hội — 1 lần / lượt đặt lịch.
   useEffect(() => {
     if (!festivalScheduled || matchState?.isFestivalRound) return;
@@ -883,8 +914,9 @@ export default function RoomPlayPage() {
     if (lastBreakAnnouncedRef.current === key) return;
     lastBreakAnnouncedRef.current = key;
     const who = matchState?.breakOrganizerId === myUserId ? 'Bạn' : breakOrganizerName;
-    toast.push('info', `🎮 ${who} đã tổ chức Giải lao zui zẻ — round sau đấu Oẳn Tù Xì!`);
-  }, [breakScheduled, matchState?.breakOrganizerId, matchState?.roundNumber]);
+    const gameLabel = matchState?.breakScheduledType === 2 ? 'Tính toán' : 'Oẳn Tù Xì';
+    toast.push('info', `🎮 ${who} đã tổ chức Giải lao zui zẻ — round sau chơi ${gameLabel}!`);
+  }, [breakScheduled, matchState?.breakOrganizerId, matchState?.roundNumber, matchState?.breakScheduledType]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -1042,14 +1074,27 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
-  async function handleScheduleBreak() {
-    try { await scheduleBreak(); }
+  async function handleScheduleBreak(gameType: number) {
+    try { await scheduleBreak(gameType); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
   async function handleRps(choice: number) {
     try { await submitRpsChoice(choice); }
     catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleMathPick(n: number) {
+    setMathMyPick(n);
+    try { await submitMathNumber(n); }
+    catch (e) { setMathMyPick(null); toast.push('error', (e as Error).message); }
+  }
+
+  async function handleMathAnswer(optionIndex: number) {
+    setMathMyChoice(optionIndex);
+    mathChoiceQuestionRef.current = matchState?.math?.currentQuestion ?? -1;
+    try { await submitMathAnswer(optionIndex); }
+    catch (e) { setMathMyChoice(null); toast.push('error', (e as Error).message); }
   }
 
   async function handleDrawXiDach() {
@@ -1491,12 +1536,21 @@ export default function RoomPlayPage() {
                     </button>
                   )}
                   {canScheduleBreak && (
-                    <button
-                      className="tlmn-options-item"
-                      onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(); }}
-                    >
-                      🎮 Giải lao zui zẻ
-                    </button>
+                    <>
+                      <div className="tlmn-options-group-label">🎮 Giải lao zui zẻ</div>
+                      <button
+                        className="tlmn-options-item sub"
+                        onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(1); }}
+                      >
+                        ✊ Oẳn Tù Xì
+                      </button>
+                      <button
+                        className="tlmn-options-item sub"
+                        onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(2); }}
+                      >
+                        🧮 Tính toán
+                      </button>
+                    </>
                   )}
                   {canSurrender && (
                     <button
@@ -1599,6 +1653,20 @@ export default function RoomPlayPage() {
           />
         )}
 
+        {isMathRound && math && (
+          <MathBreakScreen
+            math={math}
+            players={matchState.players}
+            myUserId={myUserId}
+            pickLeftSec={mathPickLeftSec}
+            answerLeftSec={mathAnswerLeftSec}
+            myPick={mathMyPick}
+            myChoiceIdx={mathMyChoice}
+            onPickNumber={handleMathPick}
+            onAnswer={handleMathAnswer}
+          />
+        )}
+
         {iAmOfferedGamble && (
           <div className="match-end-overlay" style={{ background: 'rgba(0,0,0,0.55)' }}>
             <div className="match-end-card gamble-offer" onClick={e => e.stopPropagation()}>
@@ -1664,7 +1732,9 @@ export default function RoomPlayPage() {
             <div className="match-end-card">
               <h2>
                 {delayedRoundEnd.wasBreak
-                  ? `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`
+                  ? (delayedRoundEnd.breakGame === 2
+                      ? `🧮 Giải lao Tính toán — Ván ${delayedRoundEnd.roundNumber}`
+                      : `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`)
                   : delayedRoundEnd.wasXiDach
                   ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
                   : delayedRoundEnd.wasFestival
@@ -1744,6 +1814,8 @@ export default function RoomPlayPage() {
                       ? `Ván ${r.roundNumber} · 🌟 Về trắng`
                       : r.wasJudge
                       ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
+                      : r.wasBreak
+                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : 'Oẳn Tù Xì'}`
                       : `Ván ${r.roundNumber}${winner ? ` · ${winner.displayName} Nhất` : ''}`;
                     return (
                       <details key={`${r.matchId}-${r.roundNumber}`} className="history-item" open={r === roundHistory[roundHistory.length - 1]}>

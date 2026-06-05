@@ -12,6 +12,16 @@ public enum MatchStatus
     XiDachPlaying = 7,           // round Sát Phạt (xì dách): players rồi nhà cái rút bài tuần tự
     XiDachCompare = 8,           // round Sát Phạt: nhà cái lần lượt bấm "So" từng player còn lại
     BreakRps = 9,                // round Giải lao: giải đấu Oẳn Tù Xì (kéo búa bao) bracket 4 người
+    BreakMathPick = 10,          // round Giải lao Tính toán: pha mỗi người chọn 1 chữ số 0-9
+    BreakMathQuiz = 11,          // round Giải lao Tính toán: pha trả lời câu hỏi trắc nghiệm
+}
+
+/// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
+public enum BreakGameType
+{
+    None = 0,
+    Rps = 1,    // Oẳn Tù Xì (kéo búa bao)
+    Math = 2,   // Tính toán (tính nhẩm trắc nghiệm)
 }
 
 public class MatchPlayer
@@ -143,19 +153,43 @@ public class Match
     /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>
     public bool IsGambleRound { get; set; }
 
-    // ---- Giải Lao Zui Zẻ (Oẳn Tù Xì bracket) ----
-    /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là giải đấu Oẳn Tù Xì. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
+    // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán) ----
+    /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là 1 game giải lao. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
     public bool BreakScheduled { get; set; }
+    /// <summary>Loại game giải lao ĐÃ ĐẶT cho round kế (Rps/Math). None khi chưa đặt. Tiêu ở DealRound.</summary>
+    public BreakGameType BreakScheduledType { get; set; } = BreakGameType.None;
     /// <summary>UserId người tổ chức giải lao (hiển thị + toast).</summary>
     public Guid? BreakOrganizerId { get; set; }
-    /// <summary>True khi round HIỆN TẠI là round giải lao (Oẳn Tù Xì).</summary>
+    /// <summary>True khi round HIỆN TẠI là round giải lao (bất kỳ game nào).</summary>
     public bool IsBreakRound { get; set; }
-    /// <summary>State bracket Oẳn Tù Xì của round giải lao hiện tại (null khi không phải round giải lao).</summary>
+    /// <summary>Loại game giải lao của round HIỆN TẠI (Rps/Math). None khi không phải round giải lao.</summary>
+    public BreakGameType BreakGame { get; set; } = BreakGameType.None;
+
+    // -- Oẳn Tù Xì --
+    /// <summary>State bracket Oẳn Tù Xì của round giải lao hiện tại (null khi không phải round Oẳn Tù Xì).</summary>
     public RpsTournament? Rps { get; set; }
     /// <summary>Hết hạn 20s chọn kéo/búa/bao của ván Oẳn Tù Xì hiện tại; hết → server tự random cho ai chưa chọn. Null trong pha hiện kết quả.</summary>
     public DateTime? RpsChoiceDeadline { get; set; }
     /// <summary>Pha HIỆN KẾT QUẢ ván Oẳn Tù Xì vừa chốt: giữ 2s cho mọi người xem rồi mới qua ván/giai đoạn kế (hoặc finalize). Null khi đang ở pha chọn.</summary>
     public DateTime? RpsRevealUntil { get; set; }
+
+    // -- Tính toán --
+    /// <summary>Số mỗi người chọn (0-9) trong pha BreakMathPick; key = UserId. Chưa chọn = không có key.</summary>
+    public Dictionary<Guid, int> MathPicks { get; set; } = new();
+    /// <summary>Hết hạn 10s pha chọn số; hết → server random cho ai chưa chọn rồi sinh câu hỏi.</summary>
+    public DateTime? MathPickDeadline { get; set; }
+    /// <summary>2 câu hỏi trắc nghiệm sinh từ 4 số đã chọn (null trước khi vào pha quiz).</summary>
+    public List<MathQuestion>? MathQuestions { get; set; }
+    /// <summary>Index câu hỏi hiện tại (0-based) trong pha BreakMathQuiz.</summary>
+    public int MathCurrentQuestion { get; set; }
+    /// <summary>Thời điểm mở câu hiện tại (để tính ElapsedMs khi player trả lời). Null giữa các câu.</summary>
+    public DateTime? MathQuestionStart { get; set; }
+    /// <summary>Hết hạn 5s trả lời câu hiện tại; hết → ai chưa trả lời tính sai (max time) rồi qua câu kế / finalize.</summary>
+    public DateTime? MathAnswerDeadline { get; set; }
+    /// <summary>Câu trả lời từng người cho từng câu: key = UserId → list (1 phần tử/câu đã mở). Dùng để xếp hạng.</summary>
+    public Dictionary<Guid, List<MathAnswer>> MathAnswers { get; set; } = new();
+    /// <summary>Pha HIỆN KẾT QUẢ câu vừa xong: giữ vài giây cho xem đáp án đúng + ai nhanh nhất rồi qua câu kế. Null khi đang trả lời.</summary>
+    public DateTime? MathRevealUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

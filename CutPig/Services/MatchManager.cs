@@ -21,6 +21,9 @@ public class MatchManager
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
+    public static TimeSpan MathPickTimeout { get; } = TimeSpan.FromSeconds(10);     // 10s mỗi người chọn 1 chữ số 0-9
+    public static TimeSpan MathAnswerTimeout { get; } = TimeSpan.FromSeconds(5);    // 5s trả lời mỗi câu trắc nghiệm
+    public static TimeSpan MathRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s xem đáp án đúng + ai nhanh nhất giữa các câu
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -97,9 +100,18 @@ public class MatchManager
         match.JudgeTriggered = false;
         match.IsGambleRound = false;
         match.IsBreakRound = false;
+        match.BreakGame = BreakGameType.None;
         match.Rps = null;
         match.RpsChoiceDeadline = null;
         match.RpsRevealUntil = null;
+        match.MathPicks.Clear();
+        match.MathPickDeadline = null;
+        match.MathQuestions = null;
+        match.MathCurrentQuestion = 0;
+        match.MathQuestionStart = null;
+        match.MathAnswerDeadline = null;
+        match.MathAnswers.Clear();
+        match.MathRevealUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -144,14 +156,19 @@ public class MatchManager
             match.StarOfHopeScheduledUserId = null;
         }
 
-        // Round Giải Lao (Oẳn Tù Xì): tiêu cờ BreakScheduled → round này là giải đấu kéo búa bao.
+        // Round Giải Lao: tiêu cờ BreakScheduled → round này là 1 game giải lao (Oẳn Tù Xì hoặc Tính toán).
         match.IsBreakRound = match.BreakScheduled;
-        match.BreakScheduled = false;
         if (match.IsBreakRound)
         {
-            DealBreakRound(match);
+            match.BreakGame = match.BreakScheduledType;
+            match.BreakScheduled = false;
+            match.BreakScheduledType = BreakGameType.None;
+            if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
+            else DealBreakRound(match); // Rps
             return;
         }
+        match.BreakScheduled = false;
+        match.BreakScheduledType = BreakGameType.None;
         match.BreakOrganizerId = null; // round thường: xoá người tổ chức giải lao
 
         // Round Sát Phạt (Xì Dách): tiêu cờ XiDachScheduledUserId → round này là xì dách, người đó là Nhà Cái.
@@ -249,8 +266,27 @@ public class MatchManager
             (seeds[i], seeds[j]) = (seeds[j], seeds[i]);
         }
         match.Rps = RpsTournament.Create(seeds);
+        match.BreakGame = BreakGameType.Rps;
         match.Status = MatchStatus.BreakRps;
         match.RpsChoiceDeadline = DateTime.UtcNow + RpsChoiceTimeout;
+    }
+
+    /// <summary>
+    /// Deal round "Giải Lao — Tính toán": cần ĐÚNG 4 người. Vào pha BreakMathPick — mỗi người chọn 1 chữ số 0-9
+    /// (10s, hết giờ auto random). KHÔNG đụng PreviousRoundWinnerId. Câu hỏi sinh khi pha chọn số kết thúc.
+    /// </summary>
+    private static void DealBreakMathRound(Match match)
+    {
+        match.BreakGame = BreakGameType.Math;
+        match.MathPicks.Clear();
+        match.MathAnswers.Clear();
+        match.MathQuestions = null;
+        match.MathCurrentQuestion = 0;
+        match.MathQuestionStart = null;
+        match.MathAnswerDeadline = null;
+        match.MathRevealUntil = null;
+        match.Status = MatchStatus.BreakMathPick;
+        match.MathPickDeadline = DateTime.UtcNow + MathPickTimeout;
     }
 
     /// <summary>
@@ -258,14 +294,16 @@ public class MatchManager
     /// InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ khi đủ 4 người.
     /// Loại trừ lẫn nhau với các biến tấu khác (1 round 1 biến thể).
     /// </summary>
-    public Match ScheduleBreak(Guid roomId, Guid userId)
+    public Match ScheduleBreak(Guid roomId, Guid userId, BreakGameType gameType = BreakGameType.Rps)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.InProgress)
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
             if (match.Players.Count != 4)
-                throw new InvalidOperationException("Giải lao Oẳn Tù Xì cần đúng 4 người.");
+                throw new InvalidOperationException("Giải lao cần đúng 4 người.");
+            if (gameType != BreakGameType.Rps && gameType != BreakGameType.Math)
+                throw new InvalidOperationException("Loại game giải lao không hợp lệ.");
             EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
@@ -273,6 +311,7 @@ public class MatchManager
                 throw new InvalidOperationException("Bạn đã dùng quyền Giải lao trong trận này.");
 
             match.BreakScheduled = true;
+            match.BreakScheduledType = gameType;
             match.BreakOrganizerId = userId;
             player.HasUsedBreak = true;
             return match;
@@ -386,6 +425,184 @@ public class MatchManager
             return true;
         }
     }
+
+    // ==================== Giải Lao — Tính toán ====================
+
+    /// <summary>
+    /// Player chọn 1 chữ số 0-9 trong pha BreakMathPick. Mọi người nhìn realtime (broadcast MatchState).
+    /// Khi đủ 4 người chọn → sinh câu hỏi + vào pha quiz NGAY. Trả về match đã cập nhật.
+    /// </summary>
+    public Match SubmitMathNumber(Guid roomId, Guid userId, int number)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMathPick)
+                throw new InvalidOperationException("Không trong pha chọn số Tính toán.");
+            if (number < 0 || number > 9)
+                throw new InvalidOperationException("Chỉ được chọn số từ 0 đến 9.");
+            if (!match.Players.Any(p => p.UserId == userId))
+                throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (match.MathPicks.ContainsKey(userId))
+                throw new InvalidOperationException("Bạn đã chọn số rồi.");
+
+            match.MathPicks[userId] = number;
+            if (match.MathPicks.Count >= match.Players.Count)
+                StartMathQuiz(match);
+            return match;
+        }
+    }
+
+    /// <summary>Sinh 2 câu hỏi từ 4 số đã chọn (theo seat order) rồi mở câu đầu (pha BreakMathQuiz).</summary>
+    private static void StartMathQuiz(Match match)
+    {
+        // Random cho ai chưa chọn (an toàn, dù caller thường gọi khi đủ).
+        foreach (var p in match.Players)
+            if (!match.MathPicks.ContainsKey(p.UserId))
+                match.MathPicks[p.UserId] = Random.Shared.Next(0, 10);
+
+        var digits = match.Players.OrderBy(p => p.SeatIndex)
+            .Select(p => match.MathPicks[p.UserId]).ToList();
+        match.MathQuestions = MathQuizEngine.BuildQuestions(digits, Random.Shared);
+        match.MathAnswers.Clear();
+        foreach (var p in match.Players) match.MathAnswers[p.UserId] = new List<MathAnswer>();
+        match.MathCurrentQuestion = 0;
+        match.MathPickDeadline = null;
+        match.MathRevealUntil = null;
+        match.Status = MatchStatus.BreakMathQuiz;
+        OpenMathQuestion(match);
+    }
+
+    /// <summary>Mở câu hỏi hiện tại: đặt MathQuestionStart + deadline 5s; thêm slot answer rỗng cho mỗi người.</summary>
+    private static void OpenMathQuestion(Match match)
+    {
+        match.MathQuestionStart = DateTime.UtcNow;
+        match.MathAnswerDeadline = DateTime.UtcNow + MathAnswerTimeout;
+        match.MathRevealUntil = null;
+        // Mỗi người 1 slot mới (chưa trả lời).
+        foreach (var p in match.Players)
+        {
+            if (!match.MathAnswers.TryGetValue(p.UserId, out var list)) { list = new(); match.MathAnswers[p.UserId] = list; }
+            list.Add(new MathAnswer { ChosenIndex = -1, Correct = false, ElapsedMs = (long)MathAnswerTimeout.TotalMilliseconds });
+        }
+    }
+
+    /// <summary>
+    /// Player chọn 1 đáp án (index 0-3) cho câu hiện tại. Ghi đúng/sai + thời gian (ms từ lúc mở câu).
+    /// Chỉ ghi 1 lần/câu. Khi MỌI người đã trả lời → vào pha hiện đáp án (MathRevealUntil) ngay (không chờ hết 5s).
+    /// </summary>
+    public Match SubmitMathAnswer(Guid roomId, Guid userId, int optionIndex)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMathQuiz || match.MathQuestions == null)
+                throw new InvalidOperationException("Không trong pha trả lời Tính toán.");
+            if (match.MathRevealUntil.HasValue)
+                throw new InvalidOperationException("Câu này đã chốt, chờ câu kế.");
+            var q = match.MathQuestions[match.MathCurrentQuestion];
+            if (optionIndex < 0 || optionIndex >= q.Options.Count)
+                throw new InvalidOperationException("Đáp án không hợp lệ.");
+            if (!match.MathAnswers.TryGetValue(userId, out var list) || list.Count <= match.MathCurrentQuestion)
+                throw new InvalidOperationException("Bạn không ở trong ván này.");
+            var slot = list[match.MathCurrentQuestion];
+            if (slot.Answered)
+                throw new InvalidOperationException("Bạn đã trả lời câu này rồi.");
+
+            long elapsed = match.MathQuestionStart.HasValue
+                ? (long)(DateTime.UtcNow - match.MathQuestionStart.Value).TotalMilliseconds
+                : (long)MathAnswerTimeout.TotalMilliseconds;
+            slot.ChosenIndex = optionIndex;
+            slot.Correct = optionIndex == q.CorrectIndex;
+            slot.ElapsedMs = Math.Clamp(elapsed, 0, (long)MathAnswerTimeout.TotalMilliseconds);
+
+            // Mọi người đã trả lời → chốt câu sớm (vào pha hiện đáp án).
+            bool allAnswered = match.Players.All(p =>
+                match.MathAnswers.TryGetValue(p.UserId, out var l) && l.Count > match.MathCurrentQuestion && l[match.MathCurrentQuestion].Answered);
+            if (allAnswered) CloseMathQuestion(match);
+            return match;
+        }
+    }
+
+    /// <summary>Chốt câu hiện tại: dừng deadline trả lời, vào pha hiện đáp án MathRevealTimeout giây.</summary>
+    private static void CloseMathQuestion(Match match)
+    {
+        match.MathAnswerDeadline = null;
+        match.MathRevealUntil = DateTime.UtcNow + MathRevealTimeout;
+    }
+
+    /// <summary>Hết pha hiện đáp án: qua câu kế (OpenMathQuestion) hoặc finalize (xếp hạng → WaitingNextRound).</summary>
+    private static void FinalizeMathReveal(Match match)
+    {
+        match.MathRevealUntil = null;
+        if (match.MathCurrentQuestion + 1 < (match.MathQuestions?.Count ?? 0))
+        {
+            match.MathCurrentQuestion++;
+            OpenMathQuestion(match);
+        }
+        else
+        {
+            FinalizeBreakMathRound(match);
+        }
+    }
+
+    /// <summary>Tính toán xong: xếp hạng theo (đúng desc, thời gian asc) → gán FinalRank 1..4 → WaitingNextRound.</summary>
+    private static void FinalizeBreakMathRound(Match match)
+    {
+        var ids = match.Players.OrderBy(p => p.SeatIndex).Select(p => p.UserId).ToList();
+        var ranking = MathQuizEngine.Rank(ids, match.MathAnswers);
+        for (int rank = 0; rank < ranking.Count; rank++)
+        {
+            var p = match.Players.FirstOrDefault(x => x.UserId == ranking[rank]);
+            if (p != null) p.FinalRank = rank + 1;
+        }
+        match.MathAnswerDeadline = null;
+        match.MathRevealUntil = null;
+        match.MathQuestionStart = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>Timer: hết 10s pha chọn số → random cho ai chưa chọn rồi sinh câu hỏi (vào quiz). Trả về true nếu vừa xử lý.</summary>
+    public bool TryAutoStartMathQuiz(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMathPick) return false;
+            if (!match.MathPickDeadline.HasValue || match.MathPickDeadline.Value > DateTime.UtcNow) return false;
+            StartMathQuiz(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết 5s trả lời câu hiện tại → chốt câu (ai chưa trả lời = sai, max time). Trả về true nếu vừa xử lý.</summary>
+    public bool TryAutoCloseMathQuestion(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMathQuiz) return false;
+            if (match.MathRevealUntil.HasValue) return false; // đang ở pha hiện đáp án
+            if (!match.MathAnswerDeadline.HasValue || match.MathAnswerDeadline.Value > DateTime.UtcNow) return false;
+            CloseMathQuestion(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết pha hiện đáp án → qua câu kế hoặc finalize. Trả về true nếu vừa xử lý (có thể → WaitingNextRound).</summary>
+    public bool TryFinalizeMathReveal(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMathQuiz) return false;
+            if (!match.MathRevealUntil.HasValue || match.MathRevealUntil.Value > DateTime.UtcNow) return false;
+            FinalizeMathReveal(match);
+            return true;
+        }
+    }
+
+    /// <summary>Mọi match đang ở pha chọn số Tính toán (timer scan auto-start quiz).</summary>
+    public IEnumerable<Match> AllBreakMathPick() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMathPick);
+
+    /// <summary>Mọi match đang ở pha quiz Tính toán (timer scan auto-close câu / finalize reveal).</summary>
+    public IEnumerable<Match> AllBreakMathQuiz() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMathQuiz);
 
     /// <summary>
     /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
@@ -2267,7 +2484,7 @@ public class MatchManager
             })
             .ToList();
 
-        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound, match.IsXiDachRound, match.IsBreakRound);
+        var dto = new Dtos.RoundEndDto(match.Id, match.RoundNumber, wasWhiteWin, match.JudgeTriggered, entries, match.IsFestivalRound, match.IsXiDachRound, match.IsBreakRound, (int)match.BreakGame);
         match.RoundHistory.Add(dto);
         return dto;
     }

@@ -339,10 +339,13 @@ export const MatchStatus = {
   XiDachPlaying: 7,
   XiDachCompare: 8,
   BreakRps: 9,
+  BreakMathPick: 10,
+  BreakMathQuiz: 11,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -365,6 +368,33 @@ export interface RpsState {
   round1B: RpsMatchup;
   thirdPlace: RpsMatchup;
   final: RpsMatchup;
+  finalRanking: string[];
+}
+
+// ---- Giải Lao (Tính toán) ----
+export interface MathPick { userId: string; number: number; }
+export interface MathPlayerResult {
+  userId: string;
+  chosenIndex: number;      // -1 nếu chưa/không lộ (chỉ lộ ở pha reveal)
+  answered: boolean;
+  correct: boolean;
+  elapsedMs: number;
+  correctCount: number;
+  totalCorrectMs: number;
+}
+export interface MathQuestion {
+  expression: string;
+  options: number[];
+  correctIndex: number;     // -1 khi đang trả lời, ≥0 ở pha reveal
+}
+export interface MathQuizState {
+  phase: number;            // 0 chọn số, 1 trả lời, 2 hiện đáp án
+  picks: MathPick[];
+  totalQuestions: number;
+  currentQuestion: number;
+  question: MathQuestion | null;
+  answeredUserIds: string[];
+  results: MathPlayerResult[];
   finalRanking: string[];
 }
 
@@ -438,11 +468,17 @@ export interface MatchPublicState {
   isGambleRound: boolean;
   gambleOfferDeadline: string | null;
   breakScheduled: boolean;
+  breakScheduledType: number;   // BreakGameType: 1 Rps, 2 Math
   breakOrganizerId: string | null;
   isBreakRound: boolean;
   rps: RpsState | null;
   rpsChoiceDeadline: string | null;
   rpsRevealUntil: string | null;
+  breakGame: number;        // BreakGameType: 0 none, 1 Rps, 2 Math
+  math: MathQuizState | null;
+  mathPickDeadline: string | null;
+  mathAnswerDeadline: string | null;
+  mathRevealUntil: string | null;
 }
 
 export interface PrivateHand {
@@ -509,6 +545,7 @@ export interface RoundEnd {
   wasFestival: boolean;
   wasXiDach: boolean;
   wasBreak: boolean;
+  breakGame: number;        // BreakGameType: 1 Rps, 2 Math (chỉ ý nghĩa khi wasBreak)
 }
 
 export interface MatchEnd {

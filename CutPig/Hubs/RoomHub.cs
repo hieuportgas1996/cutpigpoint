@@ -703,7 +703,7 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
-    public async Task ScheduleBreak()
+    public async Task ScheduleBreak(int gameType = 1)
     {
         var auth = await AuthenticateAsync();
         if (auth == null) throw new HubException("Unauthorized");
@@ -711,10 +711,39 @@ public class RoomHub : Hub
         if (roomId == null) throw new HubException("Chưa vào phòng nào.");
 
         Match match;
-        try { match = _matches.ScheduleBreak(roomId.Value, auth.Value.UserId); }
+        try { match = _matches.ScheduleBreak(roomId.Value, auth.Value.UserId, (GameEngine.BreakGameType)gameType); }
         catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
 
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task SubmitMathNumber(int number)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitMathNumber(roomId.Value, auth.Value.UserId, number); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task SubmitMathAnswer(int optionIndex)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitMathAnswer(roomId.Value, auth.Value.UserId, optionIndex); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Math quiz finalize chỉ qua timer (reveal phase), không kết thúc tức thì ở đây.
     }
 
     public async Task SubmitRpsChoice(int choice)
@@ -960,11 +989,17 @@ public class RoomHub : Hub
             m.IsGambleRound,
             m.GambleOfferDeadline,
             m.BreakScheduled,
+            (int)m.BreakScheduledType,
             m.BreakOrganizerId,
             m.IsBreakRound,
             BuildRpsState(m.Rps),
             m.RpsChoiceDeadline,
-            m.RpsRevealUntil);
+            m.RpsRevealUntil,
+            (int)m.BreakGame,
+            BuildMathState(m),
+            m.MathPickDeadline,
+            m.MathAnswerDeadline,
+            m.MathRevealUntil);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -975,6 +1010,55 @@ public class RoomHub : Hub
             m.ChoiceA != GameEngine.RpsChoice.None, m.ChoiceB != GameEngine.RpsChoice.None,
             (int)m.LastChoiceA, (int)m.LastChoiceB, (int)m.LastOutcome, m.HasLast);
         return new RpsStateDto((int)t.Stage, M(t.Round1A), M(t.Round1B), M(t.ThirdPlace), M(t.Final), new List<Guid>(t.FinalRanking));
+    }
+
+    /// <summary>
+    /// Build state Tính toán cho broadcast. Pha trả lời: KHÔNG lộ đáp án đúng (CorrectIndex=-1) hay chọn của ai
+    /// (ChosenIndex=-1) — chỉ lộ ai đã trả lời. Pha hiện đáp án (reveal): lộ CorrectIndex + chọn + đúng/sai + thời gian.
+    /// </summary>
+    private static MathQuizStateDto? BuildMathState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.Math) return null;
+        bool isPick = m.Status == MatchStatus.BreakMathPick;
+        bool reveal = m.MathRevealUntil.HasValue;
+        int phase = isPick ? 0 : reveal ? 2 : 1;
+
+        var picks = m.MathPicks.Select(kv => new MathPickDto(kv.Key, kv.Value)).ToList();
+        int qIdx = m.MathCurrentQuestion;
+
+        MathQuestionDto? question = null;
+        var answered = new List<Guid>();
+        if (!isPick && m.MathQuestions != null && qIdx < m.MathQuestions.Count)
+        {
+            var q = m.MathQuestions[qIdx];
+            question = new MathQuestionDto(q.Expression, new List<int>(q.Options), reveal ? q.CorrectIndex : -1);
+            foreach (var p in m.Players)
+                if (m.MathAnswers.TryGetValue(p.UserId, out var l) && l.Count > qIdx && l[qIdx].Answered)
+                    answered.Add(p.UserId);
+        }
+
+        var results = new List<MathPlayerResultDto>();
+        foreach (var p in m.Players)
+        {
+            m.MathAnswers.TryGetValue(p.UserId, out var list);
+            list ??= new();
+            int correctCount = list.Count(a => a.Correct);
+            long totalCorrectMs = list.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+            var cur = (qIdx < list.Count) ? list[qIdx] : null;
+            results.Add(new MathPlayerResultDto(
+                p.UserId,
+                reveal && cur != null ? cur.ChosenIndex : -1,   // chỉ lộ chọn ở pha reveal
+                cur?.Answered ?? false,
+                reveal && (cur?.Correct ?? false),
+                reveal && cur != null ? cur.ElapsedMs : 0,
+                correctCount,
+                totalCorrectMs));
+        }
+
+        return new MathQuizStateDto(
+            phase, picks,
+            m.MathQuestions?.Count ?? MathQuizEngine.NumQuestions,
+            qIdx, question, answered, results, new List<Guid>());
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

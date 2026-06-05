@@ -1,0 +1,176 @@
+.math-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 35%, rgba(80,46,14,0.5), rgba(0,0,0,0.8));
+  padding: 16px;
+}
+
+.math-card {
+  width: min(520px, 96vw);
+  max-height: 94vh;
+  overflow-y: auto;
+  background: linear-gradient(165deg, #3c2712, #251607);
+  border: 2px solid #d4a44a;
+  border-radius: 22px;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07);
+  padding: 18px 20px;
+  color: #f6e7c8;
+  text-align: center;
+}
+
+.math-title { font-size: 22px; font-weight: 800; color: #ffe26b; }
+.math-sub { font-size: 13px; color: #e2c089; margin: 4px 0 16px; font-weight: 600; }
+.math-sub b.low { color: #ff8a87; }
+.math-status { font-size: 13px; color: #e2c089; margin-top: 12px; font-weight: 600; }
+.math-status b { color: #ffe26b; }
+
+/* ---- Pha chọn số ---- */
+.math-picks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.math-pick-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(212,164,74,0.28);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.math-pick-seat.done { border-color: #6cc46c; box-shadow: 0 0 12px rgba(108,196,108,0.25); }
+.math-pick-seat.me { background: rgba(255,226,107,0.1); }
+.math-pick-name { font-size: 11px; font-weight: 700; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.math-pick-num {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffe26b;
+  min-height: 30px;
+}
+.math-pick-seat.waiting .math-pick-num { color: #7a5a30; }
+
+.math-digit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.math-digit-btn {
+  padding: 14px 0;
+  font-size: 24px;
+  font-weight: 900;
+  color: #2a1810;
+  background: linear-gradient(145deg, #f5d36b, #c79a2e);
+  border: 2px solid #fff3c4;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+.math-digit-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
+.math-digit-btn:active { transform: translateY(0); }
+
+/* ---- Phép tính + đáp án ---- */
+.math-expr {
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  margin: 8px 0 18px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  line-height: 1.3;
+  word-break: break-word;
+}
+.math-expr .math-eq { color: #ffe26b; }
+
+.math-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.math-opt-btn {
+  position: relative;
+  padding: 16px 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #f6e7c8;
+  background: rgba(0,0,0,0.3);
+  border: 2px solid rgba(212,164,74,0.4);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.math-opt-btn:hover:not(:disabled) { background: rgba(212,164,74,0.18); transform: translateY(-2px); }
+.math-opt-btn:disabled { cursor: default; }
+.math-opt-btn.mine { border-color: #ffe26b; }
+.math-opt-btn.correct {
+  background: linear-gradient(145deg, #2f8a3f, #1d5527);
+  border-color: #7fdc95;
+  color: #eafff0;
+  animation: mathCorrectPop 0.4s ease;
+}
+.math-opt-btn.wrong {
+  background: linear-gradient(145deg, #7a2b2b, #4a1717);
+  border-color: #e7a3a3;
+  color: #ffe1e1;
+}
+.math-opt-tag {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #ffe26b;
+  opacity: 0.9;
+}
+@keyframes mathCorrectPop {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* ---- Người chơi ---- */
+.math-players {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.math-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(212,164,74,0.22);
+}
+.math-player.me { background: rgba(255,226,107,0.1); }
+.math-player-name { font-size: 11px; font-weight: 700; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.math-player-status { font-size: 10px; color: #b08f55; font-weight: 600; }
+.math-player-status.ans { color: #7fdc95; }
+.math-player-result { font-size: 12px; font-weight: 700; }
+.math-player-result.ok { color: #7fdc95; }
+.math-player-result.no { color: #ff8a87; }
+.math-player-score { font-size: 11px; color: #e2c089; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .math-card { padding: 14px 14px; }
+  .math-title { font-size: 18px; }
+  .math-expr { font-size: 23px; margin: 6px 0 14px; }
+  .math-opt-btn { font-size: 20px; padding: 13px 0; }
+  .math-digit-btn { font-size: 20px; padding: 11px 0; }
+  .math-pick-num { font-size: 22px; }
+  .math-pick-name, .math-player-name { font-size: 10px; max-width: 60px; }
+}

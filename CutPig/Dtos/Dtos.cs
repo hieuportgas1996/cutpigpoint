@@ -106,11 +106,17 @@ public record MatchPublicStateDto(
     bool IsGambleRound = false,
     DateTime? GambleOfferDeadline = null,
     bool BreakScheduled = false,
+    int BreakScheduledType = 0,        // BreakGameType: 1 Rps, 2 Math (khi BreakScheduled)
     Guid? BreakOrganizerId = null,
     bool IsBreakRound = false,
     RpsStateDto? Rps = null,
     DateTime? RpsChoiceDeadline = null,
-    DateTime? RpsRevealUntil = null);
+    DateTime? RpsRevealUntil = null,
+    int BreakGame = 0,                 // BreakGameType: 0 none, 1 Rps, 2 Math
+    MathQuizStateDto? Math = null,
+    DateTime? MathPickDeadline = null,
+    DateTime? MathAnswerDeadline = null,
+    DateTime? MathRevealUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -135,6 +141,30 @@ public record RpsStateDto(
     RpsMatchupDto Final,
     List<Guid> FinalRanking);
 
+// ---- Giải Lao (Tính toán) ----
+public record MathPickDto(Guid UserId, int Number);  // số người chơi đã chọn (public realtime)
+public record MathPlayerResultDto(
+    Guid UserId,
+    int ChosenIndex,        // -1 = chưa/không trả lời (CHỈ lộ ở pha reveal hoặc cho chính mình)
+    bool Answered,
+    bool Correct,           // CHỈ ý nghĩa ở pha reveal
+    long ElapsedMs,
+    int CorrectCount,       // tổng số câu đúng tới thời điểm này
+    long TotalCorrectMs);   // tổng thời gian các câu đúng (để hiển thị tốc độ)
+public record MathQuestionDto(
+    string Expression,
+    List<int> Options,
+    int CorrectIndex);      // CHỈ gửi (≥0) ở pha reveal; -1 khi đang trả lời
+public record MathQuizStateDto(
+    int Phase,              // 0 = đang chọn số (BreakMathPick), 1 = đang trả lời, 2 = đang hiện đáp án (reveal)
+    List<MathPickDto> Picks,
+    int TotalQuestions,
+    int CurrentQuestion,    // 0-based
+    MathQuestionDto? Question,        // câu hiện tại (null trong pha chọn số)
+    List<Guid> AnsweredUserIds,       // ai đã trả lời câu hiện tại (không lộ chọn gì)
+    List<MathPlayerResultDto> Results,// kết quả tích lũy + (ở reveal) chi tiết câu hiện tại
+    List<Guid> FinalRanking);         // chỉ có khi finalize (WaitingNextRound) — thường rỗng trong state
+
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
 public record PlayMoveRequest(List<CardDto> Cards);
@@ -145,7 +175,7 @@ public record ChatHistoryDto(List<ChatMessageDto> Messages);
 public record HeldItemsDto(int BlackPigs, int RedPigs, bool HasFourOfAKind, bool HasThreePairRun, bool HasFourPairRun);
 public record HeldDetailDto(string Label, int Value);
 public record RoundResultEntryDto(Guid UserId, string DisplayName, int FinalRank, int RoundScore, int TotalScore, string? WhiteWinReason, int ChopBonus, bool WonByThreeOfSpades, bool LostByThreeOfSpades, bool JudgeIsWinner, bool JudgeIsVictim, bool JudgeIsPardoned, int JudgeHeldValue, int BaseRankScore, int ThreeOfSpadesDelta, int JudgeDelta, int WhiteWinDelta, int HeldPenaltyDelta, HeldItemsDto Held, List<HeldDetailDto> HeldDetails, int FestivalDelta = 0, bool FestivalWinner = false, List<CardDto>? FestivalCards = null, string? FestivalLabel = null, int StarDelta = 0, bool IsStar = false, List<string>? ChopLabels = null, bool ChopIsCutter = false, List<CardDto>? XiDachCards = null, string? XiDachLabel = null, bool XiDachIsDealer = false, int XiDachTotal = 0, int GambleDelta = 0, bool IsGamble = false);
-public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, bool WasJudge, List<RoundResultEntryDto> Results, bool WasFestival = false, bool WasXiDach = false, bool WasBreak = false);
+public record RoundEndDto(Guid MatchId, int RoundNumber, bool WasWhiteWin, bool WasJudge, List<RoundResultEntryDto> Results, bool WasFestival = false, bool WasXiDach = false, bool WasBreak = false, int BreakGame = 0);
 public record RoundHistoryDto(Guid MatchId, List<RoundEndDto> Rounds);
 public record MatchEndDto(Guid MatchId, List<RoundResultEntryDto> FinalScores);
 
