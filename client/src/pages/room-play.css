@@ -1027,6 +1027,31 @@
   opacity: 1;
 }
 
+/* Giải lao Tính toán — chi tiết thời gian từng câu trong modal tổng kết */
+.tlmn-root .math-result-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.tlmn-root .math-result-correct { color: var(--gold-soft); font-weight: 700; }
+.tlmn-root .math-result-q {
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  font-variant-numeric: tabular-nums;
+}
+.tlmn-root .math-result-q.ok { color: var(--success, #6ee2a8); background: rgba(108,196,108,0.15); }
+.tlmn-root .math-result-q.no { color: var(--danger, #ff7373); background: rgba(255,115,115,0.12); }
+.tlmn-root .math-result-total {
+  color: var(--cream);
+  opacity: 0.85;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Pha nặn bài lễ hội (FestivalReveal) — bài hiện tại SEAT, thanh điều khiển nổi phía trên */
 .tlmn-root .seat-festival-cards {
   position: absolute;

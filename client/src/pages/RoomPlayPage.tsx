@@ -306,6 +306,40 @@ function XiDachResultRows({ round, myUserId }: { round: RoundEnd; myUserId: stri
   );
 }
 
+const MATH_MEDALS = ['🥇', '🥈', '🥉', '4️⃣'];
+function MathResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  // Theo hạng (FinalRank 1..4).
+  const rows = [...round.results].sort((a, b) => (a.finalRank || 99) - (b.finalRank || 99));
+  return (
+    <div className="match-end-list festival-list">
+      {rows.map(r => (
+        <div key={r.userId} className={`match-end-row festival-row ${r.finalRank === 1 ? 'festival-winner' : ''}`}>
+          <span className="rank-tag">{MATH_MEDALS[(r.finalRank || 1) - 1] ?? `#${r.finalRank}`}</span>
+          <div className="match-end-name">
+            <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+            <div className="math-result-detail">
+              <span className="math-result-correct">🎯 {r.mathCorrectCount}/{r.mathResults?.length ?? 0} đúng</span>
+              {/* Thời gian từng câu — câu đúng hiện giây, sai hiện ❌, không trả lời hiện ⏰ */}
+              {(r.mathResults ?? []).map((q, i) => (
+                <span key={i} className={`math-result-q ${q.correct ? 'ok' : 'no'}`}>
+                  C{i + 1}: {q.correct ? `${(q.elapsedMs / 1000).toFixed(1)}s` : (q.answered ? '❌' : '⏰')}
+                </span>
+              ))}
+              {r.mathCorrectCount > 0 && (
+                <span className="math-result-total">Σ {(r.mathTotalCorrectMs / 1000).toFixed(1)}s</span>
+              )}
+            </div>
+          </div>
+          <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+            {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+          </span>
+          <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Hàng bài đánh ra giữa bàn. Khi sảnh quá dài (vượt maxWidth khả dụng) thì các lá tự
 // ĐÈ LÊN NHAU (negative margin) thay vì tràn ra che mất ghế hai bên. Vẫn xếp 1 hàng,
 // không xuống dòng — giữ animation bay vào + đọc được mặt bài (chỉ phần trái mỗi lá bị che).
@@ -1749,6 +1783,8 @@ export default function RoomPlayPage() {
                 ? <XiDachResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasFestival
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
+                : delayedRoundEnd.wasBreak && delayedRoundEnd.breakGame === 2
+                ? <MathResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
                 <div className="next-round-countdown">
@@ -1837,6 +1873,8 @@ export default function RoomPlayPage() {
                           ? <XiDachResultRows round={r} myUserId={myUserId} />
                           : r.wasFestival
                           ? <FestivalResultRows round={r} myUserId={myUserId} />
+                          : r.wasBreak && r.breakGame === 2
+                          ? <MathResultRows round={r} myUserId={myUserId} />
                           : <RoundResultRows round={r} myUserId={myUserId} />}
                       </details>
                     );

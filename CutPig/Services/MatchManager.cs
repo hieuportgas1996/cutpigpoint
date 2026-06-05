@@ -22,7 +22,7 @@ public class MatchManager
     public static TimeSpan FestivalAutoFlipTimeout { get; } = TimeSpan.FromSeconds(60);   // auto-lật nếu treo
     public static TimeSpan XiDachTurnTimeout { get; } = TimeSpan.FromSeconds(30);          // 30s/lượt rút bài xì dách
     public static TimeSpan MathPickTimeout { get; } = TimeSpan.FromSeconds(10);     // 10s mỗi người chọn 1 chữ số 0-9
-    public static TimeSpan MathAnswerTimeout { get; } = TimeSpan.FromSeconds(5);    // 5s trả lời mỗi câu trắc nghiệm
+    public static TimeSpan MathAnswerTimeout { get; } = TimeSpan.FromSeconds(20);   // 20s suy nghĩ + trả lời mỗi câu trắc nghiệm
     public static TimeSpan MathRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s xem đáp án đúng + ai nhanh nhất giữa các câu
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
@@ -2447,6 +2447,16 @@ public class MatchManager
                     : null;
                 string? xdLabel = match.IsXiDachRound ? XiDachEngine.Label(p.Hand) : null;
                 int xdTotal = match.IsXiDachRound ? XiDachEngine.Total(p.Hand) : 0;
+                // Giải lao Tính toán: gắn chi tiết từng câu (đúng/sai + thời gian) cho modal tổng kết.
+                int mathCorrect = 0; long mathTotalMs = 0;
+                List<Dtos.MathQuestionResultDto>? mathResults = null;
+                if (match.IsBreakRound && match.BreakGame == BreakGameType.Math
+                    && match.MathAnswers.TryGetValue(p.UserId, out var mAns))
+                {
+                    mathResults = mAns.Select(a => new Dtos.MathQuestionResultDto(a.Correct, a.Answered, a.ElapsedMs)).ToList();
+                    mathCorrect = mAns.Count(a => a.Correct);
+                    mathTotalMs = mAns.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+                }
                 return new Dtos.RoundResultEntryDto(
                     p.UserId, p.DisplayName,
                     p.FinalRank ?? 0,
@@ -2480,7 +2490,10 @@ public class MatchManager
                     p.IsXiDachDealer,
                     xdTotal,
                     bd.GambleDelta,
-                    p.IsGambling);
+                    p.IsGambling,
+                    mathCorrect,
+                    mathTotalMs,
+                    mathResults);
             })
             .ToList();
 

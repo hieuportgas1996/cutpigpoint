@@ -118,12 +118,13 @@ export function RpsBreakScreen({
         <div className="rps-title">🎮 Oẳn Tù Xì</div>
         <div className="rps-stage">{STAGE_TITLE[rps.stage]} · cán {cur.winTarget} thắng</div>
 
-        {/* Bracket gọn 1 hàng */}
+        {/* Bracket gọn 1 hàng. Cặp ĐANG đấu hiển thị tỉ số TRỄ (dispA/dispB) khớp với tỉ số lớn ở giữa —
+            chỉ nhảy điểm khi pha 'score', không nhảy trước. */}
         <div className="rps-bracket">
-          <BracketCell m={rps.round1A} label="V1" nameOf={nameOf} active={rps.stage === RpsStage.Round1A} />
-          <BracketCell m={rps.round1B} label="V2" nameOf={nameOf} active={rps.stage === RpsStage.Round1B} />
-          <BracketCell m={rps.thirdPlace} label="Hạng 3" nameOf={nameOf} active={rps.stage === RpsStage.ThirdPlace} />
-          <BracketCell m={rps.final} label="CK" nameOf={nameOf} active={rps.stage === RpsStage.Final} />
+          <BracketCell m={rps.round1A} label="V1" nameOf={nameOf} active={rps.stage === RpsStage.Round1A} dispWinsA={rps.stage === RpsStage.Round1A ? dispA : undefined} dispWinsB={rps.stage === RpsStage.Round1A ? dispB : undefined} />
+          <BracketCell m={rps.round1B} label="V2" nameOf={nameOf} active={rps.stage === RpsStage.Round1B} dispWinsA={rps.stage === RpsStage.Round1B ? dispA : undefined} dispWinsB={rps.stage === RpsStage.Round1B ? dispB : undefined} />
+          <BracketCell m={rps.thirdPlace} label="Hạng 3" nameOf={nameOf} active={rps.stage === RpsStage.ThirdPlace} dispWinsA={rps.stage === RpsStage.ThirdPlace ? dispA : undefined} dispWinsB={rps.stage === RpsStage.ThirdPlace ? dispB : undefined} />
+          <BracketCell m={rps.final} label="CK" nameOf={nameOf} active={rps.stage === RpsStage.Final} dispWinsA={rps.stage === RpsStage.Final ? dispA : undefined} dispWinsB={rps.stage === RpsStage.Final ? dispB : undefined} />
         </div>
 
         {/* Đấu trường: 2 nắm đấm nằm ngang đối nhau */}
@@ -172,17 +173,22 @@ export function RpsBreakScreen({
   );
 }
 
-function BracketCell({ m, label, nameOf, active }: { m: RpsMatchup; label: string; nameOf: Record<string, string>; active: boolean }) {
+function BracketCell({ m, label, nameOf, active, dispWinsA, dispWinsB }: {
+  m: RpsMatchup; label: string; nameOf: Record<string, string>; active: boolean;
+  dispWinsA?: number; dispWinsB?: number; // tỉ số TRỄ cho cặp đang đấu (khớp tỉ số lớn); undefined = dùng m.winsA/B
+}) {
   const aWin = m.winnerId && m.winnerId === m.playerAId;
   const bWin = m.winnerId && m.winnerId === m.playerBId;
+  const showA = dispWinsA ?? m.winsA;
+  const showB = dispWinsB ?? m.winsB;
   return (
     <div className={`rps-bcell ${active ? 'active' : ''} ${m.winnerId ? 'done' : ''}`}>
       <div className="rps-blabel">{label}</div>
       <div className={`rps-brow ${aWin ? 'w' : m.winnerId ? 'l' : ''}`}>
-        <span>{m.playerAId ? nameOf[m.playerAId] ?? '?' : '—'}</span><b>{m.winsA}</b>
+        <span>{m.playerAId ? nameOf[m.playerAId] ?? '?' : '—'}</span><b>{showA}</b>
       </div>
       <div className={`rps-brow ${bWin ? 'w' : m.winnerId ? 'l' : ''}`}>
-        <span>{m.playerBId ? nameOf[m.playerBId] ?? '?' : '—'}</span><b>{m.winsB}</b>
+        <span>{m.playerBId ? nameOf[m.playerBId] ?? '?' : '—'}</span><b>{showB}</b>
       </div>
     </div>
   );

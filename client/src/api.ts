@@ -521,6 +521,15 @@ export interface RoundResultEntry {
   xiDachTotal: number;
   gambleDelta: number;
   isGamble: boolean;
+  mathCorrectCount: number;
+  mathTotalCorrectMs: number;
+  mathResults: MathQuestionResult[] | null;
+}
+
+export interface MathQuestionResult {
+  correct: boolean;
+  answered: boolean;
+  elapsedMs: number;
 }
 
 export interface HeldItems {
