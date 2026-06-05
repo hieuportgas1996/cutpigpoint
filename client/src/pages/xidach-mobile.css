@@ -1,0 +1,79 @@
+.xdm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 30%, rgba(80,46,14,0.6), rgba(0,0,0,0.85));
+  padding: 8px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.xdm-card {
+  width: 100%;
+  max-width: 460px;
+  align-self: flex-start;
+  margin: auto 0;
+  background: linear-gradient(165deg, #3c2712, #251607);
+  border: 2px solid #d4a44a;
+  border-radius: 18px;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.6);
+  padding: 12px;
+  color: #f6e7c8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xdm-title { font-size: 16px; font-weight: 800; color: #ffe26b; text-align: center; }
+.xdm-status { font-size: 12px; color: #e2c089; text-align: center; font-weight: 600; }
+.xdm-status b { color: #fff; }
+.xdm-status b.low { color: #ff8a87; }
+
+.xdm-list { display: flex; flex-direction: column; gap: 6px; }
+
+.xdm-row {
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(212,164,74,0.28);
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+.xdm-row.dealer { border-color: #ffd700; background: rgba(255,215,0,0.08); }
+.xdm-row.me { background: rgba(255,226,107,0.1); }
+.xdm-row.turn { box-shadow: 0 0 0 2px #ffe26b inset; }
+
+.xdm-row-head { display: flex; align-items: center; gap: 8px; }
+.xdm-row-name { font-size: 13px; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xdm-dealer-badge {
+  font-size: 10px; font-weight: 800; color: #1a1208;
+  background: var(--gold, #ffd700); padding: 1px 6px; border-radius: 999px; margin-right: 6px;
+}
+.xdm-row-status { display: flex; align-items: center; gap: 4px; }
+.xdm-stood { font-size: 9px; font-weight: 800; color: #1a1208; background: #c9a14a; padding: 1px 6px; border-radius: 999px; }
+.xdm-settled { font-size: 10px; color: #8fd98f; font-weight: 700; }
+
+.xdm-row-cards {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+.xdm-row-info { display: inline-flex; align-items: baseline; gap: 4px; margin-left: 4px; }
+.xdm-count { font-size: 12px; color: #e2c089; font-weight: 700; }
+.xdm-label { font-size: 12px; font-weight: 800; color: #ffe26b; }
+.xdm-compare { padding: 3px 12px !important; font-size: 12px !important; margin-left: auto; }
+
+.xdm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  padding-top: 6px;
+  border-top: 1px solid rgba(212,164,74,0.2);
+}
+.xdm-actions .tlmn-btn { padding: 9px 16px; font-size: 14px; }
+.xdm-wait { font-size: 12px; color: #b08f55; font-weight: 600; }

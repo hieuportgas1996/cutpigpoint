@@ -10,6 +10,7 @@ import { ChampionTrophy } from '../game/effects/ChampionTrophy';
 import { RpsBreakScreen } from './RpsBreakScreen';
 import { MathBreakScreen } from './MathBreakScreen';
 import { MemoryBreakScreen } from './MemoryBreakScreen';
+import { XiDachMobilePanel } from './XiDachMobilePanel';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -1748,6 +1749,33 @@ export default function RoomPlayPage() {
             answerLeftSec={memAnswerLeftSec}
             myChoiceIdx={memMyChoice}
             onAnswer={handleMemoryAnswer}
+          />
+        )}
+
+        {isXiDachRound && isMobile && (
+          <XiDachMobilePanel
+            players={matchState.players}
+            myUserId={myUserId}
+            dealerName={xiDachDealerName}
+            isCompare={isXiDachCompare}
+            iAmDealer={iAmDealer}
+            isMyTurn={isMyXiDachTurn}
+            turnName={xiDachTurnName}
+            turnLeftSec={xiDachTurnLeftSec}
+            myHand={myHand}
+            myLabel={xiDachHandLabel(myHand)}
+            myCount={myXiDachCount}
+            myCanDraw={myCanDraw}
+            myCanStand={myCanStand}
+            myTotal={myXiDachTotal}
+            dealerCanCompare={dealerCanCompare}
+            anyUnsettled={anyUnsettledXiDach}
+            playerDone={playerXiDachDone}
+            handLabelOf={xiDachHandLabel}
+            onDraw={handleDrawXiDach}
+            onStand={handleStandXiDach}
+            onCompare={handleCompareXiDach}
+            onCompareAll={handleCompareXiDachAll}
           />
         )}
 
