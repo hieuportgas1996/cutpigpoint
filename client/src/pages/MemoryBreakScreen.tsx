@@ -140,7 +140,12 @@ export function MemoryBreakScreen({
           <div className="mem-status">⏳ Đã chọn — chờ mọi người / hết giờ…</div>
         )}
         {reveal && memory.answerSlug && (
-          <div className="mem-status">Đáp án: <b>{clubName(memory.answerSlug)}</b> · câu kế ngay…</div>
+          <div className="mem-status mem-answer-line">
+            <span>Đáp án:</span>
+            <Logo slug={memory.answerSlug} size="sm" />
+            <b>{clubName(memory.answerSlug)}</b>
+            <span>· câu kế ngay…</span>
+          </div>
         )}
       </div>
     </div>

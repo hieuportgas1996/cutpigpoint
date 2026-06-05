@@ -27,6 +27,17 @@
 .mem-sub b.low { color: #ff8a87; }
 .mem-status { font-size: 13px; color: #e2c089; margin-top: 12px; font-weight: 600; }
 .mem-status b { color: #ffe26b; }
+.mem-answer-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.mem-answer-line .mem-logo-sm {
+  background: #faf3e0;
+  border-radius: 6px;
+  padding: 2px;
+}
 .mem-question { font-size: 17px; font-weight: 700; margin: 14px 0 12px; color: #fff; }
 .mem-question b { color: #ffe26b; font-size: 20px; }
 
