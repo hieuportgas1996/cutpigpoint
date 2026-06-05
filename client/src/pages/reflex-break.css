@@ -81,6 +81,18 @@
   animation: rfxTargetPop 0.4s ease;
 }
 .rfx-cell.wrong { border-color: #e7a3a3; box-shadow: 0 0 12px rgba(231,163,163,0.5); opacity: 0.7; }
+.rfx-cell-hidden { cursor: default; background: rgba(0,0,0,0.3); }
+.rfx-qmark {
+  font-size: 34px;
+  font-weight: 900;
+  color: #d4a44a;
+  opacity: 0.85;
+  animation: rfxQPulse 1s ease-in-out infinite;
+}
+@keyframes rfxQPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50% { opacity: 0.95; transform: scale(1.05); }
+}
 @keyframes rfxTargetPop {
   0% { transform: scale(0.9); }
   60% { transform: scale(1.08); }

@@ -1148,8 +1148,9 @@ public class RoomHub : Hub
     }
 
     /// <summary>
-    /// Build state Phản xạ cho broadcast. Lưới LUÔN hiện. Pha cooldown (0): chưa gửi đề. Pha click (1): gửi
-    /// đề (TargetShape/Color) nhưng KHÔNG gửi TargetIndex (-1). Pha reveal (2): gửi cả TargetIndex + chọn/đúng/time.
+    /// Build state Phản xạ cho broadcast. Pha cooldown (0): KHÔNG gửi lưới (grid rỗng → client hiện "?") + chưa gửi đề
+    /// → tránh player đoán trước vị trí. Pha click (1): gửi lưới + đề (TargetShape/Color) nhưng KHÔNG gửi TargetIndex (-1).
+    /// Pha reveal (2): gửi cả TargetIndex + chọn/đúng/time.
     /// </summary>
     private static ReflexGameStateDto? BuildReflexState(Match m)
     {
@@ -1160,7 +1161,10 @@ public class RoomHub : Hub
         int rIdx = m.ReflexCurrentRound;
         var round = m.ReflexRounds[rIdx];
 
-        var grid = round.Grid.Select(c => new ReflexCellDto(c.Shape, c.Color)).ToList();
+        // Cooldown: KHÔNG lộ hình (gửi list rỗng → client biết số ô = 9 cố định, hiện "?"). Pha sau gửi đủ.
+        var grid = cooldown
+            ? new List<ReflexCellDto>()
+            : round.Grid.Select(c => new ReflexCellDto(c.Shape, c.Color)).ToList();
         var answered = new List<Guid>();
         if (!cooldown)
             foreach (var p in m.Players)

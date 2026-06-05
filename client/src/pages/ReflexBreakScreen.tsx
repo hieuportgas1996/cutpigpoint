@@ -60,24 +60,30 @@ export function ReflexBreakScreen({
           </div>
         )}
 
-        {/* Lưới 3×3 */}
+        {/* Lưới 3×3. Pha cooldown: server gửi lưới rỗng → hiện 9 ô "?" để không lộ vị trí hình. */}
         <div className="rfx-grid">
-          {reflex.grid.map((cell, i) => {
-            const isTarget = reveal && i === reflex.targetIndex;
-            const isMine = myCellIdx === i;
-            const isWrongMine = reveal && isMine && i !== reflex.targetIndex;
-            return (
-              <button
-                key={i}
-                className={`rfx-cell ${isTarget ? 'target' : ''} ${isWrongMine ? 'wrong' : ''} ${isMine ? 'mine' : ''}`}
-                disabled={!canClick}
-                onClick={() => canClick && onPick(i)}
-                title={`${shapeName(cell.shape)} ${colorName(cell.color)}`}
-              >
-                <ShapeSvg shape={cell.shape} color={cell.color} size={56} />
-              </button>
-            );
-          })}
+          {cooldown
+            ? Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="rfx-cell rfx-cell-hidden" aria-hidden="true">
+                  <span className="rfx-qmark">?</span>
+                </div>
+              ))
+            : reflex.grid.map((cell, i) => {
+                const isTarget = reveal && i === reflex.targetIndex;
+                const isMine = myCellIdx === i;
+                const isWrongMine = reveal && isMine && i !== reflex.targetIndex;
+                return (
+                  <button
+                    key={i}
+                    className={`rfx-cell ${isTarget ? 'target' : ''} ${isWrongMine ? 'wrong' : ''} ${isMine ? 'mine' : ''}`}
+                    disabled={!canClick}
+                    onClick={() => canClick && onPick(i)}
+                    title={`${shapeName(cell.shape)} ${colorName(cell.color)}`}
+                  >
+                    <ShapeSvg shape={cell.shape} color={cell.color} size={56} />
+                  </button>
+                );
+              })}
         </div>
 
         {/* Người chơi */}
