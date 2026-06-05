@@ -305,6 +305,37 @@ function XiDachResultRows({ round, myUserId }: { round: RoundEnd; myUserId: stri
   );
 }
 
+// Hàng bài đánh ra giữa bàn. Khi sảnh quá dài (vượt maxWidth khả dụng) thì các lá tự
+// ĐÈ LÊN NHAU (negative margin) thay vì tràn ra che mất ghế hai bên. Vẫn xếp 1 hàng,
+// không xuống dòng — giữ animation bay vào + đọc được mặt bài (chỉ phần trái mỗi lá bị che).
+function TrickCardRow({
+  cards, cardSize, cardWidth, maxWidth, className = '',
+}: {
+  cards: Card[]; cardSize: 'sm' | 'md'; cardWidth: number; maxWidth: number; className?: string;
+}) {
+  const n = cards.length;
+  const gap = 6;
+  const naturalWidth = n * cardWidth + (n - 1) * gap;
+  // Nếu vượt khung: tính overlap âm để n lá vừa khít maxWidth. Tối đa đè 62% bề rộng lá.
+  let overlap = 0;
+  if (n > 1 && naturalWidth > maxWidth) {
+    overlap = Math.min(cardWidth * 0.62, (naturalWidth - maxWidth) / (n - 1));
+  }
+  return (
+    <div className={`play-card-row ${className}`} style={{ maxWidth }}>
+      {cards.map((c, i) => (
+        <div
+          key={c.id}
+          className="play-card-slot"
+          style={i > 0 && overlap > 0 ? { marginLeft: -overlap } : undefined}
+        >
+          <CardSvg card={c} size={cardSize} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function RoomPlayPage() {
   const { id: code } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -423,6 +454,10 @@ export default function RoomPlayPage() {
   const isMobile = viewportW < 720;
   const cardSize: 'sm' | 'md' = isMobile ? 'sm' : 'md';
   const cardWidth = isMobile ? 44 : 64;
+  // Bề rộng tối đa cho hàng bài giữa bàn — chừa chỗ cho ghế trái/phải. Bàn rộng tối đa 1200px
+  // (desktop) / full viewport (mobile, ghế dồn lên góc); trừ ~2×130px ghế + đệm.
+  const tableW = Math.min(viewportW, isMobile ? viewportW : 1200);
+  const trickMaxWidth = isMobile ? tableW - 24 : Math.max(280, tableW - 320);
 
   // Clear selection chỉ khi sang ván mới — giữ nguyên lá đã tick khi đối phương đánh / pass / khi
   // lượt chuyển qua chuyển lại, để người chơi không phải tick lại từ đầu mỗi turn.
@@ -1130,7 +1165,7 @@ export default function RoomPlayPage() {
                 {bubble && <div key={bubble.id} className="seat-chat-bubble">{bubble.text}</div>}
                 {streak > 0 && (
                   <div className="seat-streak-badge" title={`Thắng ${streak} ván liên tiếp`}>
-                    {'🏆'.repeat(streak)}
+                    {streak <= 5 ? '🏆'.repeat(streak) : <>{streak} × 🏆</>}
                   </div>
                 )}
                 {isStar && <div className="seat-star-badge" title="Ngôi Sao Hi Vọng — điểm giao dịch ×2">⭐</div>}
@@ -1294,13 +1329,7 @@ export default function RoomPlayPage() {
             ) : trick.length === 0 ? (
               lastWonTrick.length > 0 ? (
                 <div className="play-won-trick">
-                  <div className="play-card-row play-card-row-faded">
-                    {lastWonTrick.map(c => (
-                      <div key={c.id} className="play-card-slot">
-                        <CardSvg card={c} size={cardSize} />
-                      </div>
-                    ))}
-                  </div>
+                  <TrickCardRow cards={lastWonTrick} cardSize={cardSize} cardWidth={cardWidth} maxWidth={trickMaxWidth} className="play-card-row-faded" />
                   <div className="play-won-trick-label muted">
                     {lastWonTrickWinnerName ? `${lastWonTrickWinnerName} thắng vòng` : 'Thắng vòng'} · mở nước mới
                   </div>
@@ -1309,13 +1338,7 @@ export default function RoomPlayPage() {
                 <div className="play-empty muted">Mở nước mới</div>
               )
             ) : (
-              <div key={flyKey} className={`play-card-row fly-from-${flyDirection}`}>
-                {trick.map(c => (
-                  <div key={c.id} className="play-card-slot">
-                    <CardSvg card={c} size={cardSize} />
-                  </div>
-                ))}
-              </div>
+              <TrickCardRow key={flyKey} cards={trick} cardSize={cardSize} cardWidth={cardWidth} maxWidth={trickMaxWidth} className={`fly-from-${flyDirection}`} />
             )}
           </div>
         </div>

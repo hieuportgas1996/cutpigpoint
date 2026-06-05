@@ -37,8 +37,9 @@
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   min-height: 100px;
+  max-width: 100%;
   z-index: 3;
   pointer-events: none;
 }
@@ -380,7 +381,7 @@
   }
 
   /* Play area centered with safe space */
-  .room-play .play-area-cards { gap: 4px; }
+  .room-play .play-card-row { gap: 4px; }
   .room-play .tlmn-mai-corner { width: 60px; height: 60px; }
 
   .room-play .tlmn-controls { padding: 10px; gap: 6px; }
@@ -719,7 +720,26 @@
   gap: 6px;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
 }
+/* Khi sảnh dài, các lá đè lên nhau (marginLeft âm inline) — lá sau nằm TRÊN lá trước
+   để mặt bài bên phải hiện rõ. play-card-slot dùng z-index tăng dần qua isolation. */
+.room-play .play-card-row .play-card-slot {
+  position: relative;
+}
+.room-play .play-card-row .play-card-slot:nth-child(1) { z-index: 1; }
+.room-play .play-card-row .play-card-slot:nth-child(2) { z-index: 2; }
+.room-play .play-card-row .play-card-slot:nth-child(3) { z-index: 3; }
+.room-play .play-card-row .play-card-slot:nth-child(4) { z-index: 4; }
+.room-play .play-card-row .play-card-slot:nth-child(5) { z-index: 5; }
+.room-play .play-card-row .play-card-slot:nth-child(6) { z-index: 6; }
+.room-play .play-card-row .play-card-slot:nth-child(7) { z-index: 7; }
+.room-play .play-card-row .play-card-slot:nth-child(8) { z-index: 8; }
+.room-play .play-card-row .play-card-slot:nth-child(9) { z-index: 9; }
+.room-play .play-card-row .play-card-slot:nth-child(10) { z-index: 10; }
+.room-play .play-card-row .play-card-slot:nth-child(11) { z-index: 11; }
+.room-play .play-card-row .play-card-slot:nth-child(12) { z-index: 12; }
+.room-play .play-card-row .play-card-slot:nth-child(13) { z-index: 13; }
 .room-play .play-card-row.fly-from-bottom { animation: cardFlyBottom 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .room-play .play-card-row.fly-from-top    { animation: cardFlyTop    0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .room-play .play-card-row.fly-from-left   { animation: cardFlyLeft   0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }

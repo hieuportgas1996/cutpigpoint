@@ -2273,11 +2273,12 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Cập nhật streak về Nhất sau khi round kết thúc + tự đặt lời mời "Liều Ăn Nhiều" khi đủ ngưỡng.
+    /// Cập nhật streak về Nhất sau khi round kết thúc + tự đặt lời mời "Liều Ăn Nhiều" tại MỖI mốc bội-5.
     /// - Round biến tấu (lễ hội / xì dách / giải lao RPS): KHÔNG đụng streak (không tăng, không reset) — KHÔNG tính vào chuỗi.
-    /// - Round TLMN thường / về trắng / phán xử: về Nhất (FinalRank==1) → streak++ (cap ở ngưỡng), ngược lại → 0.
-    /// - Player đạt streak == ngưỡng (5) → set GambleOfferUserId rồi RESET streak người đó về 0 (chuỗi tối đa 5).
-    ///   Nếu round KẾ là biến tấu / đã có lời mời / lịch liều → HOÃN (chưa set, giữ streak ở 5) → mời ở round thường kế.
+    /// - Round TLMN thường / về trắng / phán xử: về Nhất (FinalRank==1) → streak++ (KHÔNG cap, đếm 6,7,8…), ngược lại → 0 (reset luôn GambleOfferedAtStreak).
+    /// - Player có WinStreak là bội số của 5 (5/10/15…) VÀ chưa mời ở mốc đó (GambleOfferedAtStreak khác) → set GambleOfferUserId.
+    ///   KHÔNG reset WinStreak — chuỗi tiếp tục đếm; lần đạt mốc kế (10,15…) lại mời tiếp.
+    ///   Nếu round KẾ là biến tấu / đã có lời mời / lịch liều → HOÃN (chưa set GambleOfferedAtStreak) → mời ở round thường kế (streak giữ nguyên qua biến tấu).
     /// </summary>
     private static void UpdateWinStreaks(Match match)
     {
@@ -2287,25 +2288,28 @@ public class MatchManager
         {
             foreach (var p in match.Players)
             {
-                if (p.FinalRank == 1) p.WinStreak = Math.Min(p.WinStreak + 1, GambleStreakThreshold); // cap ở 5
-                else p.WinStreak = 0;
+                if (p.FinalRank == 1) p.WinStreak++;           // KHÔNG cap — đếm vô hạn
+                else { p.WinStreak = 0; p.GambleOfferedAtStreak = 0; }
             }
         }
 
         // Chỉ mời khi hiện không có lời mời / lịch liều / biến tấu nào đang treo (1 lời mời/lúc).
-        // Nếu round KẾ đã là biến tấu (festival/xì dách/star đã đặt) → HOÃN: chưa set, giữ streak ở 5;
-        // lần round-end sau (sau khi biến tấu resolve) sẽ mời lại vì streak vẫn còn 5.
+        // Nếu round KẾ đã là biến tấu (festival/xì dách/star đã đặt) → HOÃN: chưa set GambleOfferedAtStreak;
+        // lần round-end sau (sau khi biến tấu resolve) sẽ mời lại vì streak vẫn còn mốc bội-5.
         if (match.GambleOfferUserId.HasValue || match.GambleScheduledUserId.HasValue) return;
         if (match.FestivalScheduled || match.XiDachScheduledUserId.HasValue || match.StarOfHopeScheduledUserId.HasValue) return;
 
-        // Mời người đạt streak. Lời mời hiện ở ván KẾ (n+1) — ván n+1 vẫn chơi BÌNH THƯỜNG (không chặn deal);
-        // đồng ý → ván n+2 mới là ván liều. Lời mời sống tối đa GambleOfferTimeout rồi auto từ chối.
-        var hot = match.Players.FirstOrDefault(p => p.WinStreak >= GambleStreakThreshold);
+        // Mời người vừa đạt mốc bội-5 (5/10/15…) mà chưa từng mời ở mốc đó. Lời mời hiện ở ván KẾ (n+1) — ván n+1
+        // vẫn chơi BÌNH THƯỜNG (không chặn deal); đồng ý → ván n+2 mới là ván liều. Lời mời sống tối đa GambleOfferTimeout.
+        var hot = match.Players.FirstOrDefault(p =>
+            p.WinStreak >= GambleStreakThreshold
+            && p.WinStreak % GambleStreakThreshold == 0
+            && p.GambleOfferedAtStreak != p.WinStreak);
         if (hot != null)
         {
             match.GambleOfferUserId = hot.UserId;
             match.GambleOfferDeadline = DateTime.UtcNow + GambleOfferTimeout;
-            hot.WinStreak = 0;            // đạt 5 → mời xong reset chuỗi về 0 (chuỗi sao bắt đầu đếm lại từ đầu)
+            hot.GambleOfferedAtStreak = hot.WinStreak;  // đánh dấu mốc này đã mời (không reset chuỗi — đếm tiếp tới mốc kế)
         }
     }
 

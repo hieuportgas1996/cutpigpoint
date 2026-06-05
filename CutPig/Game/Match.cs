@@ -58,8 +58,10 @@ public class MatchPlayer
     public bool HasUsedBreak { get; set; }
 
     // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
-    /// <summary>Số ván về Nhất LIÊN TIẾP gần nhất (về trắng/phán-xử thắng cũng = Nhất). Reset 0 khi không về Nhất. Round biến tấu (lễ hội/xì dách) KHÔNG đụng. Giữ qua round.</summary>
+    /// <summary>Số ván về Nhất LIÊN TIẾP gần nhất (về trắng/phán-xử thắng cũng = Nhất). Reset 0 khi không về Nhất. Round biến tấu (lễ hội/xì dách) KHÔNG đụng. Giữ qua round. KHÔNG cap — đếm vô hạn (6,7,8…); client hiện "N x 🏆" khi >5.</summary>
     public int WinStreak { get; set; }
+    /// <summary>Mốc streak (bội số 5) gần nhất đã mời Liều. Tránh mời lại cùng 1 mốc; mời lại ở mốc kế (5→10→15…). Reset 0 khi WinStreak về 0.</summary>
+    public int GambleOfferedAtStreak { get; set; }
     /// <summary>True khi player này LÀ người liều của round HIỆN TẠI (điểm thắng ×2 +6 / điểm thua ×2). Reset ở DealRound.</summary>
     public bool IsGambling { get; set; }
     // ---- Xì Dách (Sát Phạt) round state — reset ở DealRound ----

@@ -230,7 +230,7 @@ public class HotStreakGambleTests
     }
 
     [Fact]
-    public void Streak_FifthNhat_SetsGambleOffer_ThenResetsStreak()
+    public void Streak_FifthNhat_SetsGambleOffer_DoesNotResetStreak()
     {
         var (m, ids) = MakeMatch(4);
         m.Players[0].FinalRank = 1;
@@ -246,22 +246,83 @@ public class HotStreakGambleTests
         }
         _mgr.BuildRoundEndDto(m); // ván thứ 5
         Assert.Equal(ids[0], m.GambleOfferUserId);
-        // Đạt 5 → mời xong RESET chuỗi về 0 (chuỗi sao tối đa 5 rồi đếm lại).
-        Assert.Equal(0, m.Players[0].WinStreak);
+        // Đạt 5 → mời nhưng KHÔNG reset chuỗi — streak vẫn = 5, đếm tiếp tới mốc 10.
+        Assert.Equal(5, m.Players[0].WinStreak);
+        Assert.Equal(5, m.Players[0].GambleOfferedAtStreak);
     }
 
     [Fact]
-    public void Streak_CapsAtThreshold_WhenOfferDeferred()
+    public void Streak_CountsPastThreshold_NoCap()
     {
-        // Lời mời bị treo (đã có 1 offer cho người khác) → streak người Nhất cap ở 5, không vượt.
+        // KHÔNG cap: thắng 8 ván liên tiếp → streak = 8 (kể cả khi lời mời mốc-5 bị treo).
         var (m, ids) = MakeMatch(4);
-        m.GambleOfferUserId = ids[3]; // giả lập đã có lời mời treo cho P4
+        m.GambleOfferUserId = ids[3]; // giả lập đã có lời mời treo cho P4 → mốc-5 của P1 hoãn
         m.Players[0].FinalRank = 1;
         m.Players[1].FinalRank = 2;
         m.Players[2].FinalRank = 3;
         m.Players[3].FinalRank = 4;
         for (int r = 0; r < 8; r++) _mgr.BuildRoundEndDto(m); // thắng 8 ván liên tiếp
-        Assert.Equal(MatchManager.GambleStreakThreshold, m.Players[0].WinStreak); // cap ở 5
+        Assert.Equal(8, m.Players[0].WinStreak); // không cap
+    }
+
+    [Fact]
+    public void Streak_OffersAgainAtTenAndFifteen()
+    {
+        // Mời lại ở MỖI mốc bội-5: 5, 10, 15… (không reset chuỗi). Từ chối mốc trước rồi tiếp tục thắng.
+        var (m, ids) = MakeMatch(4);
+        m.Players[0].FinalRank = 1;
+        m.Players[1].FinalRank = 2;
+        m.Players[2].FinalRank = 3;
+        m.Players[3].FinalRank = 4;
+
+        // Tới mốc 5 → mời.
+        for (int r = 0; r < 5; r++) _mgr.BuildRoundEndDto(m);
+        Assert.Equal(ids[0], m.GambleOfferUserId);
+        Assert.Equal(5, m.Players[0].WinStreak);
+
+        // P1 từ chối lời mời mốc 5 (clear offer). Thắng tiếp 5→9: KHÔNG mời lại (chưa tới mốc 10).
+        m.GambleOfferUserId = null; m.GambleOfferDeadline = null;
+        for (int r = 0; r < 4; r++) _mgr.BuildRoundEndDto(m); // streak 6,7,8,9
+        Assert.Null(m.GambleOfferUserId);
+        Assert.Equal(9, m.Players[0].WinStreak);
+
+        // Mốc 10 → mời lại.
+        _mgr.BuildRoundEndDto(m); // streak 10
+        Assert.Equal(ids[0], m.GambleOfferUserId);
+        Assert.Equal(10, m.Players[0].WinStreak);
+        Assert.Equal(10, m.Players[0].GambleOfferedAtStreak);
+
+        // Từ chối mốc 10, thắng tới 15 → mời lại lần nữa.
+        m.GambleOfferUserId = null; m.GambleOfferDeadline = null;
+        for (int r = 0; r < 5; r++) _mgr.BuildRoundEndDto(m); // streak 11..15
+        Assert.Equal(ids[0], m.GambleOfferUserId);
+        Assert.Equal(15, m.Players[0].WinStreak);
+    }
+
+    [Fact]
+    public void Streak_NonNhat_ResetsStreakAndMilestoneMarker()
+    {
+        // Thua → reset cả WinStreak lẫn GambleOfferedAtStreak (chuỗi mới đếm lại từ đầu, mốc-5 mời lại được).
+        var (m, ids) = MakeMatch(4);
+        m.Players[0].FinalRank = 1;
+        m.Players[1].FinalRank = 2;
+        m.Players[2].FinalRank = 3;
+        m.Players[3].FinalRank = 4;
+        for (int r = 0; r < 5; r++) _mgr.BuildRoundEndDto(m); // mốc 5 → mời + đánh dấu
+        Assert.Equal(5, m.Players[0].GambleOfferedAtStreak);
+        m.GambleOfferUserId = null; m.GambleOfferDeadline = null;
+
+        // P1 thua 1 ván.
+        m.Players[0].FinalRank = 4; m.Players[3].FinalRank = 1;
+        _mgr.BuildRoundEndDto(m);
+        Assert.Equal(0, m.Players[0].WinStreak);
+        Assert.Equal(0, m.Players[0].GambleOfferedAtStreak); // marker reset
+
+        // Thắng lại 5 ván → mời lại được ở mốc 5 mới.
+        m.Players[0].FinalRank = 1; m.Players[3].FinalRank = 4;
+        for (int r = 0; r < 5; r++) _mgr.BuildRoundEndDto(m);
+        Assert.Equal(ids[0], m.GambleOfferUserId);
+        Assert.Equal(5, m.Players[0].WinStreak);
     }
 
     [Fact]
