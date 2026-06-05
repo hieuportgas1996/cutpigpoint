@@ -5,62 +5,27 @@ using System.Linq;
 namespace CutPig.GameEngine;
 
 /// <summary>
-/// "Giải lao — Phản xạ": game phản xạ nhanh cho ĐÚNG 4 người. 3 lượt, mỗi lượt:
-///  1. Cooldown 3s: hiện lưới 3×3 (9 hình ngẫu nhiên, mỗi ô 1 cặp (hình,màu) DUY NHẤT) + đếm ngược chuẩn bị.
-///  2. Play: hiện đề "Tìm hình &lt;shape&gt; màu &lt;color&gt;" — player click đúng ô đó, 10s.
-/// Ai click ĐÚNG ô và NHANH NHẤT hạng cao (giống Trí nhớ). Engine thuần — MatchManager giữ state + timer.
-/// Mã shape/color khớp client để vẽ SVG + hiện tên tiếng Việt.
+/// "Giải lao — Phản xạ": game phản xạ nhanh cho ĐÚNG 4 người, dùng bộ bài 52 lá. 3 lượt, mỗi lượt:
+///  1. Cooldown 3s: lưới 4×4 (16 lá ngẫu nhiên DUY NHẤT) bị ẩn ("?") + đếm ngược chuẩn bị.
+///  2. Play: hiện lưới + đề "Tìm 3 lá: A B C" — player click đúng 3 lá đó (chọn đủ 3 lá = chốt), 15s.
+/// ĐÚNG khi chọn đúng CẢ 3 lá chỉ định; ai đúng + nhanh nhất (theo lúc chọn lá thứ 3) hạng cao (giống Trí nhớ).
+/// Engine thuần — MatchManager giữ state + timer. Card encoding dùng chung GameEngine.Card (rank 3..15).
 /// </summary>
 public static class ReflexGameEngine
 {
-    public const int GridSize = 9;       // 3×3
+    public const int GridSize = 16;      // 4×4
     public const int NumRounds = 3;
+    public const int NumTargets = 3;     // tìm 3 lá
 
-    /// <summary>Hình + tên hiển thị (mirror client SHAPE_NAME).</summary>
-    public static readonly IReadOnlyList<(string Key, string Name)> Shapes = new[]
-    {
-        ("circle", "hình tròn"),
-        ("square", "hình vuông"),
-        ("oval", "hình bầu dục"),
-        ("rectangle", "hình chữ nhật"),
-        ("triangle", "hình tam giác"),
-        ("trapezoid", "hình thang"),
-        ("pentagon", "hình ngũ giác"),
-        ("star", "hình ngôi sao"),
-    };
-
-    /// <summary>Màu + tên hiển thị + mã hex (mirror client COLOR).</summary>
-    public static readonly IReadOnlyList<(string Key, string Name, string Hex)> Colors = new[]
-    {
-        ("red", "đỏ", "#e23b3b"),
-        ("blue", "xanh dương", "#3b82f6"),
-        ("green", "xanh lá", "#22c55e"),
-        ("yellow", "vàng", "#f5c518"),
-        ("orange", "cam", "#f97316"),
-        ("purple", "tím", "#a855f7"),
-        ("pink", "hồng", "#ec4899"),
-        ("cyan", "xanh ngọc", "#06b6d4"),
-        ("white", "trắng", "#f3f4f6"),
-        ("brown", "nâu", "#92633a"),
-    };
-
-    /// <summary>1 ô trong lưới: hình + màu.</summary>
-    public class ReflexCell
-    {
-        public string Shape { get; set; } = "";
-        public string Color { get; set; } = "";
-    }
-
-    /// <summary>1 lượt: lưới 9 ô + index ô đáp án (đề bài = shape+color của ô đó).</summary>
+    /// <summary>1 lượt: lưới 16 lá + 3 index lá đáp án (đề bài = 3 lá đó).</summary>
     public class ReflexRound
     {
-        public List<ReflexCell> Grid { get; set; } = new();
-        public int TargetIndex { get; set; }
-        public string TargetShape => Grid[TargetIndex].Shape;
-        public string TargetColor => Grid[TargetIndex].Color;
+        public List<Card> Grid { get; set; } = new();
+        public List<int> TargetIndexes { get; set; } = new();  // 3 ô đáp án (sorted để so khớp)
+        public IEnumerable<Card> TargetCards => TargetIndexes.Select(i => Grid[i]);
     }
 
-    /// <summary>Sinh <see cref="NumRounds"/> lượt, mỗi lượt 1 lưới 3×3 gồm 9 cặp (hình,màu) DUY NHẤT + 1 ô target.</summary>
+    /// <summary>Sinh <see cref="NumRounds"/> lượt, mỗi lượt lưới 4×4 = 16 lá DUY NHẤT + 3 ô target.</summary>
     public static List<ReflexRound> BuildRounds(Random rng)
     {
         var rounds = new List<ReflexRound>();
@@ -71,20 +36,25 @@ public static class ReflexGameEngine
 
     private static ReflexRound BuildRound(Random rng)
     {
-        // Tạo mọi cặp (shape,color) rồi xáo, lấy 9 cặp DUY NHẤT.
-        var pairs = new List<(string Shape, string Color)>();
-        foreach (var s in Shapes)
-            foreach (var c in Colors)
-                pairs.Add((s.Key, c.Key));
-        for (int i = pairs.Count - 1; i > 0; i--)
+        // 16 lá ngẫu nhiên DUY NHẤT từ bộ 52.
+        var deck = Deck.Shuffle(Deck.Build(), rng);
+        var grid = deck.Take(GridSize).ToList();
+        // 3 ô target khác nhau.
+        var cells = Enumerable.Range(0, GridSize).ToList();
+        for (int i = cells.Count - 1; i > 0; i--)
         {
             int j = rng.Next(i + 1);
-            (pairs[i], pairs[j]) = (pairs[j], pairs[i]);
+            (cells[i], cells[j]) = (cells[j], cells[i]);
         }
-        var grid = pairs.Take(GridSize)
-            .Select(p => new ReflexCell { Shape = p.Shape, Color = p.Color })
-            .ToList();
-        return new ReflexRound { Grid = grid, TargetIndex = rng.Next(GridSize) };
+        var targets = cells.Take(NumTargets).OrderBy(x => x).ToList();
+        return new ReflexRound { Grid = grid, TargetIndexes = targets };
+    }
+
+    /// <summary>True nếu tập <paramref name="picked"/> (các ô đã chọn) khớp ĐÚNG 3 ô target.</summary>
+    public static bool IsCorrect(ReflexRound round, IEnumerable<int> picked)
+    {
+        var set = new HashSet<int>(picked);
+        return set.Count == NumTargets && set.SetEquals(round.TargetIndexes);
     }
 
     /// <summary>Xếp hạng GIỐNG HỆT Trí nhớ/Tính toán (dùng chung MathAnswer + MathQuizEngine.Rank).</summary>

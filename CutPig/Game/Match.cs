@@ -219,20 +219,22 @@ public class Match
     /// <summary>Pha hiện đáp án câu Trí nhớ vừa xong.</summary>
     public DateTime? MemoryRevealUntil { get; set; }
 
-    // -- Phản xạ (Reflex) -- (dùng chung MathAnswer cho lời giải + ranking)
-    /// <summary>3 lượt Phản xạ (mỗi lượt 1 lưới 3×3 + ô target). Null khi không phải round Phản xạ.</summary>
+    // -- Phản xạ (Reflex) -- bài 52 lá, lưới 4×4, tìm 3 lá (dùng chung MathAnswer cho lời giải + ranking)
+    /// <summary>3 lượt Phản xạ (mỗi lượt 1 lưới 4×4 = 16 lá + 3 ô target). Null khi không phải round Phản xạ.</summary>
     public List<ReflexGameEngine.ReflexRound>? ReflexRounds { get; set; }
     /// <summary>Index lượt hiện tại (0-based).</summary>
     public int ReflexCurrentRound { get; set; }
-    /// <summary>Hết hạn 3s cooldown chuẩn bị (đã hiện lưới, chưa cho click). Sang pha play khi hết.</summary>
+    /// <summary>Hết hạn 3s cooldown chuẩn bị (lưới đang ẩn, chưa cho click). Sang pha play khi hết.</summary>
     public DateTime? ReflexCooldownUntil { get; set; }
     /// <summary>Thời điểm mở pha click (tính ElapsedMs). Null ngoài pha play.</summary>
     public DateTime? ReflexRoundStart { get; set; }
     /// <summary>Hết hạn click lượt hiện tại.</summary>
     public DateTime? ReflexAnswerDeadline { get; set; }
-    /// <summary>Câu trả lời từng người cho từng lượt Phản xạ (key = UserId; ChosenIndex = ô đã click).</summary>
+    /// <summary>Các ô đã chọn của từng người trong lượt HIỆN TẠI (key = UserId → list index ô; chọn đủ 3 = chốt). Reset mỗi lượt.</summary>
+    public Dictionary<Guid, List<int>> ReflexPicks { get; set; } = new();
+    /// <summary>Kết quả từng người cho từng lượt Phản xạ (key = UserId; Correct = chọn đúng cả 3 lá, ElapsedMs = lúc chọn lá thứ 3).</summary>
     public Dictionary<Guid, List<MathAnswer>> ReflexAnswers { get; set; } = new();
-    /// <summary>Pha hiện đáp án lượt vừa xong (tô ô đúng + ai nhanh nhất) trước khi qua lượt kế.</summary>
+    /// <summary>Pha hiện đáp án lượt vừa xong (tô 3 ô đúng + ai nhanh nhất) trước khi qua lượt kế.</summary>
     public DateTime? ReflexRevealUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>

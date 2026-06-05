@@ -420,8 +420,8 @@ export default function RoomPlayPage() {
   // Giải lao Trí nhớ: client nhớ đáp án mình chọn câu hiện tại (server ẩn lúc trả lời).
   const [memMyChoice, setMemMyChoice] = useState<number | null>(null);
   const memChoiceQuestionRef = useRef<number>(-1);
-  // Giải lao Phản xạ: client nhớ ô mình click lượt hiện tại (server ẩn lúc đang chơi).
-  const [reflexMyCell, setReflexMyCell] = useState<number | null>(null);
+  // Giải lao Phản xạ: client nhớ CÁC ô mình đã click lượt hiện tại (tối đa 3, server ẩn lúc đang chơi).
+  const [reflexMySelected, setReflexMySelected] = useState<number[]>([]);
   const reflexRoundRef = useRef<number>(-1);
   const [cutPigBanner, setCutPigBanner] = useState<{ id: number; cutter: string; comboLabel: string } | null>(null);
   const lastCutSignature = useRef<string | null>(null);
@@ -939,12 +939,12 @@ export default function RoomPlayPage() {
     }
   }, [matchState?.memory?.currentQuestion, matchState?.status]);
 
-  // Giải lao Phản xạ: reset ô đã click khi sang LƯỢT MỚI (currentRound đổi).
+  // Giải lao Phản xạ: reset các ô đã chọn khi sang LƯỢT MỚI (currentRound đổi).
   useEffect(() => {
     const r = matchState?.reflex?.currentRound ?? -1;
     if (reflexRoundRef.current !== r) {
       reflexRoundRef.current = r;
-      setReflexMyCell(null);
+      setReflexMySelected([]);
     }
   }, [matchState?.reflex?.currentRound, matchState?.status]);
 
@@ -1190,10 +1190,14 @@ export default function RoomPlayPage() {
   }
 
   async function handleReflexPick(cellIndex: number) {
-    setReflexMyCell(cellIndex);
+    // Thêm ô vào tập đã chọn (tối đa 3, không trùng). Optimistic — server chốt khi đủ 3.
+    setReflexMySelected(prev => (prev.includes(cellIndex) || prev.length >= 3 ? prev : [...prev, cellIndex]));
     reflexRoundRef.current = matchState?.reflex?.currentRound ?? -1;
     try { await submitReflexCell(cellIndex); }
-    catch (e) { setReflexMyCell(null); toast.push('error', (e as Error).message); }
+    catch (e) {
+      setReflexMySelected(prev => prev.filter(c => c !== cellIndex));
+      toast.push('error', (e as Error).message);
+    }
   }
 
   async function handleDrawXiDach() {
@@ -1777,7 +1781,7 @@ export default function RoomPlayPage() {
             myUserId={myUserId}
             cooldownLeftSec={reflexCooldownLeftSec}
             answerLeftSec={reflexAnswerLeftSec}
-            myCellIdx={reflexMyCell}
+            mySelected={reflexMySelected}
             onPick={handleReflexPick}
           />
         )}

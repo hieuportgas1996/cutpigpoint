@@ -45,7 +45,7 @@ public class MathBreakFlowTests
         mgr.ScheduleBreak(roomId, ids[0]); // gameType bỏ qua — server random
         Assert.True(match.BreakScheduled);
         // Chọn 1 game hợp lệ trong pool ban đầu + rút khỏi pool.
-        Assert.Contains(match.BreakScheduledType, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory });
+        Assert.Contains(match.BreakScheduledType, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
         Assert.Equal(before - 1, match.BreakGamePool.Count);
         Assert.Equal(ids[0], match.BreakOrganizerId);
         Assert.True(match.Players[0].HasUsedBreak);

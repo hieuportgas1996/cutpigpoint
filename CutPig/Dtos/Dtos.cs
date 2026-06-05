@@ -188,17 +188,15 @@ public record MemoryGameStateDto(
     List<Guid> AnsweredUserIds,
     List<MathPlayerResultDto> Results);
 
-// ---- Giải Lao (Phản xạ) ----
-public record ReflexCellDto(string Shape, string Color);   // hình + màu (key)
+// ---- Giải Lao (Phản xạ) — bài 52 lá, lưới 4×4, tìm 3 lá ----
 public record ReflexGameStateDto(
-    int Phase,                  // 0 = cooldown chuẩn bị, 1 = đang click, 2 = hiện đáp án (reveal)
-    List<ReflexCellDto> Grid,   // 9 ô (luôn hiện)
+    int Phase,                  // 0 = cooldown chuẩn bị (lưới ẩn), 1 = đang click, 2 = hiện đáp án (reveal)
+    List<CardDto> Grid,         // 16 lá (RỖNG ở pha cooldown để ẩn)
     int TotalRounds,
     int CurrentRound,
-    string? TargetShape,        // đề: hình (CHỈ pha click + reveal; null pha cooldown)
-    string? TargetColor,        // đề: màu
-    int TargetIndex,            // ô đúng (CHỈ ≥0 ở pha reveal; -1 khi đang click/cooldown)
-    List<Guid> AnsweredUserIds,
+    List<CardDto>? TargetCards, // đề: 3 lá cần tìm (CHỈ pha click + reveal; null pha cooldown)
+    List<int>? TargetIndexes,   // 3 ô đúng (CHỈ ở pha reveal; null khi đang click/cooldown)
+    List<Guid> AnsweredUserIds, // ai đã chốt (đủ 3 lá) — client tự nhớ lá MÌNH đã chọn
     List<MathPlayerResultDto> Results);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);

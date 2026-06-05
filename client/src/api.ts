@@ -419,16 +419,14 @@ export interface MemoryGameState {
   results: MathPlayerResult[];
 }
 
-// ---- Giải Lao (Phản xạ) ----
-export interface ReflexCell { shape: string; color: string; }
+// ---- Giải Lao (Phản xạ) — bài 52 lá, lưới 4×4, tìm 3 lá ----
 export interface ReflexGameState {
-  phase: number;            // 0 cooldown, 1 click, 2 hiện đáp án
-  grid: ReflexCell[];       // 9 ô (luôn hiện)
+  phase: number;            // 0 cooldown (ẩn lưới), 1 click, 2 hiện đáp án
+  grid: CardDto[];          // 16 lá (rỗng ở pha cooldown)
   totalRounds: number;
   currentRound: number;
-  targetShape: string | null;   // đề (pha click + reveal)
-  targetColor: string | null;
-  targetIndex: number;          // ô đúng (≥0 chỉ ở reveal, -1 khi click/cooldown)
+  targetCards: CardDto[] | null;  // đề: 3 lá cần tìm (pha click + reveal)
+  targetIndexes: number[] | null; // 3 ô đúng (chỉ ở reveal)
   answeredUserIds: string[];
   results: MathPlayerResult[];
 }

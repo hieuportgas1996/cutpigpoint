@@ -9,13 +9,13 @@ using Xunit;
 namespace CutPig.Tests;
 
 /// <summary>
-/// Tests "Giải lao — Phản xạ": engine sinh 3 lượt, mỗi lượt lưới 3×3 gồm 9 cặp (hình,màu) DUY NHẤT + 1 ô target;
-/// + luồng MatchManager (cooldown 3s → click → reveal → lượt kế → finalize xếp hạng theo đúng+nhanh).
+/// Tests "Giải lao — Phản xạ" (bài 52 lá, lưới 4×4, tìm 3 lá): engine sinh 3 lượt, mỗi lượt 16 lá DUY NHẤT +
+/// 3 ô target khác nhau; + luồng MatchManager (cooldown → click chọn 3 lá → reveal → finalize xếp hạng đúng+nhanh).
 /// </summary>
 public class ReflexGameTests
 {
     [Fact]
-    public void BuildRounds_ThreeRounds_NineUniqueCellsEach()
+    public void BuildRounds_ThreeRounds_SixteenUniqueCards_ThreeTargets()
     {
         var rng = new Random(99);
         for (int trial = 0; trial < 300; trial++)
@@ -24,16 +24,26 @@ public class ReflexGameTests
             Assert.Equal(ReflexGameEngine.NumRounds, rounds.Count);
             foreach (var r in rounds)
             {
-                Assert.Equal(ReflexGameEngine.GridSize, r.Grid.Count);
-                // 9 cặp (shape,color) DUY NHẤT.
-                Assert.Equal(ReflexGameEngine.GridSize, r.Grid.Select(c => $"{c.Shape}|{c.Color}").Distinct().Count());
-                Assert.InRange(r.TargetIndex, 0, 8);
-                Assert.All(r.Grid, c => {
-                    Assert.Contains(c.Shape, ReflexGameEngine.Shapes.Select(s => s.Key));
-                    Assert.Contains(c.Color, ReflexGameEngine.Colors.Select(s => s.Key));
-                });
+                Assert.Equal(ReflexGameEngine.GridSize, r.Grid.Count);                  // 16 lá
+                Assert.Equal(ReflexGameEngine.GridSize, r.Grid.Distinct().Count());     // duy nhất
+                Assert.Equal(ReflexGameEngine.NumTargets, r.TargetIndexes.Count);       // 3 ô target
+                Assert.Equal(ReflexGameEngine.NumTargets, r.TargetIndexes.Distinct().Count());
+                Assert.All(r.TargetIndexes, i => Assert.InRange(i, 0, 15));
             }
         }
+    }
+
+    [Fact]
+    public void IsCorrect_OnlyWhenExactThreeTargets()
+    {
+        var rng = new Random(1);
+        var round = ReflexGameEngine.BuildRounds(rng)[0];
+        var t = round.TargetIndexes;
+        Assert.True(ReflexGameEngine.IsCorrect(round, t));                       // đúng cả 3
+        Assert.True(ReflexGameEngine.IsCorrect(round, t.AsEnumerable().Reverse())); // không quan tâm thứ tự
+        Assert.False(ReflexGameEngine.IsCorrect(round, t.Take(2)));             // thiếu 1
+        var wrong = Enumerable.Range(0, 16).First(i => !t.Contains(i));
+        Assert.False(ReflexGameEngine.IsCorrect(round, new[] { t[0], t[1], wrong })); // sai 1 lá
     }
 
     private static readonly FieldInfo MatchesField =
@@ -73,7 +83,7 @@ public class ReflexGameTests
     }
 
     [Fact]
-    public void Click_CorrectTarget_FastestRanksFirst_AcrossThreeRounds()
+    public void Pick_ThreeCorrect_ChotsAndFastestRanksFirst_AcrossThreeRounds()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true; match.BreakGame = BreakGameType.Reflex;
@@ -83,22 +93,24 @@ public class ReflexGameTests
         {
             match.ReflexCooldownUntil = DateTime.UtcNow.AddSeconds(-1);
             mgr.TryStartReflexPlay(roomId);
-            int target = match.ReflexRounds![round].TargetIndex;
-            // P0 click trước (nhanh nhất), rồi P1,P2,P3.
-            for (int i = 0; i < 4; i++) mgr.SubmitReflexCell(roomId, ids[i], target);
+            var targets = match.ReflexRounds![round].TargetIndexes;
+            // Mỗi người chọn đúng 3 lá; P0 hoàn tất trước (nhanh nhất).
+            foreach (var id in ids)
+                foreach (var t in targets)
+                    mgr.SubmitReflexCell(roomId, id, t);
             Assert.NotNull(match.ReflexRevealUntil);
             Invoke("FinalizeReflexReveal", match);
         }
 
         Assert.Equal(MatchStatus.WaitingNextRound, match.Status);
-        Assert.Equal(1, match.Players[0].FinalRank); // cùng đúng 3/3 → nhanh nhất hạng 1
+        Assert.Equal(1, match.Players[0].FinalRank);   // cùng đúng 3/3 → nhanh nhất hạng 1
         var scores = mgr.ComputeRoundScores(match);
         Assert.Equal(0, scores.Sum());
         Assert.Equal(2, scores[0]);
     }
 
     [Fact]
-    public void Click_WrongCellAndTimeout_CountAsIncorrect()
+    public void Pick_WrongCardCountsIncorrect_Timeout()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true; match.BreakGame = BreakGameType.Reflex;
@@ -108,11 +120,14 @@ public class ReflexGameTests
         {
             match.ReflexCooldownUntil = DateTime.UtcNow.AddSeconds(-1);
             mgr.TryStartReflexPlay(roomId);
-            int target = match.ReflexRounds![round].TargetIndex;
-            int wrong = (target + 1) % ReflexGameEngine.GridSize;
-            mgr.SubmitReflexCell(roomId, ids[0], target);  // P0 đúng
-            mgr.SubmitReflexCell(roomId, ids[1], wrong);   // P1 sai
-            match.ReflexAnswerDeadline = DateTime.UtcNow.AddSeconds(-1); // P2,P3 hết giờ
+            var targets = match.ReflexRounds![round].TargetIndexes;
+            int wrong = Enumerable.Range(0, 16).First(i => !targets.Contains(i));
+            // P0 chọn đúng 3 lá; P1 chọn 2 đúng + 1 sai (=> sai); P2,P3 không chọn → hết giờ.
+            foreach (var t in targets) mgr.SubmitReflexCell(roomId, ids[0], t);
+            mgr.SubmitReflexCell(roomId, ids[1], targets[0]);
+            mgr.SubmitReflexCell(roomId, ids[1], targets[1]);
+            mgr.SubmitReflexCell(roomId, ids[1], wrong);
+            match.ReflexAnswerDeadline = DateTime.UtcNow.AddSeconds(-1);
             Assert.True(mgr.TryAutoCloseReflexRound(roomId));
             Invoke("FinalizeReflexReveal", match);
         }

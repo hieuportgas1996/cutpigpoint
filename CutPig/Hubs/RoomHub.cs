@@ -1148,9 +1148,9 @@ public class RoomHub : Hub
     }
 
     /// <summary>
-    /// Build state Phản xạ cho broadcast. Pha cooldown (0): KHÔNG gửi lưới (grid rỗng → client hiện "?") + chưa gửi đề
-    /// → tránh player đoán trước vị trí. Pha click (1): gửi lưới + đề (TargetShape/Color) nhưng KHÔNG gửi TargetIndex (-1).
-    /// Pha reveal (2): gửi cả TargetIndex + chọn/đúng/time.
+    /// Build state Phản xạ cho broadcast (bài 52 lá, lưới 4×4, tìm 3 lá). Pha cooldown (0): grid RỖNG (ẩn) + chưa gửi đề
+    /// → tránh đoán trước. Pha click (1): gửi lưới 16 lá + đề (TargetCards 3 lá) nhưng KHÔNG gửi TargetIndexes.
+    /// Pha reveal (2): gửi cả TargetIndexes + đúng/sai/time. Client tự nhớ lá MÌNH đã chọn.
     /// </summary>
     private static ReflexGameStateDto? BuildReflexState(Match m)
     {
@@ -1161,10 +1161,9 @@ public class RoomHub : Hub
         int rIdx = m.ReflexCurrentRound;
         var round = m.ReflexRounds[rIdx];
 
-        // Cooldown: KHÔNG lộ hình (gửi list rỗng → client biết số ô = 9 cố định, hiện "?"). Pha sau gửi đủ.
         var grid = cooldown
-            ? new List<ReflexCellDto>()
-            : round.Grid.Select(c => new ReflexCellDto(c.Shape, c.Color)).ToList();
+            ? new List<CardDto>()   // ẩn lưới ở cooldown
+            : round.Grid.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList();
         var answered = new List<Guid>();
         if (!cooldown)
             foreach (var p in m.Players)
@@ -1181,7 +1180,7 @@ public class RoomHub : Hub
             var cur = (rIdx < list.Count) ? list[rIdx] : null;
             results.Add(new MathPlayerResultDto(
                 p.UserId,
-                reveal && cur != null ? cur.ChosenIndex : -1,
+                -1,                                  // không dùng ChosenIndex cho game này (chọn 3 lá)
                 cur?.Answered ?? false,
                 reveal && (cur?.Correct ?? false),
                 reveal && cur != null ? cur.ElapsedMs : 0,
@@ -1191,9 +1190,8 @@ public class RoomHub : Hub
 
         return new ReflexGameStateDto(
             phase, grid, m.ReflexRounds.Count, rIdx,
-            cooldown ? null : round.TargetShape,   // đề chỉ hiện từ pha click
-            cooldown ? null : round.TargetColor,
-            reveal ? round.TargetIndex : -1,       // ô đúng chỉ lộ ở reveal
+            cooldown ? null : round.TargetCards.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList(),  // đề 3 lá từ pha click
+            reveal ? new List<int>(round.TargetIndexes) : null,   // 3 ô đúng chỉ lộ ở reveal
             answered, results);
     }
 

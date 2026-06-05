@@ -49,30 +49,40 @@
   50% { transform: scale(1.25); }
 }
 
-/* Lưới 3×3 */
+/* Đề: 3 lá cần tìm */
+.rfx-target-cards {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.rfx-progress { color: #e2c089; font-weight: 700; }
+
+/* Lưới 4×4 */
 .rfx-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  max-width: 300px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  max-width: 340px;
   margin: 0 auto 14px;
 }
 .rfx-cell {
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 3 / 4;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255,255,255,0.06);
   border: 2px solid rgba(212,164,74,0.35);
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: transform 0.08s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-  padding: 6px;
+  padding: 3px;
 }
 .rfx-cell:disabled { cursor: default; }
 .rfx-cell:not(:disabled):hover { transform: translateY(-2px); border-color: #ffe26b; }
 .rfx-cell:not(:disabled):active { transform: scale(0.95); }
-.rfx-cell svg { width: 100%; height: 100%; display: block; }
+.rfx-cell-card svg { width: 100%; height: auto; display: block; }
+.rfx-cell-card { background: transparent; border-color: rgba(212,164,74,0.3); }
 .rfx-cell.mine { border-color: #ffe26b; box-shadow: 0 0 0 2px rgba(255,226,107,0.4); }
 .rfx-cell.target {
   border-color: #7fdc95;
@@ -130,6 +140,6 @@
   .rfx-card { padding: 12px 12px; }
   .rfx-title { font-size: 18px; }
   .rfx-prompt { font-size: 15px; }
-  .rfx-grid { max-width: 264px; gap: 6px; }
+  .rfx-grid { max-width: 300px; gap: 4px; }
   .rfx-player-name { font-size: 10px; max-width: 60px; }
 }

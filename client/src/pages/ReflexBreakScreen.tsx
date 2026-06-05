@@ -1,24 +1,25 @@
 import { useMemo } from 'react';
 import type { MatchPlayerPublic, ReflexGameState } from '../api';
 import { Avatar } from '../ui/Avatar';
-import { ShapeSvg, shapeName, colorName, COLOR_HEX } from '../game/ShapeSvg';
+import { CardSvg } from '../game/CardSvg';
+import { cardFromDto } from '../game/cards';
 import './reflex-break.css';
 
 /**
- * Màn "Giải lao — Phản xạ" full-screen overlay. 3 pha (reflex.phase):
- *  0 = cooldown 3s: hiện lưới 3×3 hình (đếm ngược chuẩn bị), chưa cho click.
- *  1 = click: hiện đề "Tìm hình X màu Y" → bấm đúng ô, 10s.
- *  2 = hiện đáp án: tô ô đúng + ai đúng + thời gian; bảng điểm tích lũy.
+ * Màn "Giải lao — Phản xạ" full-screen overlay — bài 52 lá, lưới 4×4, tìm 3 lá. 3 pha (reflex.phase):
+ *  0 = cooldown 3s: lưới 16 ô ẩn ("?"), đếm ngược chuẩn bị.
+ *  1 = click: hiện lưới + đề "Tìm 3 lá: A B C" → bấm đủ 3 lá (chọn lá thứ 3 = chốt), 15s.
+ *  2 = hiện đáp án: tô 3 ô đúng + ai đúng + thời gian; bảng điểm tích lũy.
  */
 export function ReflexBreakScreen({
-  reflex, players, myUserId, cooldownLeftSec, answerLeftSec, myCellIdx, onPick,
+  reflex, players, myUserId, cooldownLeftSec, answerLeftSec, mySelected, onPick,
 }: {
   reflex: ReflexGameState;
   players: MatchPlayerPublic[];
   myUserId: string;
   cooldownLeftSec: number;
   answerLeftSec: number;
-  myCellIdx: number | null;
+  mySelected: number[];     // các ô MÌNH đã chọn lượt này (client nhớ)
   onPick: (cellIndex: number) => void;
 }) {
   const nameOf = useMemo(() => {
@@ -38,8 +39,10 @@ export function ReflexBreakScreen({
   const answered = new Set(reflex.answeredUserIds);
   const resultOf: Record<string, ReflexGameState['results'][number]> = {};
   for (const r of reflex.results) resultOf[r.userId] = r;
-  const iAnswered = answered.has(myUserId) || myCellIdx != null;
-  const canClick = reflex.phase === 1 && !iAnswered;
+  const targetSet = new Set(reflex.targetIndexes ?? []);
+  const mySel = new Set(mySelected);
+  const iDone = answered.has(myUserId) || mySelected.length >= 3;
+  const canClick = reflex.phase === 1 && !iDone;
 
   return (
     <div className="rfx-overlay">
@@ -54,33 +57,37 @@ export function ReflexBreakScreen({
           </div>
         ) : (
           <div className="rfx-prompt">
-            Tìm nhanh: <b>{reflex.targetShape ? shapeName(reflex.targetShape) : ''}</b>
-            {' '}màu <b style={reflex.targetColor ? { color: COLOR_HEX[reflex.targetColor] ?? undefined } : undefined}>{reflex.targetColor ? colorName(reflex.targetColor) : ''}</b>
-            {!reveal && <> · <b className={answerLeftSec <= 3 ? 'low' : ''}>{answerLeftSec}s</b></>}
+            <div>Tìm nhanh 3 lá {!reveal && <b className={answerLeftSec <= 3 ? 'low' : ''}>· {answerLeftSec}s</b>}{' '}
+              {!reveal && <span className="rfx-progress">({mySelected.length}/3)</span>}
+            </div>
+            <div className="rfx-target-cards">
+              {(reflex.targetCards ?? []).map((c, i) => (
+                <CardSvg key={i} card={cardFromDto(c)} size="sm" />
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Lưới 3×3. Pha cooldown: server gửi lưới rỗng → hiện 9 ô "?" để không lộ vị trí hình. */}
+        {/* Lưới 4×4. Cooldown: lưới rỗng → 16 ô "?". */}
         <div className="rfx-grid">
           {cooldown
-            ? Array.from({ length: 9 }).map((_, i) => (
+            ? Array.from({ length: 16 }).map((_, i) => (
                 <div key={i} className="rfx-cell rfx-cell-hidden" aria-hidden="true">
                   <span className="rfx-qmark">?</span>
                 </div>
               ))
-            : reflex.grid.map((cell, i) => {
-                const isTarget = reveal && i === reflex.targetIndex;
-                const isMine = myCellIdx === i;
-                const isWrongMine = reveal && isMine && i !== reflex.targetIndex;
+            : reflex.grid.map((c, i) => {
+                const isTarget = reveal && targetSet.has(i);
+                const isMine = mySel.has(i);
+                const isWrongMine = reveal && isMine && !targetSet.has(i);
                 return (
                   <button
                     key={i}
-                    className={`rfx-cell ${isTarget ? 'target' : ''} ${isWrongMine ? 'wrong' : ''} ${isMine ? 'mine' : ''}`}
-                    disabled={!canClick}
-                    onClick={() => canClick && onPick(i)}
-                    title={`${shapeName(cell.shape)} ${colorName(cell.color)}`}
+                    className={`rfx-cell rfx-cell-card ${isTarget ? 'target' : ''} ${isWrongMine ? 'wrong' : ''} ${isMine ? 'mine' : ''}`}
+                    disabled={!canClick || isMine}
+                    onClick={() => canClick && !isMine && onPick(i)}
                   >
-                    <ShapeSvg shape={cell.shape} color={cell.color} size={56} />
+                    <CardSvg card={cardFromDto(c)} size="sm" />
                   </button>
                 );
               })}
@@ -110,11 +117,11 @@ export function ReflexBreakScreen({
           })}
         </div>
 
-        {reflex.phase === 1 && iAnswered && (
-          <div className="rfx-status">⏳ Đã chọn — chờ mọi người / hết giờ…</div>
+        {reflex.phase === 1 && iDone && (
+          <div className="rfx-status">⏳ Đã chọn 3 lá — chờ mọi người / hết giờ…</div>
         )}
         {reveal && (
-          <div className="rfx-status">Ô đúng đã sáng · lượt kế ngay…</div>
+          <div className="rfx-status">3 lá đúng đã sáng · lượt kế ngay…</div>
         )}
       </div>
     </div>

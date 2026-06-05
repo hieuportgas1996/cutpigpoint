@@ -28,7 +28,7 @@ public class MatchManager
     public static TimeSpan MemoryAnswerTimeout { get; } = TimeSpan.FromSeconds(20); // 20s trả lời mỗi câu "ô X là đội nào?"
     public static TimeSpan MemoryRevealTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s hiện đáp án đúng giữa các câu
     public static TimeSpan ReflexCooldownTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s cooldown chuẩn bị mỗi lượt Phản xạ
-    public static TimeSpan ReflexAnswerTimeout { get; } = TimeSpan.FromSeconds(10);   // 10s click đúng ô theo đề
+    public static TimeSpan ReflexAnswerTimeout { get; } = TimeSpan.FromSeconds(15);   // 15s tìm + chọn đúng 3 lá theo đề
     public static TimeSpan ReflexRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s hiện ô đúng giữa các lượt
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
@@ -130,6 +130,7 @@ public class MatchManager
         match.ReflexCooldownUntil = null;
         match.ReflexRoundStart = null;
         match.ReflexAnswerDeadline = null;
+        match.ReflexPicks.Clear();
         match.ReflexAnswers.Clear();
         match.ReflexRevealUntil = null;
         foreach (var p in match.Players)
@@ -801,6 +802,7 @@ public class MatchManager
         match.BreakGame = BreakGameType.Reflex;
         match.ReflexRounds = ReflexGameEngine.BuildRounds(Random.Shared);
         match.ReflexAnswers.Clear();
+        match.ReflexPicks.Clear();
         foreach (var p in match.Players) match.ReflexAnswers[p.UserId] = new List<MathAnswer>();
         match.ReflexCurrentRound = 0;
         match.ReflexRoundStart = null;
@@ -819,7 +821,7 @@ public class MatchManager
         match.ReflexCooldownUntil = DateTime.UtcNow + ReflexCooldownTimeout;
     }
 
-    /// <summary>Hết cooldown → mở pha click: đặt start + deadline; thêm slot answer rỗng cho mỗi người.</summary>
+    /// <summary>Hết cooldown → mở pha click: đặt start + deadline; reset picks + thêm slot answer rỗng cho mỗi người.</summary>
     private static void StartReflexPlay(Match match)
     {
         match.ReflexCooldownUntil = null;
@@ -827,16 +829,19 @@ public class MatchManager
         match.ReflexAnswerDeadline = DateTime.UtcNow + ReflexAnswerTimeout;
         match.ReflexRevealUntil = null;
         match.Status = MatchStatus.BreakReflexPlay;
+        match.ReflexPicks.Clear();
         foreach (var p in match.Players)
         {
+            match.ReflexPicks[p.UserId] = new List<int>();
             if (!match.ReflexAnswers.TryGetValue(p.UserId, out var list)) { list = new(); match.ReflexAnswers[p.UserId] = list; }
             list.Add(new MathAnswer { ChosenIndex = -1, Correct = false, ElapsedMs = (long)ReflexAnswerTimeout.TotalMilliseconds });
         }
     }
 
     /// <summary>
-    /// Player click 1 ô (index 0-8) trong pha play. Đúng nếu trùng ô target; ghi thời gian. 1 lần/lượt.
-    /// Mọi người click xong → pha hiện đáp án (ReflexRevealUntil) ngay.
+    /// Player click 1 lá (index 0-15) trong pha play → thêm vào tập đã chọn. Chọn ĐỦ 3 lá = CHỐT lượt cho người đó
+    /// (Correct = đúng cả 3 lá target, ElapsedMs = lúc chọn lá thứ 3). Click trùng lá đã chọn → bỏ qua. Không bỏ chọn.
+    /// Mọi người chốt xong → pha hiện đáp án (ReflexRevealUntil) ngay.
     /// </summary>
     public Match SubmitReflexCell(Guid roomId, Guid userId, int cellIndex)
     {
@@ -853,18 +858,27 @@ public class MatchManager
                 throw new InvalidOperationException("Bạn không ở trong ván này.");
             var slot = list[match.ReflexCurrentRound];
             if (slot.Answered)
-                throw new InvalidOperationException("Bạn đã chọn rồi.");
+                throw new InvalidOperationException("Bạn đã chốt lượt này rồi.");
 
-            long elapsed = match.ReflexRoundStart.HasValue
-                ? (long)(DateTime.UtcNow - match.ReflexRoundStart.Value).TotalMilliseconds
-                : (long)ReflexAnswerTimeout.TotalMilliseconds;
-            slot.ChosenIndex = cellIndex;
-            slot.Correct = cellIndex == round.TargetIndex;
-            slot.ElapsedMs = Math.Clamp(elapsed, 0, (long)ReflexAnswerTimeout.TotalMilliseconds);
+            if (!match.ReflexPicks.TryGetValue(userId, out var picks)) { picks = new(); match.ReflexPicks[userId] = picks; }
+            if (picks.Contains(cellIndex)) return match;        // click trùng → bỏ qua (không bỏ chọn)
+            if (picks.Count >= ReflexGameEngine.NumTargets) return match;
+            picks.Add(cellIndex);
 
-            bool allAnswered = match.Players.All(p =>
-                match.ReflexAnswers.TryGetValue(p.UserId, out var l) && l.Count > match.ReflexCurrentRound && l[match.ReflexCurrentRound].Answered);
-            if (allAnswered) CloseReflexRound(match);
+            // Chọn đủ 3 lá → chốt slot cho người này.
+            if (picks.Count >= ReflexGameEngine.NumTargets)
+            {
+                long elapsed = match.ReflexRoundStart.HasValue
+                    ? (long)(DateTime.UtcNow - match.ReflexRoundStart.Value).TotalMilliseconds
+                    : (long)ReflexAnswerTimeout.TotalMilliseconds;
+                slot.ChosenIndex = picks[0];                    // đánh dấu đã trả lời (giá trị không quan trọng, dùng ChosenCells dưới)
+                slot.Correct = ReflexGameEngine.IsCorrect(round, picks);
+                slot.ElapsedMs = Math.Clamp(elapsed, 0, (long)ReflexAnswerTimeout.TotalMilliseconds);
+
+                bool allAnswered = match.Players.All(p =>
+                    match.ReflexAnswers.TryGetValue(p.UserId, out var l) && l.Count > match.ReflexCurrentRound && l[match.ReflexCurrentRound].Answered);
+                if (allAnswered) CloseReflexRound(match);
+            }
             return match;
         }
     }
