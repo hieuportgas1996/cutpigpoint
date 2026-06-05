@@ -35,6 +35,7 @@ interface UseRoomConnectionResult {
   submitMathNumber: (number: number) => Promise<void>;
   submitMathAnswer: (optionIndex: number) => Promise<void>;
   submitMemoryAnswer: (optionIndex: number) => Promise<void>;
+  submitReflexCell: (cellIndex: number) => Promise<void>;
   drawXiDachCard: () => Promise<void>;
   standXiDach: () => Promise<void>;
   compareXiDach: (targetUserId: string) => Promise<void>;
@@ -296,6 +297,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('SubmitMemoryAnswer', optionIndex);
   }, []);
 
+  const submitReflexCell = useCallback(async (cellIndex: number) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('SubmitReflexCell', cellIndex);
+  }, []);
+
   const drawXiDachCard = useCallback(async () => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -359,7 +366,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

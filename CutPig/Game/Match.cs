@@ -16,6 +16,8 @@ public enum MatchStatus
     BreakMathQuiz = 11,          // round Giải lao Tính toán: pha trả lời câu hỏi trắc nghiệm
     BreakMemoryView = 12,        // round Giải lao Trí nhớ: pha xem lưới 3×3 logo CLB (đếm ngược 10s)
     BreakMemoryQuiz = 13,        // round Giải lao Trí nhớ: pha trả lời "ô X là đội nào?"
+    BreakReflexCooldown = 14,    // round Giải lao Phản xạ: pha cooldown 3s chuẩn bị (đã hiện lưới)
+    BreakReflexPlay = 15,        // round Giải lao Phản xạ: pha click đúng ô theo đề
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
@@ -25,6 +27,7 @@ public enum BreakGameType
     Rps = 1,      // Oẳn Tù Xì (kéo búa bao)
     Math = 2,     // Tính toán (tính nhẩm trắc nghiệm)
     Memory = 3,   // Trí nhớ (ghi nhớ logo CLB)
+    Reflex = 4,   // Phản xạ (click đúng hình/màu nhanh nhất)
 }
 
 public class MatchPlayer
@@ -159,10 +162,10 @@ public class Match
     // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán / Trí nhớ) ----
     /// <summary>
     /// Pool game giải lao CÒN LẠI trong trận. Bấm "Giải lao" → random rút 1 game khỏi pool (chơi rồi mất khỏi pool).
-    /// Khởi tạo [Rps, Rps, Math, Memory] (4 lượt = 4 player × 1 lần). Hết pool → reset đầy lại.
+    /// Khởi tạo 4 game khác nhau (4 lượt = 4 player × 1 lần). Hết pool → reset đầy lại.
     /// </summary>
     public List<BreakGameType> BreakGamePool { get; set; } = new()
-        { BreakGameType.Rps, BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory };
+        { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex };
     /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là 1 game giải lao. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
     public bool BreakScheduled { get; set; }
     /// <summary>Loại game giải lao ĐÃ ĐẶT cho round kế (Rps/Math/Memory). None khi chưa đặt. Tiêu ở DealRound.</summary>
@@ -215,6 +218,22 @@ public class Match
     public Dictionary<Guid, List<MathAnswer>> MemoryAnswers { get; set; } = new();
     /// <summary>Pha hiện đáp án câu Trí nhớ vừa xong.</summary>
     public DateTime? MemoryRevealUntil { get; set; }
+
+    // -- Phản xạ (Reflex) -- (dùng chung MathAnswer cho lời giải + ranking)
+    /// <summary>3 lượt Phản xạ (mỗi lượt 1 lưới 3×3 + ô target). Null khi không phải round Phản xạ.</summary>
+    public List<ReflexGameEngine.ReflexRound>? ReflexRounds { get; set; }
+    /// <summary>Index lượt hiện tại (0-based).</summary>
+    public int ReflexCurrentRound { get; set; }
+    /// <summary>Hết hạn 3s cooldown chuẩn bị (đã hiện lưới, chưa cho click). Sang pha play khi hết.</summary>
+    public DateTime? ReflexCooldownUntil { get; set; }
+    /// <summary>Thời điểm mở pha click (tính ElapsedMs). Null ngoài pha play.</summary>
+    public DateTime? ReflexRoundStart { get; set; }
+    /// <summary>Hết hạn click lượt hiện tại.</summary>
+    public DateTime? ReflexAnswerDeadline { get; set; }
+    /// <summary>Câu trả lời từng người cho từng lượt Phản xạ (key = UserId; ChosenIndex = ô đã click).</summary>
+    public Dictionary<Guid, List<MathAnswer>> ReflexAnswers { get; set; } = new();
+    /// <summary>Pha hiện đáp án lượt vừa xong (tô ô đúng + ai nhanh nhất) trước khi qua lượt kế.</summary>
+    public DateTime? ReflexRevealUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

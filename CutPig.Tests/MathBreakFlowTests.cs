@@ -59,17 +59,18 @@ public class MathBreakFlowTests
     }
 
     [Fact]
-    public void Schedule_PoolDefaultsToFourEntries_RpsTwice()
+    public void Schedule_PoolDefaultsToFourDistinctGames()
     {
         var (_, match, _, _) = Setup();
         Assert.Equal(4, match.BreakGamePool.Count);
-        Assert.Equal(2, match.BreakGamePool.Count(g => g == BreakGameType.Rps));
+        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Rps));
         Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Math));
         Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Memory));
+        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Reflex));
     }
 
     [Fact]
-    public void Schedule_FourTimes_DrainsPoolWithoutDuplicateBeyondRps()
+    public void Schedule_FourTimes_DrainsPoolAllDistinct()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.Status = MatchStatus.InProgress;
@@ -83,10 +84,10 @@ public class MathBreakFlowTests
             drawn.Add(match.BreakScheduledType);
         }
         Assert.Empty(match.BreakGamePool); // hết pool sau 4 lần
-        // 4 lần rút = đúng multiset [Rps,Rps,Math,Memory].
-        Assert.Equal(2, drawn.Count(g => g == BreakGameType.Rps));
-        Assert.Equal(1, drawn.Count(g => g == BreakGameType.Math));
-        Assert.Equal(1, drawn.Count(g => g == BreakGameType.Memory));
+        // 4 lần rút = đúng 4 game KHÁC nhau.
+        Assert.Equal(4, drawn.Distinct().Count());
+        foreach (var g in new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex })
+            Assert.Contains(g, drawn);
     }
 
     [Fact]

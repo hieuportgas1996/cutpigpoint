@@ -219,6 +219,24 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Giải Lao (Phản xạ): hết 3s cooldown → mở pha click; hết hạn click → chốt lượt (hiện đáp án);
+                // hết pha hiện đáp án → lượt kế (cooldown) hoặc finalize.
+                foreach (var match in _matches.AllBreakReflexCooldown().ToList())
+                {
+                    if (_matches.TryStartReflexPlay(match.RoomId))
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                }
+                foreach (var match in _matches.AllBreakReflexPlay().ToList())
+                {
+                    bool changed = _matches.TryAutoCloseReflexRound(match.RoomId) || _matches.TryFinalizeReflexReveal(match.RoomId);
+                    if (changed)
+                    {
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                        if (match.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(match, stoppingToken);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {

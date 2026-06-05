@@ -27,6 +27,9 @@ public class MatchManager
     public static TimeSpan MemoryViewTimeout { get; } = TimeSpan.FromSeconds(10);   // 10s xem lưới 3×3 logo CLB để ghi nhớ
     public static TimeSpan MemoryAnswerTimeout { get; } = TimeSpan.FromSeconds(20); // 20s trả lời mỗi câu "ô X là đội nào?"
     public static TimeSpan MemoryRevealTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s hiện đáp án đúng giữa các câu
+    public static TimeSpan ReflexCooldownTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s cooldown chuẩn bị mỗi lượt Phản xạ
+    public static TimeSpan ReflexAnswerTimeout { get; } = TimeSpan.FromSeconds(10);   // 10s click đúng ô theo đề
+    public static TimeSpan ReflexRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s hiện ô đúng giữa các lượt
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -122,6 +125,13 @@ public class MatchManager
         match.MemoryAnswerDeadline = null;
         match.MemoryAnswers.Clear();
         match.MemoryRevealUntil = null;
+        match.ReflexRounds = null;
+        match.ReflexCurrentRound = 0;
+        match.ReflexCooldownUntil = null;
+        match.ReflexRoundStart = null;
+        match.ReflexAnswerDeadline = null;
+        match.ReflexAnswers.Clear();
+        match.ReflexRevealUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -175,6 +185,7 @@ public class MatchManager
             match.BreakScheduledType = BreakGameType.None;
             if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
             else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
+            else if (match.BreakGame == BreakGameType.Reflex) DealBreakReflexRound(match);
             else DealBreakRound(match); // Rps
             return;
         }
@@ -322,7 +333,7 @@ public class MatchManager
 
             // Random rút 1 game khỏi pool. Hết pool → nạp đầy lại rồi rút.
             if (match.BreakGamePool.Count == 0)
-                match.BreakGamePool.AddRange(new[] { BreakGameType.Rps, BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory });
+                match.BreakGamePool.AddRange(new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
             int pick = Random.Shared.Next(match.BreakGamePool.Count);
             var chosen = match.BreakGamePool[pick];
             match.BreakGamePool.RemoveAt(pick);
@@ -778,6 +789,166 @@ public class MatchManager
 
     /// <summary>Mọi match đang ở pha quiz Trí nhớ (timer scan auto-close / finalize).</summary>
     public IEnumerable<Match> AllBreakMemoryQuiz() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMemoryQuiz);
+
+    // ==================== Giải Lao — Phản xạ ====================
+
+    /// <summary>
+    /// Deal round "Giải Lao — Phản xạ": sinh 3 lượt (mỗi lượt 1 lưới 3×3 + ô target). Vào lượt đầu pha cooldown 3s
+    /// (đã hiện lưới, chưa cho click). KHÔNG đụng PreviousRoundWinnerId.
+    /// </summary>
+    private static void DealBreakReflexRound(Match match)
+    {
+        match.BreakGame = BreakGameType.Reflex;
+        match.ReflexRounds = ReflexGameEngine.BuildRounds(Random.Shared);
+        match.ReflexAnswers.Clear();
+        foreach (var p in match.Players) match.ReflexAnswers[p.UserId] = new List<MathAnswer>();
+        match.ReflexCurrentRound = 0;
+        match.ReflexRoundStart = null;
+        match.ReflexAnswerDeadline = null;
+        match.ReflexRevealUntil = null;
+        OpenReflexCooldown(match);
+    }
+
+    /// <summary>Vào pha cooldown 3s của lượt hiện tại (hiện lưới, chưa click).</summary>
+    private static void OpenReflexCooldown(Match match)
+    {
+        match.ReflexRoundStart = null;
+        match.ReflexAnswerDeadline = null;
+        match.ReflexRevealUntil = null;
+        match.Status = MatchStatus.BreakReflexCooldown;
+        match.ReflexCooldownUntil = DateTime.UtcNow + ReflexCooldownTimeout;
+    }
+
+    /// <summary>Hết cooldown → mở pha click: đặt start + deadline; thêm slot answer rỗng cho mỗi người.</summary>
+    private static void StartReflexPlay(Match match)
+    {
+        match.ReflexCooldownUntil = null;
+        match.ReflexRoundStart = DateTime.UtcNow;
+        match.ReflexAnswerDeadline = DateTime.UtcNow + ReflexAnswerTimeout;
+        match.ReflexRevealUntil = null;
+        match.Status = MatchStatus.BreakReflexPlay;
+        foreach (var p in match.Players)
+        {
+            if (!match.ReflexAnswers.TryGetValue(p.UserId, out var list)) { list = new(); match.ReflexAnswers[p.UserId] = list; }
+            list.Add(new MathAnswer { ChosenIndex = -1, Correct = false, ElapsedMs = (long)ReflexAnswerTimeout.TotalMilliseconds });
+        }
+    }
+
+    /// <summary>
+    /// Player click 1 ô (index 0-8) trong pha play. Đúng nếu trùng ô target; ghi thời gian. 1 lần/lượt.
+    /// Mọi người click xong → pha hiện đáp án (ReflexRevealUntil) ngay.
+    /// </summary>
+    public Match SubmitReflexCell(Guid roomId, Guid userId, int cellIndex)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakReflexPlay || match.ReflexRounds == null)
+                throw new InvalidOperationException("Không trong pha chơi Phản xạ.");
+            if (match.ReflexRevealUntil.HasValue)
+                throw new InvalidOperationException("Lượt này đã chốt, chờ lượt kế.");
+            var round = match.ReflexRounds[match.ReflexCurrentRound];
+            if (cellIndex < 0 || cellIndex >= round.Grid.Count)
+                throw new InvalidOperationException("Ô không hợp lệ.");
+            if (!match.ReflexAnswers.TryGetValue(userId, out var list) || list.Count <= match.ReflexCurrentRound)
+                throw new InvalidOperationException("Bạn không ở trong ván này.");
+            var slot = list[match.ReflexCurrentRound];
+            if (slot.Answered)
+                throw new InvalidOperationException("Bạn đã chọn rồi.");
+
+            long elapsed = match.ReflexRoundStart.HasValue
+                ? (long)(DateTime.UtcNow - match.ReflexRoundStart.Value).TotalMilliseconds
+                : (long)ReflexAnswerTimeout.TotalMilliseconds;
+            slot.ChosenIndex = cellIndex;
+            slot.Correct = cellIndex == round.TargetIndex;
+            slot.ElapsedMs = Math.Clamp(elapsed, 0, (long)ReflexAnswerTimeout.TotalMilliseconds);
+
+            bool allAnswered = match.Players.All(p =>
+                match.ReflexAnswers.TryGetValue(p.UserId, out var l) && l.Count > match.ReflexCurrentRound && l[match.ReflexCurrentRound].Answered);
+            if (allAnswered) CloseReflexRound(match);
+            return match;
+        }
+    }
+
+    private static void CloseReflexRound(Match match)
+    {
+        match.ReflexAnswerDeadline = null;
+        match.ReflexRevealUntil = DateTime.UtcNow + ReflexRevealTimeout;
+    }
+
+    private static void FinalizeReflexReveal(Match match)
+    {
+        match.ReflexRevealUntil = null;
+        if (match.ReflexCurrentRound + 1 < (match.ReflexRounds?.Count ?? 0))
+        {
+            match.ReflexCurrentRound++;
+            OpenReflexCooldown(match);  // lượt kế bắt đầu bằng cooldown 3s
+        }
+        else
+        {
+            FinalizeBreakReflexRound(match);
+        }
+    }
+
+    /// <summary>Phản xạ xong: xếp hạng (đúng desc, thời gian asc) → FinalRank 1..4 → WaitingNextRound.</summary>
+    private static void FinalizeBreakReflexRound(Match match)
+    {
+        var ids = match.Players.OrderBy(p => p.SeatIndex).Select(p => p.UserId).ToList();
+        var ranking = ReflexGameEngine.Rank(ids, match.ReflexAnswers);
+        for (int rank = 0; rank < ranking.Count; rank++)
+        {
+            var p = match.Players.FirstOrDefault(x => x.UserId == ranking[rank]);
+            if (p != null) p.FinalRank = rank + 1;
+        }
+        match.ReflexCooldownUntil = null;
+        match.ReflexAnswerDeadline = null;
+        match.ReflexRevealUntil = null;
+        match.ReflexRoundStart = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>Timer: hết 3s cooldown → mở pha click. Trả về true nếu vừa xử lý.</summary>
+    public bool TryStartReflexPlay(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakReflexCooldown) return false;
+            if (!match.ReflexCooldownUntil.HasValue || match.ReflexCooldownUntil.Value > DateTime.UtcNow) return false;
+            StartReflexPlay(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết hạn click → chốt lượt (ai chưa click = sai). Trả về true nếu vừa xử lý.</summary>
+    public bool TryAutoCloseReflexRound(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakReflexPlay) return false;
+            if (match.ReflexRevealUntil.HasValue) return false;
+            if (!match.ReflexAnswerDeadline.HasValue || match.ReflexAnswerDeadline.Value > DateTime.UtcNow) return false;
+            CloseReflexRound(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết pha hiện đáp án → lượt kế (cooldown) hoặc finalize. Trả về true nếu vừa xử lý.</summary>
+    public bool TryFinalizeReflexReveal(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakReflexPlay) return false;
+            if (!match.ReflexRevealUntil.HasValue || match.ReflexRevealUntil.Value > DateTime.UtcNow) return false;
+            FinalizeReflexReveal(match);
+            return true;
+        }
+    }
+
+    /// <summary>Mọi match đang ở pha cooldown Phản xạ (timer scan → mở pha click).</summary>
+    public IEnumerable<Match> AllBreakReflexCooldown() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakReflexCooldown);
+
+    /// <summary>Mọi match đang ở pha click Phản xạ (timer scan auto-close / finalize).</summary>
+    public IEnumerable<Match> AllBreakReflexPlay() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakReflexPlay);
 
     /// <summary>
     /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
@@ -2628,6 +2799,7 @@ public class MatchManager
                 List<Dtos.MathQuestionResultDto>? mathResults = null;
                 var quizAnswers = match.BreakGame == BreakGameType.Memory ? match.MemoryAnswers
                     : match.BreakGame == BreakGameType.Math ? match.MathAnswers
+                    : match.BreakGame == BreakGameType.Reflex ? match.ReflexAnswers
                     : null;
                 if (match.IsBreakRound && quizAnswers != null && quizAnswers.TryGetValue(p.UserId, out var mAns))
                 {

@@ -120,7 +120,11 @@ public record MatchPublicStateDto(
     MemoryGameStateDto? Memory = null,
     DateTime? MemoryViewDeadline = null,
     DateTime? MemoryAnswerDeadline = null,
-    DateTime? MemoryRevealUntil = null);
+    DateTime? MemoryRevealUntil = null,
+    ReflexGameStateDto? Reflex = null,
+    DateTime? ReflexCooldownUntil = null,
+    DateTime? ReflexAnswerDeadline = null,
+    DateTime? ReflexRevealUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -181,6 +185,19 @@ public record MemoryGameStateDto(
     int CurrentQuestion,
     MemoryQuestionDto? Question,       // câu hiện tại (null pha view)
     string? AnswerSlug,                // slug đúng (CHỈ ở pha reveal)
+    List<Guid> AnsweredUserIds,
+    List<MathPlayerResultDto> Results);
+
+// ---- Giải Lao (Phản xạ) ----
+public record ReflexCellDto(string Shape, string Color);   // hình + màu (key)
+public record ReflexGameStateDto(
+    int Phase,                  // 0 = cooldown chuẩn bị, 1 = đang click, 2 = hiện đáp án (reveal)
+    List<ReflexCellDto> Grid,   // 9 ô (luôn hiện)
+    int TotalRounds,
+    int CurrentRound,
+    string? TargetShape,        // đề: hình (CHỈ pha click + reveal; null pha cooldown)
+    string? TargetColor,        // đề: màu
+    int TargetIndex,            // ô đúng (CHỈ ≥0 ở pha reveal; -1 khi đang click/cooldown)
     List<Guid> AnsweredUserIds,
     List<MathPlayerResultDto> Results);
 

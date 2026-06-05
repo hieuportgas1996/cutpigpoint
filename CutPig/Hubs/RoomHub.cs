@@ -760,6 +760,20 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task SubmitReflexCell(int cellIndex)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitReflexCell(roomId.Value, auth.Value.UserId, cellIndex); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitRpsChoice(int choice)
     {
         var auth = await AuthenticateAsync();
@@ -1017,7 +1031,11 @@ public class RoomHub : Hub
             BuildMemoryState(m),
             m.MemoryViewDeadline,
             m.MemoryAnswerDeadline,
-            m.MemoryRevealUntil);
+            m.MemoryRevealUntil,
+            BuildReflexState(m),
+            m.ReflexCooldownUntil,
+            m.ReflexAnswerDeadline,
+            m.ReflexRevealUntil);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -1127,6 +1145,52 @@ public class RoomHub : Hub
             isView ? new List<string>(m.MemoryBoard.Grid) : null,   // chỉ gửi lưới ở pha view
             m.MemoryBoard.Questions.Count,
             qIdx, question, answerSlug, answered, results);
+    }
+
+    /// <summary>
+    /// Build state Phản xạ cho broadcast. Lưới LUÔN hiện. Pha cooldown (0): chưa gửi đề. Pha click (1): gửi
+    /// đề (TargetShape/Color) nhưng KHÔNG gửi TargetIndex (-1). Pha reveal (2): gửi cả TargetIndex + chọn/đúng/time.
+    /// </summary>
+    private static ReflexGameStateDto? BuildReflexState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.Reflex || m.ReflexRounds == null) return null;
+        bool cooldown = m.Status == MatchStatus.BreakReflexCooldown;
+        bool reveal = m.ReflexRevealUntil.HasValue;
+        int phase = cooldown ? 0 : reveal ? 2 : 1;
+        int rIdx = m.ReflexCurrentRound;
+        var round = m.ReflexRounds[rIdx];
+
+        var grid = round.Grid.Select(c => new ReflexCellDto(c.Shape, c.Color)).ToList();
+        var answered = new List<Guid>();
+        if (!cooldown)
+            foreach (var p in m.Players)
+                if (m.ReflexAnswers.TryGetValue(p.UserId, out var l) && l.Count > rIdx && l[rIdx].Answered)
+                    answered.Add(p.UserId);
+
+        var results = new List<MathPlayerResultDto>();
+        foreach (var p in m.Players)
+        {
+            m.ReflexAnswers.TryGetValue(p.UserId, out var list);
+            list ??= new();
+            int correctCount = list.Count(a => a.Correct);
+            long totalCorrectMs = list.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+            var cur = (rIdx < list.Count) ? list[rIdx] : null;
+            results.Add(new MathPlayerResultDto(
+                p.UserId,
+                reveal && cur != null ? cur.ChosenIndex : -1,
+                cur?.Answered ?? false,
+                reveal && (cur?.Correct ?? false),
+                reveal && cur != null ? cur.ElapsedMs : 0,
+                correctCount,
+                totalCorrectMs));
+        }
+
+        return new ReflexGameStateDto(
+            phase, grid, m.ReflexRounds.Count, rIdx,
+            cooldown ? null : round.TargetShape,   // đề chỉ hiện từ pha click
+            cooldown ? null : round.TargetColor,
+            reveal ? round.TargetIndex : -1,       // ô đúng chỉ lộ ở reveal
+            answered, results);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

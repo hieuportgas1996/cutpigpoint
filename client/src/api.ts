@@ -343,11 +343,13 @@ export const MatchStatus = {
   BreakMathQuiz: 11,
   BreakMemoryView: 12,
   BreakMemoryQuiz: 13,
+  BreakReflexCooldown: 14,
+  BreakReflexPlay: 15,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -413,6 +415,20 @@ export interface MemoryGameState {
   currentQuestion: number;
   question: MemoryQuestion | null;
   answerSlug: string | null;     // slug đúng (chỉ pha reveal)
+  answeredUserIds: string[];
+  results: MathPlayerResult[];
+}
+
+// ---- Giải Lao (Phản xạ) ----
+export interface ReflexCell { shape: string; color: string; }
+export interface ReflexGameState {
+  phase: number;            // 0 cooldown, 1 click, 2 hiện đáp án
+  grid: ReflexCell[];       // 9 ô (luôn hiện)
+  totalRounds: number;
+  currentRound: number;
+  targetShape: string | null;   // đề (pha click + reveal)
+  targetColor: string | null;
+  targetIndex: number;          // ô đúng (≥0 chỉ ở reveal, -1 khi click/cooldown)
   answeredUserIds: string[];
   results: MathPlayerResult[];
 }
@@ -502,6 +518,10 @@ export interface MatchPublicState {
   memoryViewDeadline: string | null;
   memoryAnswerDeadline: string | null;
   memoryRevealUntil: string | null;
+  reflex: ReflexGameState | null;
+  reflexCooldownUntil: string | null;
+  reflexAnswerDeadline: string | null;
+  reflexRevealUntil: string | null;
 }
 
 export interface PrivateHand {
