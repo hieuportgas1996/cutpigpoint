@@ -1,0 +1,165 @@
+.mem-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 35%, rgba(80,46,14,0.5), rgba(0,0,0,0.8));
+  padding: 16px;
+}
+
+.mem-card {
+  width: min(520px, 96vw);
+  max-height: 94vh;
+  overflow-y: auto;
+  background: linear-gradient(165deg, #3c2712, #251607);
+  border: 2px solid #d4a44a;
+  border-radius: 22px;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07);
+  padding: 18px 20px;
+  color: #f6e7c8;
+  text-align: center;
+}
+
+.mem-title { font-size: 22px; font-weight: 800; color: #ffe26b; }
+.mem-sub { font-size: 13px; color: #e2c089; margin: 4px 0 16px; font-weight: 600; }
+.mem-sub b.low { color: #ff8a87; }
+.mem-status { font-size: 13px; color: #e2c089; margin-top: 12px; font-weight: 600; }
+.mem-status b { color: #ffe26b; }
+.mem-question { font-size: 17px; font-weight: 700; margin: 14px 0 12px; color: #fff; }
+.mem-question b { color: #ffe26b; font-size: 20px; }
+
+/* Lưới 3×3 */
+.mem-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.mem-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.3);
+  border: 2px solid rgba(212,164,74,0.35);
+}
+.mem-cell.filled { background: #faf3e0; }
+.mem-cell-no {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #d4a44a;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  z-index: 2;
+}
+.mem-cell.filled .mem-cell-no { color: #8b1f1b; text-shadow: none; }
+
+/* Lưới mini ở pha câu hỏi */
+.mem-grid-mini { max-width: 180px; }
+.mem-grid-mini .mem-cell { border-radius: 8px; }
+.mem-cell.dim { opacity: 0.45; }
+.mem-cell.asked {
+  border-color: #ffe26b;
+  background: rgba(255,226,107,0.12);
+  box-shadow: 0 0 14px rgba(255,210,80,0.4);
+  animation: memAskPulse 1s ease-in-out infinite;
+}
+.mem-q-mark { font-size: 24px; font-weight: 900; color: #ffe26b; }
+@keyframes memAskPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,210,80,0.3); }
+  50% { box-shadow: 0 0 20px rgba(255,210,80,0.6); }
+}
+
+/* Logo */
+.mem-logo { object-fit: contain; }
+.mem-logo-sm { width: 28px; height: 28px; }
+.mem-logo-md { width: 64px; height: 64px; }
+.mem-logo-lg { width: 72px; height: 72px; }
+.mem-logo-fallback { font-size: 11px; font-weight: 700; color: #2a1810; padding: 2px; }
+
+/* 4 đáp án logo */
+.mem-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.mem-opt-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  min-height: 92px;
+  background: #faf3e0;
+  border: 3px solid rgba(212,164,74,0.5);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mem-opt-btn:hover:not(:disabled) { transform: translateY(-2px); border-color: #ffe26b; }
+.mem-opt-btn:disabled { cursor: default; }
+.mem-opt-btn.mine { border-color: #ffe26b; box-shadow: 0 0 0 2px rgba(255,226,107,0.4); }
+.mem-opt-btn.correct {
+  border-color: #7fdc95;
+  box-shadow: 0 0 18px rgba(127,220,149,0.55);
+  animation: memCorrectPop 0.4s ease;
+}
+.mem-opt-btn.wrong { border-color: #e7a3a3; box-shadow: 0 0 14px rgba(231,163,163,0.45); opacity: 0.7; }
+.mem-opt-tag {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8b1f1b;
+}
+@keyframes memCorrectPop {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* Người chơi */
+.mem-players {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.mem-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(212,164,74,0.22);
+}
+.mem-player.me { background: rgba(255,226,107,0.1); }
+.mem-player-name { font-size: 11px; font-weight: 700; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-player-status { font-size: 10px; color: #b08f55; font-weight: 600; }
+.mem-player-status.ans { color: #7fdc95; }
+.mem-player-result { font-size: 12px; font-weight: 700; }
+.mem-player-result.ok { color: #7fdc95; }
+.mem-player-result.no { color: #ff8a87; }
+.mem-player-score { font-size: 11px; color: #e2c089; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .mem-card { padding: 14px; }
+  .mem-title { font-size: 18px; }
+  .mem-grid { max-width: 270px; }
+  .mem-logo-md { width: 52px; height: 52px; }
+  .mem-logo-lg { width: 60px; height: 60px; }
+  .mem-opt-btn { min-height: 78px; padding: 9px; }
+  .mem-player-name { font-size: 10px; max-width: 60px; }
+}

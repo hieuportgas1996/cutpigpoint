@@ -14,14 +14,17 @@ public enum MatchStatus
     BreakRps = 9,                // round Giải lao: giải đấu Oẳn Tù Xì (kéo búa bao) bracket 4 người
     BreakMathPick = 10,          // round Giải lao Tính toán: pha mỗi người chọn 1 chữ số 0-9
     BreakMathQuiz = 11,          // round Giải lao Tính toán: pha trả lời câu hỏi trắc nghiệm
+    BreakMemoryView = 12,        // round Giải lao Trí nhớ: pha xem lưới 3×3 logo CLB (đếm ngược 10s)
+    BreakMemoryQuiz = 13,        // round Giải lao Trí nhớ: pha trả lời "ô X là đội nào?"
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
 public enum BreakGameType
 {
     None = 0,
-    Rps = 1,    // Oẳn Tù Xì (kéo búa bao)
-    Math = 2,   // Tính toán (tính nhẩm trắc nghiệm)
+    Rps = 1,      // Oẳn Tù Xì (kéo búa bao)
+    Math = 2,     // Tính toán (tính nhẩm trắc nghiệm)
+    Memory = 3,   // Trí nhớ (ghi nhớ logo CLB)
 }
 
 public class MatchPlayer
@@ -190,6 +193,22 @@ public class Match
     public Dictionary<Guid, List<MathAnswer>> MathAnswers { get; set; } = new();
     /// <summary>Pha HIỆN KẾT QUẢ câu vừa xong: giữ vài giây cho xem đáp án đúng + ai nhanh nhất rồi qua câu kế. Null khi đang trả lời.</summary>
     public DateTime? MathRevealUntil { get; set; }
+
+    // -- Trí nhớ (Memory) -- (dùng chung MathAnswers cho lời giải + ranking)
+    /// <summary>Lưới + câu hỏi Trí nhớ của round hiện tại (null khi không phải round Trí nhớ).</summary>
+    public MemoryGameEngine.MemoryBoard? MemoryBoard { get; set; }
+    /// <summary>Hết hạn 10s pha xem lưới ghi nhớ; hết → vào pha trả lời.</summary>
+    public DateTime? MemoryViewDeadline { get; set; }
+    /// <summary>Index câu hỏi hiện tại (0-based) trong pha BreakMemoryQuiz.</summary>
+    public int MemoryCurrentQuestion { get; set; }
+    /// <summary>Thời điểm mở câu hiện tại (tính ElapsedMs). Null giữa các câu.</summary>
+    public DateTime? MemoryQuestionStart { get; set; }
+    /// <summary>Hết hạn trả lời câu hiện tại.</summary>
+    public DateTime? MemoryAnswerDeadline { get; set; }
+    /// <summary>Câu trả lời từng người cho từng câu Trí nhớ (key = UserId).</summary>
+    public Dictionary<Guid, List<MathAnswer>> MemoryAnswers { get; set; } = new();
+    /// <summary>Pha hiện đáp án câu Trí nhớ vừa xong.</summary>
+    public DateTime? MemoryRevealUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

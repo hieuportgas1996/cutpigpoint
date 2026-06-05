@@ -24,6 +24,9 @@ public class MatchManager
     public static TimeSpan MathPickTimeout { get; } = TimeSpan.FromSeconds(10);     // 10s mỗi người chọn 1 chữ số 0-9
     public static TimeSpan MathAnswerTimeout { get; } = TimeSpan.FromSeconds(20);   // 20s suy nghĩ + trả lời mỗi câu trắc nghiệm
     public static TimeSpan MathRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s xem đáp án đúng + ai nhanh nhất giữa các câu
+    public static TimeSpan MemoryViewTimeout { get; } = TimeSpan.FromSeconds(10);   // 10s xem lưới 3×3 logo CLB để ghi nhớ
+    public static TimeSpan MemoryAnswerTimeout { get; } = TimeSpan.FromSeconds(20); // 20s trả lời mỗi câu "ô X là đội nào?"
+    public static TimeSpan MemoryRevealTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s hiện đáp án đúng giữa các câu
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -112,6 +115,13 @@ public class MatchManager
         match.MathAnswerDeadline = null;
         match.MathAnswers.Clear();
         match.MathRevealUntil = null;
+        match.MemoryBoard = null;
+        match.MemoryViewDeadline = null;
+        match.MemoryCurrentQuestion = 0;
+        match.MemoryQuestionStart = null;
+        match.MemoryAnswerDeadline = null;
+        match.MemoryAnswers.Clear();
+        match.MemoryRevealUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -164,6 +174,7 @@ public class MatchManager
             match.BreakScheduled = false;
             match.BreakScheduledType = BreakGameType.None;
             if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
+            else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
             else DealBreakRound(match); // Rps
             return;
         }
@@ -302,7 +313,7 @@ public class MatchManager
                 throw new InvalidOperationException("Ván chưa bắt đầu.");
             if (match.Players.Count != 4)
                 throw new InvalidOperationException("Giải lao cần đúng 4 người.");
-            if (gameType != BreakGameType.Rps && gameType != BreakGameType.Math)
+            if (gameType != BreakGameType.Rps && gameType != BreakGameType.Math && gameType != BreakGameType.Memory)
                 throw new InvalidOperationException("Loại game giải lao không hợp lệ.");
             EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
@@ -603,6 +614,164 @@ public class MatchManager
 
     /// <summary>Mọi match đang ở pha quiz Tính toán (timer scan auto-close câu / finalize reveal).</summary>
     public IEnumerable<Match> AllBreakMathQuiz() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMathQuiz);
+
+    // ==================== Giải Lao — Trí nhớ ====================
+
+    /// <summary>
+    /// Deal round "Giải Lao — Trí nhớ": random lưới 3×3 (9 logo CLB) + 3 câu hỏi. Vào pha xem lưới
+    /// (BreakMemoryView) đếm ngược 10s cho mọi người ghi nhớ. KHÔNG đụng PreviousRoundWinnerId.
+    /// </summary>
+    private static void DealBreakMemoryRound(Match match)
+    {
+        match.BreakGame = BreakGameType.Memory;
+        match.MemoryBoard = MemoryGameEngine.BuildBoard(Random.Shared);
+        match.MemoryAnswers.Clear();
+        foreach (var p in match.Players) match.MemoryAnswers[p.UserId] = new List<MathAnswer>();
+        match.MemoryCurrentQuestion = 0;
+        match.MemoryQuestionStart = null;
+        match.MemoryAnswerDeadline = null;
+        match.MemoryRevealUntil = null;
+        match.Status = MatchStatus.BreakMemoryView;
+        match.MemoryViewDeadline = DateTime.UtcNow + MemoryViewTimeout;
+    }
+
+    /// <summary>Hết pha xem lưới → ẩn lưới, mở câu hỏi đầu (pha BreakMemoryQuiz).</summary>
+    private static void StartMemoryQuiz(Match match)
+    {
+        match.MemoryViewDeadline = null;
+        match.MemoryCurrentQuestion = 0;
+        match.MemoryRevealUntil = null;
+        match.Status = MatchStatus.BreakMemoryQuiz;
+        OpenMemoryQuestion(match);
+    }
+
+    /// <summary>Mở câu hỏi hiện tại: đặt start + deadline; thêm slot answer rỗng cho mỗi người.</summary>
+    private static void OpenMemoryQuestion(Match match)
+    {
+        match.MemoryQuestionStart = DateTime.UtcNow;
+        match.MemoryAnswerDeadline = DateTime.UtcNow + MemoryAnswerTimeout;
+        match.MemoryRevealUntil = null;
+        foreach (var p in match.Players)
+        {
+            if (!match.MemoryAnswers.TryGetValue(p.UserId, out var list)) { list = new(); match.MemoryAnswers[p.UserId] = list; }
+            list.Add(new MathAnswer { ChosenIndex = -1, Correct = false, ElapsedMs = (long)MemoryAnswerTimeout.TotalMilliseconds });
+        }
+    }
+
+    /// <summary>
+    /// Player chọn 1 đáp án (index 0-3) cho câu Trí nhớ hiện tại. Ghi đúng/sai + thời gian. 1 lần/câu.
+    /// Mọi người trả lời xong → pha hiện đáp án (MemoryRevealUntil) ngay.
+    /// </summary>
+    public Match SubmitMemoryAnswer(Guid roomId, Guid userId, int optionIndex)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMemoryQuiz || match.MemoryBoard == null)
+                throw new InvalidOperationException("Không trong pha trả lời Trí nhớ.");
+            if (match.MemoryRevealUntil.HasValue)
+                throw new InvalidOperationException("Câu này đã chốt, chờ câu kế.");
+            var q = match.MemoryBoard.Questions[match.MemoryCurrentQuestion];
+            if (optionIndex < 0 || optionIndex >= q.Options.Count)
+                throw new InvalidOperationException("Đáp án không hợp lệ.");
+            if (!match.MemoryAnswers.TryGetValue(userId, out var list) || list.Count <= match.MemoryCurrentQuestion)
+                throw new InvalidOperationException("Bạn không ở trong ván này.");
+            var slot = list[match.MemoryCurrentQuestion];
+            if (slot.Answered)
+                throw new InvalidOperationException("Bạn đã trả lời câu này rồi.");
+
+            long elapsed = match.MemoryQuestionStart.HasValue
+                ? (long)(DateTime.UtcNow - match.MemoryQuestionStart.Value).TotalMilliseconds
+                : (long)MemoryAnswerTimeout.TotalMilliseconds;
+            slot.ChosenIndex = optionIndex;
+            slot.Correct = optionIndex == q.CorrectIndex;
+            slot.ElapsedMs = Math.Clamp(elapsed, 0, (long)MemoryAnswerTimeout.TotalMilliseconds);
+
+            bool allAnswered = match.Players.All(p =>
+                match.MemoryAnswers.TryGetValue(p.UserId, out var l) && l.Count > match.MemoryCurrentQuestion && l[match.MemoryCurrentQuestion].Answered);
+            if (allAnswered) CloseMemoryQuestion(match);
+            return match;
+        }
+    }
+
+    private static void CloseMemoryQuestion(Match match)
+    {
+        match.MemoryAnswerDeadline = null;
+        match.MemoryRevealUntil = DateTime.UtcNow + MemoryRevealTimeout;
+    }
+
+    private static void FinalizeMemoryReveal(Match match)
+    {
+        match.MemoryRevealUntil = null;
+        if (match.MemoryCurrentQuestion + 1 < (match.MemoryBoard?.Questions.Count ?? 0))
+        {
+            match.MemoryCurrentQuestion++;
+            OpenMemoryQuestion(match);
+        }
+        else
+        {
+            FinalizeBreakMemoryRound(match);
+        }
+    }
+
+    /// <summary>Trí nhớ xong: xếp hạng (đúng desc, thời gian asc) → FinalRank 1..4 → WaitingNextRound.</summary>
+    private static void FinalizeBreakMemoryRound(Match match)
+    {
+        var ids = match.Players.OrderBy(p => p.SeatIndex).Select(p => p.UserId).ToList();
+        var ranking = MemoryGameEngine.Rank(ids, match.MemoryAnswers);
+        for (int rank = 0; rank < ranking.Count; rank++)
+        {
+            var p = match.Players.FirstOrDefault(x => x.UserId == ranking[rank]);
+            if (p != null) p.FinalRank = rank + 1;
+        }
+        match.MemoryAnswerDeadline = null;
+        match.MemoryRevealUntil = null;
+        match.MemoryQuestionStart = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>Timer: hết 10s pha xem lưới → vào pha trả lời. Trả về true nếu vừa xử lý.</summary>
+    public bool TryStartMemoryQuiz(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMemoryView) return false;
+            if (!match.MemoryViewDeadline.HasValue || match.MemoryViewDeadline.Value > DateTime.UtcNow) return false;
+            StartMemoryQuiz(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết hạn trả lời câu Trí nhớ → chốt câu (ai chưa trả lời = sai). Trả về true nếu vừa xử lý.</summary>
+    public bool TryAutoCloseMemoryQuestion(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMemoryQuiz) return false;
+            if (match.MemoryRevealUntil.HasValue) return false;
+            if (!match.MemoryAnswerDeadline.HasValue || match.MemoryAnswerDeadline.Value > DateTime.UtcNow) return false;
+            CloseMemoryQuestion(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết pha hiện đáp án Trí nhớ → câu kế hoặc finalize. Trả về true nếu vừa xử lý.</summary>
+    public bool TryFinalizeMemoryReveal(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMemoryQuiz) return false;
+            if (!match.MemoryRevealUntil.HasValue || match.MemoryRevealUntil.Value > DateTime.UtcNow) return false;
+            FinalizeMemoryReveal(match);
+            return true;
+        }
+    }
+
+    /// <summary>Mọi match đang ở pha xem lưới Trí nhớ (timer scan auto-start quiz).</summary>
+    public IEnumerable<Match> AllBreakMemoryView() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMemoryView);
+
+    /// <summary>Mọi match đang ở pha quiz Trí nhớ (timer scan auto-close / finalize).</summary>
+    public IEnumerable<Match> AllBreakMemoryQuiz() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMemoryQuiz);
 
     /// <summary>
     /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
@@ -2447,11 +2616,14 @@ public class MatchManager
                     : null;
                 string? xdLabel = match.IsXiDachRound ? XiDachEngine.Label(p.Hand) : null;
                 int xdTotal = match.IsXiDachRound ? XiDachEngine.Total(p.Hand) : 0;
-                // Giải lao Tính toán: gắn chi tiết từng câu (đúng/sai + thời gian) cho modal tổng kết.
+                // Giải lao Tính toán / Trí nhớ: gắn chi tiết từng câu (đúng/sai + thời gian) cho modal tổng kết.
+                // Cả 2 game dùng chung kiểu MathAnswer + cùng cột MathResults trong DTO.
                 int mathCorrect = 0; long mathTotalMs = 0;
                 List<Dtos.MathQuestionResultDto>? mathResults = null;
-                if (match.IsBreakRound && match.BreakGame == BreakGameType.Math
-                    && match.MathAnswers.TryGetValue(p.UserId, out var mAns))
+                var quizAnswers = match.BreakGame == BreakGameType.Memory ? match.MemoryAnswers
+                    : match.BreakGame == BreakGameType.Math ? match.MathAnswers
+                    : null;
+                if (match.IsBreakRound && quizAnswers != null && quizAnswers.TryGetValue(p.UserId, out var mAns))
                 {
                     mathResults = mAns.Select(a => new Dtos.MathQuestionResultDto(a.Correct, a.Answered, a.ElapsedMs)).ToList();
                     mathCorrect = mAns.Count(a => a.Correct);

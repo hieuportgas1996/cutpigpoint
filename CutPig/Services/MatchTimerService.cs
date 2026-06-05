@@ -201,6 +201,24 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Giải Lao (Trí nhớ): hết 10s xem lưới → vào quiz; hết hạn trả lời → chốt câu (hiện đáp án);
+                // hết pha hiện đáp án → câu kế hoặc finalize (xếp hạng → WaitingNextRound).
+                foreach (var match in _matches.AllBreakMemoryView().ToList())
+                {
+                    if (_matches.TryStartMemoryQuiz(match.RoomId))
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                }
+                foreach (var match in _matches.AllBreakMemoryQuiz().ToList())
+                {
+                    bool changed = _matches.TryAutoCloseMemoryQuestion(match.RoomId) || _matches.TryFinalizeMemoryReveal(match.RoomId);
+                    if (changed)
+                    {
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                        if (match.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(match, stoppingToken);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {

@@ -341,11 +341,13 @@ export const MatchStatus = {
   BreakRps: 9,
   BreakMathPick: 10,
   BreakMathQuiz: 11,
+  BreakMemoryView: 12,
+  BreakMemoryQuiz: 13,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -396,6 +398,23 @@ export interface MathQuizState {
   answeredUserIds: string[];
   results: MathPlayerResult[];
   finalRanking: string[];
+}
+
+// ---- Giải Lao (Trí nhớ) ----
+export interface MemoryQuestion {
+  cellIndex: number;        // ô 0-8 đang hỏi
+  options: string[];        // 4 slug CLB đáp án
+  correctIndex: number;     // -1 khi đang trả lời, ≥0 ở pha reveal
+}
+export interface MemoryGameState {
+  phase: number;            // 0 xem lưới, 1 trả lời, 2 hiện đáp án
+  grid: string[] | null;    // 9 slug CLB (chỉ pha view)
+  totalQuestions: number;
+  currentQuestion: number;
+  question: MemoryQuestion | null;
+  answerSlug: string | null;     // slug đúng (chỉ pha reveal)
+  answeredUserIds: string[];
+  results: MathPlayerResult[];
 }
 
 export interface MatchPlayerPublic {
@@ -474,11 +493,15 @@ export interface MatchPublicState {
   rps: RpsState | null;
   rpsChoiceDeadline: string | null;
   rpsRevealUntil: string | null;
-  breakGame: number;        // BreakGameType: 0 none, 1 Rps, 2 Math
+  breakGame: number;        // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory
   math: MathQuizState | null;
   mathPickDeadline: string | null;
   mathAnswerDeadline: string | null;
   mathRevealUntil: string | null;
+  memory: MemoryGameState | null;
+  memoryViewDeadline: string | null;
+  memoryAnswerDeadline: string | null;
+  memoryRevealUntil: string | null;
 }
 
 export interface PrivateHand {

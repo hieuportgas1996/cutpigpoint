@@ -746,6 +746,20 @@ public class RoomHub : Hub
         // Math quiz finalize chỉ qua timer (reveal phase), không kết thúc tức thì ở đây.
     }
 
+    public async Task SubmitMemoryAnswer(int optionIndex)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitMemoryAnswer(roomId.Value, auth.Value.UserId, optionIndex); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitRpsChoice(int choice)
     {
         var auth = await AuthenticateAsync();
@@ -999,7 +1013,11 @@ public class RoomHub : Hub
             BuildMathState(m),
             m.MathPickDeadline,
             m.MathAnswerDeadline,
-            m.MathRevealUntil);
+            m.MathRevealUntil,
+            BuildMemoryState(m),
+            m.MemoryViewDeadline,
+            m.MemoryAnswerDeadline,
+            m.MemoryRevealUntil);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -1059,6 +1077,56 @@ public class RoomHub : Hub
             phase, picks,
             m.MathQuestions?.Count ?? MathQuizEngine.NumQuestions,
             qIdx, question, answered, results, new List<Guid>());
+    }
+
+    /// <summary>
+    /// Build state Trí nhớ cho broadcast. Pha view: gửi đủ lưới 9 logo. Pha trả lời: ẩn lưới + ẩn đáp án đúng
+    /// + ẩn chọn của người khác (chỉ lộ ai đã trả lời). Pha reveal: lộ AnswerSlug + CorrectIndex + chọn/đúng-sai/time.
+    /// </summary>
+    private static MemoryGameStateDto? BuildMemoryState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.Memory || m.MemoryBoard == null) return null;
+        bool isView = m.Status == MatchStatus.BreakMemoryView;
+        bool reveal = m.MemoryRevealUntil.HasValue;
+        int phase = isView ? 0 : reveal ? 2 : 1;
+        int qIdx = m.MemoryCurrentQuestion;
+
+        MemoryQuestionDto? question = null;
+        string? answerSlug = null;
+        var answered = new List<Guid>();
+        if (!isView && qIdx < m.MemoryBoard.Questions.Count)
+        {
+            var q = m.MemoryBoard.Questions[qIdx];
+            question = new MemoryQuestionDto(q.CellIndex, new List<string>(q.Options), reveal ? q.CorrectIndex : -1);
+            if (reveal) answerSlug = q.AnswerSlug;
+            foreach (var p in m.Players)
+                if (m.MemoryAnswers.TryGetValue(p.UserId, out var l) && l.Count > qIdx && l[qIdx].Answered)
+                    answered.Add(p.UserId);
+        }
+
+        var results = new List<MathPlayerResultDto>();
+        foreach (var p in m.Players)
+        {
+            m.MemoryAnswers.TryGetValue(p.UserId, out var list);
+            list ??= new();
+            int correctCount = list.Count(a => a.Correct);
+            long totalCorrectMs = list.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+            var cur = (qIdx < list.Count) ? list[qIdx] : null;
+            results.Add(new MathPlayerResultDto(
+                p.UserId,
+                reveal && cur != null ? cur.ChosenIndex : -1,
+                cur?.Answered ?? false,
+                reveal && (cur?.Correct ?? false),
+                reveal && cur != null ? cur.ElapsedMs : 0,
+                correctCount,
+                totalCorrectMs));
+        }
+
+        return new MemoryGameStateDto(
+            phase,
+            isView ? new List<string>(m.MemoryBoard.Grid) : null,   // chỉ gửi lưới ở pha view
+            m.MemoryBoard.Questions.Count,
+            qIdx, question, answerSlug, answered, results);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

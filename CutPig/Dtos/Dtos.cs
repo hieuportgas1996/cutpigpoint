@@ -112,11 +112,15 @@ public record MatchPublicStateDto(
     RpsStateDto? Rps = null,
     DateTime? RpsChoiceDeadline = null,
     DateTime? RpsRevealUntil = null,
-    int BreakGame = 0,                 // BreakGameType: 0 none, 1 Rps, 2 Math
+    int BreakGame = 0,                 // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory
     MathQuizStateDto? Math = null,
     DateTime? MathPickDeadline = null,
     DateTime? MathAnswerDeadline = null,
-    DateTime? MathRevealUntil = null);
+    DateTime? MathRevealUntil = null,
+    MemoryGameStateDto? Memory = null,
+    DateTime? MemoryViewDeadline = null,
+    DateTime? MemoryAnswerDeadline = null,
+    DateTime? MemoryRevealUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -164,6 +168,21 @@ public record MathQuizStateDto(
     List<Guid> AnsweredUserIds,       // ai đã trả lời câu hiện tại (không lộ chọn gì)
     List<MathPlayerResultDto> Results,// kết quả tích lũy + (ở reveal) chi tiết câu hiện tại
     List<Guid> FinalRanking);         // chỉ có khi finalize (WaitingNextRound) — thường rỗng trong state
+
+// ---- Giải Lao (Trí nhớ) ----
+public record MemoryQuestionDto(
+    int CellIndex,          // ô 0-8 đang hỏi
+    List<string> Options,   // 4 slug CLB đáp án
+    int CorrectIndex);      // -1 khi đang trả lời, ≥0 ở pha reveal
+public record MemoryGameStateDto(
+    int Phase,              // 0 = xem lưới (view), 1 = đang trả lời, 2 = hiện đáp án (reveal)
+    List<string>? Grid,     // 9 slug CLB (CHỈ gửi ở pha view; null khi đang quiz để ẩn)
+    int TotalQuestions,
+    int CurrentQuestion,
+    MemoryQuestionDto? Question,       // câu hiện tại (null pha view)
+    string? AnswerSlug,                // slug đúng (CHỈ ở pha reveal)
+    List<Guid> AnsweredUserIds,
+    List<MathPlayerResultDto> Results);
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
