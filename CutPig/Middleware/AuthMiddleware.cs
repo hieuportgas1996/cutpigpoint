@@ -18,7 +18,9 @@ public class AuthMiddleware
 
         if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
-            (path.StartsWith("/api/users/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/avatar", StringComparison.OrdinalIgnoreCase)))
+            (HttpMethods.IsGet(context.Request.Method) &&
+             (path.StartsWith("/api/users/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/players/", StringComparison.OrdinalIgnoreCase)) &&
+             path.EndsWith("/avatar", StringComparison.OrdinalIgnoreCase)))
         {
             await _next(context);
             return;
