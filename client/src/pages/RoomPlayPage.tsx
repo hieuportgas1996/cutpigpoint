@@ -817,11 +817,11 @@ export default function RoomPlayPage() {
     ? (gambleScheduledUserId === myUserId ? 'Bạn' : matchState?.players.find(p => p.userId === gambleScheduledUserId)?.displayName ?? '')
     : '';
 
-  // Giải Lao (Oẳn Tù Xì): đặt lịch được nếu đang chơi, chưa biến tấu, chưa dùng quyền, đủ 4 người.
-  const myHasUsedBreak = me?.hasUsedBreak ?? false;
+  // Giải Lao: đặt lịch được nếu đang chơi, chưa biến tấu, còn lượt (tối đa 2 lần/trận), đủ 4 người.
+  const myBreakUsedCount = me?.breakUsedCount ?? 0;
   const canScheduleBreak = matchState?.status === MatchStatus.InProgress
     && noSpecialScheduled
-    && !myHasUsedBreak
+    && myBreakUsedCount < 2
     && (matchState?.players.length === 4);
   const breakScheduled = matchState?.breakScheduled ?? false;
   const breakOrganizerName = matchState?.breakOrganizerId
@@ -1727,9 +1727,9 @@ export default function RoomPlayPage() {
                     <button
                       className="tlmn-options-item"
                       onClick={() => { setOptionsMenuOpen(false); handleScheduleBreak(); }}
-                      title="Random 1 game giải lao (Oẳn Tù Xì / Tính toán / Trí nhớ) — chơi rồi không lặp lại"
+                      title="Tổ chức giải lao — bạn chọn game ở đầu round sau (tối đa 2 lần/trận)"
                     >
-                      🎮 Giải lao zui zẻ
+                      🎮 Giải lao zui zẻ {myBreakUsedCount > 0 && `(còn ${2 - myBreakUsedCount})`}
                     </button>
                   )}
                   {canSurrender && (

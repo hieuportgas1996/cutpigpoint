@@ -66,7 +66,7 @@ public record MatchPlayerDto(
     List<CardDto>? XiDachVisibleCards = null,
     int WinStreak = 0,
     bool IsGambling = false,
-    bool HasUsedBreak = false);
+    int BreakUsedCount = 0);
 
 public record MatchPublicStateDto(
     Guid MatchId,

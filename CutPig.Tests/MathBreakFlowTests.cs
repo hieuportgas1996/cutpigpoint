@@ -45,7 +45,27 @@ public class MathBreakFlowTests
         Assert.True(match.BreakScheduled);
         Assert.Equal(ids[0], match.BreakOrganizerId);
         Assert.Equal(BreakGameType.None, match.BreakGame); // game chọn ở đầu round
-        Assert.True(match.Players[0].HasUsedBreak);
+        Assert.Equal(1, match.Players[0].BreakUsedCount);
+    }
+
+    [Fact]
+    public void Schedule_AllowsTwicePerPlayer_ThenBlocks()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.Status = MatchStatus.InProgress;
+
+        // Lần 1.
+        mgr.ScheduleBreak(roomId, ids[0]);
+        Assert.Equal(1, match.Players[0].BreakUsedCount);
+
+        // Giả lập đã chơi xong round giải lao (xoá cờ schedule) để đặt tiếp lần 2.
+        match.BreakScheduled = false; match.BreakOrganizerId = null;
+        mgr.ScheduleBreak(roomId, ids[0]);
+        Assert.Equal(2, match.Players[0].BreakUsedCount);
+
+        // Lần 3 → chặn (đã dùng hết 2 lượt).
+        match.BreakScheduled = false; match.BreakOrganizerId = null;
+        Assert.Throws<InvalidOperationException>(() => mgr.ScheduleBreak(roomId, ids[0]));
     }
 
     [Fact]

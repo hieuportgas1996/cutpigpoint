@@ -77,8 +77,8 @@ public class MatchPlayer
     /// <summary>True khi player đã dùng quyền "Sát Phạt" (tổ chức xì dách) — 1 lần / TRẬN (giữ qua round).</summary>
     public bool HasUsedXiDach { get; set; }
 
-    /// <summary>True khi player đã dùng quyền "Giải lao zui zẻ" — 1 lần / TRẬN (giữ qua round).</summary>
-    public bool HasUsedBreak { get; set; }
+    /// <summary>Số lần player đã dùng quyền "Giải lao zui zẻ" — tối đa 2 lần / TRẬN (giữ qua round).</summary>
+    public int BreakUsedCount { get; set; }
 
     // ---- Liều Ăn Nhiều (Hot Streak Gamble) ----
     /// <summary>Số ván về Nhất LIÊN TIẾP gần nhất (về trắng/phán-xử thắng cũng = Nhất). Reset 0 khi không về Nhất. Round biến tấu (lễ hội/xì dách) KHÔNG đụng. Giữ qua round. KHÔNG cap — đếm vô hạn (6,7,8…); client hiện "N x 🏆" khi >5.</summary>

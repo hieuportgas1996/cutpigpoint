@@ -338,10 +338,12 @@ public class MatchManager
     /// <summary>
     /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là round giải lao. KHÔNG chọn game ở đây — game được
     /// người tổ chức chọn ở pha BreakSelect đầu round (modal option, 30s → random nếu không chọn).
-    /// Bất kỳ lúc nào trong round InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ đủ 4 người.
+    /// Bất kỳ lúc nào trong round InProgress. Chỉ 1 người/round (BreakScheduled), tối đa 2 lần/TRẬN (BreakUsedCount). CHỈ đủ 4 người.
     /// Loại trừ lẫn nhau với các biến tấu khác.
     /// (Tham số gameType BỎ QUA — giữ chữ ký cho tương thích hub; game chọn ở đầu round.)
     /// </summary>
+    public const int MaxBreakPerPlayer = 2;
+
     public Match ScheduleBreak(Guid roomId, Guid userId, BreakGameType gameType = BreakGameType.None)
     {
         lock (LockFor(roomId))
@@ -353,12 +355,12 @@ public class MatchManager
             EnsureNoSpecialScheduled(match);
             var player = match.Players.FirstOrDefault(p => p.UserId == userId)
                 ?? throw new InvalidOperationException("Bạn không ở trong ván này.");
-            if (player.HasUsedBreak)
-                throw new InvalidOperationException("Bạn đã dùng quyền Giải lao trong trận này.");
+            if (player.BreakUsedCount >= MaxBreakPerPlayer)
+                throw new InvalidOperationException($"Bạn đã dùng hết {MaxBreakPerPlayer} lượt Giải lao trong trận này.");
 
             match.BreakScheduled = true;
             match.BreakOrganizerId = userId;
-            player.HasUsedBreak = true;
+            player.BreakUsedCount++;
             return match;
         }
     }

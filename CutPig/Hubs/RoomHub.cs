@@ -1066,7 +1066,7 @@ public class RoomHub : Hub
                 (m.IsXiDachRound && p.XiDachRevealed) ? p.Hand.Select(c => new CardDto(c.Rank, (int)c.Suit)).ToList() : null,
                 p.WinStreak,
                 p.IsGambling,
-                p.HasUsedBreak)).ToList(),
+                p.BreakUsedCount)).ToList(),
             m.WhiteWinDeadline,
             m.TrickCutDeadline,
             m.PendingTrickWinnerId,

@@ -501,7 +501,7 @@ export interface MatchPlayerPublic {
   xiDachVisibleCards: CardDto[] | null;
   winStreak: number;
   isGambling: boolean;
-  hasUsedBreak: boolean;
+  breakUsedCount: number;
 }
 
 export interface MatchPublicState {
