@@ -127,7 +127,11 @@ public record MatchPublicStateDto(
     DateTime? ReflexAnswerDeadline = null,
     DateTime? ReflexRevealUntil = null,
     SudokuGameStateDto? Sudoku = null,
-    DateTime? SudokuDeadline = null);
+    DateTime? SudokuDeadline = null,
+    MatchPairsStateDto? MatchPairs = null,
+    DateTime? MatchPairsSpinDeadline = null,
+    DateTime? MatchPairsDeadline = null,
+    DateTime? MatchPairsMismatchUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -215,6 +219,17 @@ public record SudokuGameStateDto(
     List<int> Given,         // 16 ô: giá trị 1-4 nếu cho sẵn, 0 nếu ô trống (KHÔNG lộ lời giải)
     int Blanks,              // số ô trống cần điền
     List<SudokuPlayerProgressDto> Progress);  // tiến độ + kết quả từng người
+
+// ---- Giải Lao (Cơ hội) — lật cặp lá bài giống nhau, theo lượt ----
+public record MatchPairsPlayerDto(Guid UserId, int Pairs, int TurnOrder);  // số cặp + thứ tự lượt (1-4; 0 nếu chưa quay)
+public record MatchPairsStateDto(
+    int Phase,                       // 0 = quay thứ tự, 1 = đang chơi
+    List<CardDto?> Cells,            // 16 ô: card nếu ĐÃ match hoặc ĐANG lật ngửa; null = còn úp (ẩn)
+    List<bool> Matched,              // 16 ô: đã match cố định
+    List<int> Flipped,               // các ô đang lật ngửa lượt này (0-2)
+    Guid? TurnUserId,                // người đang tới lượt (pha chơi)
+    bool Spun,                       // đã quay thứ tự chưa
+    List<MatchPairsPlayerDto> Players);  // số cặp + thứ tự lượt từng người
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

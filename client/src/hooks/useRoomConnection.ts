@@ -39,6 +39,8 @@ interface UseRoomConnectionResult {
   submitMemoryAnswer: (optionIndex: number) => Promise<void>;
   submitReflexCell: (cellIndex: number) => Promise<void>;
   submitSudokuCell: (cellIndex: number, value: number) => Promise<void>;
+  spinMatchPairsOrder: () => Promise<void>;
+  flipMatchPairsCell: (cellIndex: number) => Promise<void>;
   drawXiDachCard: () => Promise<void>;
   standXiDach: () => Promise<void>;
   compareXiDach: (targetUserId: string) => Promise<void>;
@@ -324,6 +326,18 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('SubmitSudokuCell', cellIndex, value);
   }, []);
 
+  const spinMatchPairsOrder = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('SpinMatchPairsOrder');
+  }, []);
+
+  const flipMatchPairsCell = useCallback(async (cellIndex: number) => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('FlipMatchPairsCell', cellIndex);
+  }, []);
+
   const drawXiDachCard = useCallback(async () => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -387,7 +401,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, spinMatchPairsOrder, flipMatchPairsCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

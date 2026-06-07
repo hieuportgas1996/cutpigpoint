@@ -348,11 +348,13 @@ export const MatchStatus = {
   BreakSelect: 16,
   BreakIntro: 17,
   BreakSudoku: 18,
+  BreakMatchSpin: 19,
+  BreakMatchPlay: 20,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5, MatchPairs: 6 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -454,6 +456,22 @@ export interface SudokuGameState {
   progress: SudokuPlayerProgress[];
 }
 
+// ---- Giải Lao (Cơ hội) — lật cặp lá bài giống nhau, theo lượt ----
+export interface MatchPairsPlayer {
+  userId: string;
+  pairs: number;
+  turnOrder: number;  // 1-4 (0 nếu chưa quay)
+}
+export interface MatchPairsState {
+  phase: number;                  // 0 quay thứ tự, 1 đang chơi
+  cells: (CardDto | null)[];      // 16 ô: card nếu đã match / đang ngửa; null = còn úp
+  matched: boolean[];             // 16 ô đã match cố định
+  flipped: number[];              // ô đang ngửa lượt này (0-2)
+  turnUserId: string | null;      // người đang tới lượt
+  spun: boolean;                  // đã quay chưa
+  players: MatchPairsPlayer[];
+}
+
 export interface MatchPlayerPublic {
   userId: string;
   displayName: string;
@@ -546,6 +564,10 @@ export interface MatchPublicState {
   reflexRevealUntil: string | null;
   sudoku: SudokuGameState | null;
   sudokuDeadline: string | null;
+  matchPairs: MatchPairsState | null;
+  matchPairsSpinDeadline: string | null;
+  matchPairsDeadline: string | null;
+  matchPairsMismatchUntil: string | null;
 }
 
 export interface PrivateHand {

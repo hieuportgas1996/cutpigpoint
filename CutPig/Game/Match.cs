@@ -21,6 +21,8 @@ public enum MatchStatus
     BreakSelect = 16,            // round Giải lao: người tổ chức đang chọn game (modal option, 30s → random)
     BreakIntro = 17,             // round Giải lao: hiện luật chơi game đã chọn (30s → tự bắt đầu)
     BreakSudoku = 18,            // round Giải lao Trí tuệ: giải Sudoku 4×4 (60s, chung 1 đề)
+    BreakMatchSpin = 19,         // round Giải lao Cơ hội: pha quay thứ tự lượt (20s, tổ chức bấm)
+    BreakMatchPlay = 20,         // round Giải lao Cơ hội: pha lật cặp theo lượt (120s tổng)
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
@@ -32,6 +34,7 @@ public enum BreakGameType
     Memory = 3,   // Trí nhớ (ghi nhớ logo CLB)
     Reflex = 4,   // Phản xạ (click đúng hình/màu nhanh nhất)
     Sudoku = 5,   // Trí tuệ (giải Sudoku 4×4)
+    MatchPairs = 6, // Cơ hội (lật cặp lá bài giống nhau)
 }
 
 public class MatchPlayer
@@ -248,6 +251,26 @@ public class Match
     public DateTime? SudokuStart { get; set; }
     /// <summary>Hết hạn 60s giải; hết → ai chưa xong tính sai (max time) rồi finalize.</summary>
     public DateTime? SudokuDeadline { get; set; }
+
+    // -- Cơ hội (Match Pairs) -- lật cặp lá bài giống nhau, theo lượt
+    /// <summary>Lưới 16 lá (8 cặp giống hệt) của round Cơ hội. Null khi không phải round này.</summary>
+    public List<Card>? MatchPairsBoard { get; set; }
+    /// <summary>16 ô: true = đã lật trúng cặp (cố định lộ). Còn lại úp.</summary>
+    public bool[] MatchPairsMatched { get; set; } = Array.Empty<bool>();
+    /// <summary>Các ô ĐANG lật ngửa lượt này (0..2 ô): ô đầu chờ ô thứ 2; nếu trật → úp lại sau MismatchUntil.</summary>
+    public List<int> MatchPairsFlipped { get; set; } = new();
+    /// <summary>Số cặp mỗi người đã tìm được (key = UserId). Dùng xếp hạng + tính điểm.</summary>
+    public Dictionary<Guid, int> MatchPairsCount { get; set; } = new();
+    /// <summary>Thứ tự lượt sau khi quay (list UserId theo seat đã xáo). Rỗng khi chưa quay.</summary>
+    public List<Guid> MatchPairsTurnOrder { get; set; } = new();
+    /// <summary>Index người đang tới lượt trong MatchPairsTurnOrder.</summary>
+    public int MatchPairsTurnIdx { get; set; }
+    /// <summary>Hết hạn 20s pha quay (tổ chức chưa bấm → server tự quay). Null ngoài pha quay.</summary>
+    public DateTime? MatchPairsSpinDeadline { get; set; }
+    /// <summary>Hết hạn 120s TỔNG ván Cơ hội (hết → kết thúc, xếp hạng theo số cặp). Null ngoài round này.</summary>
+    public DateTime? MatchPairsDeadline { get; set; }
+    /// <summary>Khi lật 2 lá KHÔNG khớp: hiện ~1.5s rồi úp lại + qua lượt. Null khi không chờ úp.</summary>
+    public DateTime? MatchPairsMismatchUntil { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

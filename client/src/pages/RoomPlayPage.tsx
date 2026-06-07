@@ -13,6 +13,7 @@ import { MemoryBreakScreen } from './MemoryBreakScreen';
 import { XiDachMobilePanel } from './XiDachMobilePanel';
 import { ReflexBreakScreen } from './ReflexBreakScreen';
 import { SudokuBreakScreen } from './SudokuBreakScreen';
+import { MatchPairsBreakScreen } from './MatchPairsBreakScreen';
 import { BreakSelectScreen, BreakIntroScreen } from './BreakSelectScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
@@ -386,7 +387,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, spinMatchPairsOrder, flipMatchPairsCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -857,6 +858,19 @@ export default function RoomPlayPage() {
     ? Math.max(0, Math.ceil((new Date(matchState.sudokuDeadline).getTime() - now) / 1000))
     : 0;
 
+  // Giải Lao (Cơ hội — Match Pairs): pha quay thứ tự / pha chơi lật cặp.
+  const isMatchPairsRound = matchState?.status === MatchStatus.BreakMatchSpin || matchState?.status === MatchStatus.BreakMatchPlay;
+  const matchPairs = matchState?.matchPairs ?? null;
+  const mprSpinLeftSec = matchState?.matchPairsSpinDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.matchPairsSpinDeadline).getTime() - now) / 1000))
+    : 0;
+  const mprTotalLeftSec = matchState?.matchPairsDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.matchPairsDeadline).getTime() - now) / 1000))
+    : 0;
+  const mprMismatchActive = matchState?.matchPairsMismatchUntil
+    ? new Date(matchState.matchPairsMismatchUntil).getTime() > now
+    : false;
+
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
@@ -1227,6 +1241,16 @@ export default function RoomPlayPage() {
 
   async function handleSudokuFill(cellIndex: number, value: number) {
     try { await submitSudokuCell(cellIndex, value); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleSpinMatchPairs() {
+    try { await spinMatchPairsOrder(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleFlipMatchPairs(cellIndex: number) {
+    try { await flipMatchPairsCell(cellIndex); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -1845,6 +1869,20 @@ export default function RoomPlayPage() {
           />
         )}
 
+        {isMatchPairsRound && matchPairs && (
+          <MatchPairsBreakScreen
+            mp={matchPairs}
+            players={matchState.players}
+            myUserId={myUserId}
+            isOrganizer={matchState.breakOrganizerId === myUserId}
+            spinLeftSec={mprSpinLeftSec}
+            totalLeftSec={mprTotalLeftSec}
+            mismatchActive={mprMismatchActive}
+            onSpin={handleSpinMatchPairs}
+            onFlip={handleFlipMatchPairs}
+          />
+        )}
+
         {isXiDachRound && isMobile && (
           <XiDachMobilePanel
             players={matchState.players}
@@ -1945,6 +1983,8 @@ export default function RoomPlayPage() {
                       ? `⚡ Giải lao Phản xạ — Ván ${delayedRoundEnd.roundNumber}`
                       : delayedRoundEnd.breakGame === 5
                       ? `🧩 Giải lao Trí tuệ — Ván ${delayedRoundEnd.roundNumber}`
+                      : delayedRoundEnd.breakGame === 6
+                      ? `🎴 Giải lao Cơ hội — Ván ${delayedRoundEnd.roundNumber}`
                       : `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`)
                   : delayedRoundEnd.wasXiDach
                   ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
@@ -2028,7 +2068,7 @@ export default function RoomPlayPage() {
                       : r.wasJudge
                       ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
                       : r.wasBreak
-                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : r.breakGame === 5 ? 'Trí tuệ' : 'Oẳn Tù Xì'}`
+                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : r.breakGame === 5 ? 'Trí tuệ' : r.breakGame === 6 ? 'Cơ hội' : 'Oẳn Tù Xì'}`
                       : `Ván ${r.roundNumber}${winner ? ` · ${winner.displayName} Nhất` : ''}`;
                     return (
                       <details key={`${r.matchId}-${r.roundNumber}`} className="history-item" open={r === roundHistory[roundHistory.length - 1]}>

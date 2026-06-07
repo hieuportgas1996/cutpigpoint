@@ -33,6 +33,9 @@ public class MatchManager
     public static TimeSpan ReflexAnswerTimeout { get; } = TimeSpan.FromSeconds(15);   // 15s tìm + chọn đúng 3 lá theo đề
     public static TimeSpan ReflexRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s hiện ô đúng giữa các lượt
     public static TimeSpan SudokuTimeout { get; } = TimeSpan.FromSeconds(60);         // 60s giải Sudoku 4×4 (Trí tuệ)
+    public static TimeSpan MatchPairsSpinTimeout { get; } = TimeSpan.FromSeconds(20); // 20s pha quay thứ tự (Cơ hội)
+    public static TimeSpan MatchPairsTimeout { get; } = TimeSpan.FromSeconds(120);    // 120s tổng ván lật cặp (Cơ hội)
+    public static TimeSpan MatchPairsMismatchTimeout { get; } = TimeSpan.FromMilliseconds(1500); // 1.5s hiện 2 lá trật rồi úp
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -143,6 +146,15 @@ public class MatchManager
         match.SudokuAnswers.Clear();
         match.SudokuStart = null;
         match.SudokuDeadline = null;
+        match.MatchPairsBoard = null;
+        match.MatchPairsMatched = Array.Empty<bool>();
+        match.MatchPairsFlipped.Clear();
+        match.MatchPairsCount.Clear();
+        match.MatchPairsTurnOrder.Clear();
+        match.MatchPairsTurnIdx = 0;
+        match.MatchPairsSpinDeadline = null;
+        match.MatchPairsDeadline = null;
+        match.MatchPairsMismatchUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -359,7 +371,7 @@ public class MatchManager
                 throw new InvalidOperationException("Không trong pha chọn game giải lao.");
             if (match.BreakOrganizerId != userId)
                 throw new InvalidOperationException("Chỉ người tổ chức được chọn game.");
-            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku))
+            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku or BreakGameType.MatchPairs))
                 throw new InvalidOperationException("Game không hợp lệ.");
             EnterBreakIntro(match, gameType);
             return match;
@@ -382,7 +394,7 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSelect) return false;
             if (!match.BreakSelectDeadline.HasValue || match.BreakSelectDeadline.Value > DateTime.UtcNow) return false;
-            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku };
+            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs };
             EnterBreakIntro(match, games[Random.Shared.Next(games.Length)]);
             return true;
         }
@@ -422,6 +434,7 @@ public class MatchManager
         else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
         else if (match.BreakGame == BreakGameType.Reflex) DealBreakReflexRound(match);
         else if (match.BreakGame == BreakGameType.Sudoku) DealBreakSudokuRound(match);
+        else if (match.BreakGame == BreakGameType.MatchPairs) DealBreakMatchPairsRound(match);
         else DealBreakRound(match); // Rps
     }
 
@@ -1144,6 +1157,164 @@ public class MatchManager
     }
 
     public IEnumerable<Match> AllBreakSudoku() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakSudoku);
+
+    // ---- Giải Lao — Cơ hội (Match Pairs: lật cặp lá bài giống nhau) ----
+    /// <summary>
+    /// Deal round "Giải Lao — Cơ hội": sinh lưới 4×4 = 8 cặp, vào pha QUAY thứ tự (20s; tổ chức bấm hoặc auto).
+    /// KHÔNG đụng PreviousRoundWinnerId.
+    /// </summary>
+    private static void DealBreakMatchPairsRound(Match match)
+    {
+        match.BreakGame = BreakGameType.MatchPairs;
+        match.MatchPairsBoard = MatchPairsGameEngine.BuildBoard(Random.Shared);
+        match.MatchPairsMatched = new bool[MatchPairsGameEngine.GridSize];
+        match.MatchPairsFlipped.Clear();
+        match.MatchPairsCount.Clear();
+        foreach (var p in match.Players) match.MatchPairsCount[p.UserId] = 0;
+        match.MatchPairsTurnOrder.Clear();
+        match.MatchPairsTurnIdx = 0;
+        match.MatchPairsMismatchUntil = null;
+        match.MatchPairsDeadline = null;
+        match.Status = MatchStatus.BreakMatchSpin;
+        match.MatchPairsSpinDeadline = DateTime.UtcNow + MatchPairsSpinTimeout;
+    }
+
+    /// <summary>Người tổ chức bấm "Quay" → random thứ tự lượt cho 4 người → vào pha chơi (120s tổng).</summary>
+    public Match SpinMatchPairsOrder(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchSpin)
+                throw new InvalidOperationException("Không trong pha quay thứ tự.");
+            if (match.BreakOrganizerId != userId)
+                throw new InvalidOperationException("Chỉ người tổ chức được quay.");
+            SpinMatchPairsOrderInternal(match);
+            return match;
+        }
+    }
+
+    private static void SpinMatchPairsOrderInternal(Match match)
+    {
+        var order = match.Players.Select(p => p.UserId).ToList();
+        for (int i = order.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        match.MatchPairsTurnOrder = order;
+        match.MatchPairsTurnIdx = 0;
+        match.MatchPairsSpinDeadline = null;
+        match.MatchPairsMismatchUntil = null;
+        match.Status = MatchStatus.BreakMatchPlay;
+        match.MatchPairsDeadline = DateTime.UtcNow + MatchPairsTimeout;
+    }
+
+    /// <summary>UserId người đang tới lượt lật (theo MatchPairsTurnOrder + Idx). Null nếu chưa quay.</summary>
+    private static Guid? MatchPairsCurrentTurn(Match match)
+        => match.MatchPairsTurnOrder.Count > 0 ? match.MatchPairsTurnOrder[match.MatchPairsTurnIdx % match.MatchPairsTurnOrder.Count] : null;
+
+    /// <summary>
+    /// Player lật 1 ô (0-15) trong lượt mình. Ô đầu → lật ngửa chờ ô thứ 2. Ô thứ 2:
+    /// trúng cặp → cố định lộ + +1 cặp + ĐƯỢC ĐI TIẾP; trật → để ngửa 1.5s (MismatchUntil) rồi timer úp lại + qua lượt.
+    /// Hết 8 cặp → finalize ngay. Không lật khi đang chờ úp / ô đã lộ / ô đang ngửa.
+    /// </summary>
+    public Match FlipMatchPairsCell(Guid roomId, Guid userId, int cellIndex)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchPlay || match.MatchPairsBoard == null)
+                throw new InvalidOperationException("Không trong pha chơi Cơ hội.");
+            if (match.MatchPairsMismatchUntil.HasValue)
+                throw new InvalidOperationException("Đang chờ úp lá, chờ chút.");
+            if (MatchPairsCurrentTurn(match) != userId)
+                throw new InvalidOperationException("Chưa tới lượt bạn.");
+            if (cellIndex < 0 || cellIndex >= MatchPairsGameEngine.GridSize)
+                throw new InvalidOperationException("Ô không hợp lệ.");
+            if (match.MatchPairsMatched[cellIndex])
+                throw new InvalidOperationException("Ô này đã lật rồi.");
+            if (match.MatchPairsFlipped.Contains(cellIndex))
+                throw new InvalidOperationException("Ô này đang ngửa rồi.");
+            if (match.MatchPairsFlipped.Count >= 2)
+                throw new InvalidOperationException("Đã lật đủ 2 lá.");
+
+            match.MatchPairsFlipped.Add(cellIndex);
+            if (match.MatchPairsFlipped.Count < 2) return match; // chờ lá thứ 2
+
+            int a = match.MatchPairsFlipped[0], b = match.MatchPairsFlipped[1];
+            if (MatchPairsGameEngine.IsMatch(match.MatchPairsBoard, a, b))
+            {
+                // Trúng cặp: cố định lộ, +1 cặp, GIỮ lượt (được đi tiếp).
+                match.MatchPairsMatched[a] = true;
+                match.MatchPairsMatched[b] = true;
+                match.MatchPairsFlipped.Clear();
+                match.MatchPairsCount[userId] = match.MatchPairsCount.GetValueOrDefault(userId) + 1;
+                if (match.MatchPairsMatched.All(x => x)) FinalizeBreakMatchPairsRound(match); // hết 8 cặp
+            }
+            else
+            {
+                // Trật: để ngửa 1.5s rồi úp lại + qua lượt (timer ResolveMatchPairsMismatch).
+                match.MatchPairsMismatchUntil = DateTime.UtcNow + MatchPairsMismatchTimeout;
+            }
+            return match;
+        }
+    }
+
+    /// <summary>Timer: hết 1.5s hiện 2 lá trật → úp lại + qua lượt người kế. Trả về true nếu vừa xử lý.</summary>
+    public bool TryResolveMatchPairsMismatch(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchPlay) return false;
+            if (!match.MatchPairsMismatchUntil.HasValue || match.MatchPairsMismatchUntil.Value > DateTime.UtcNow) return false;
+            match.MatchPairsFlipped.Clear();
+            match.MatchPairsMismatchUntil = null;
+            match.MatchPairsTurnIdx++; // qua lượt người kế
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết 120s tổng ván → kết thúc (xếp hạng theo số cặp). Trả về true nếu vừa xử lý.</summary>
+    public bool TryFinalizeMatchPairs(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchPlay) return false;
+            if (!match.MatchPairsDeadline.HasValue || match.MatchPairsDeadline.Value > DateTime.UtcNow) return false;
+            FinalizeBreakMatchPairsRound(match);
+            return true;
+        }
+    }
+
+    /// <summary>Timer: hết 20s pha quay mà chưa bấm → server tự quay. Trả về true nếu vừa xử lý.</summary>
+    public bool TryAutoSpinMatchPairs(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchSpin) return false;
+            if (!match.MatchPairsSpinDeadline.HasValue || match.MatchPairsSpinDeadline.Value > DateTime.UtcNow) return false;
+            SpinMatchPairsOrderInternal(match);
+            return true;
+        }
+    }
+
+    /// <summary>Cơ hội xong: xếp hạng theo SỐ CẶP (desc) → FinalRank 1..4 → WaitingNextRound. Điểm tính ở ComputeMatchPairsScores.</summary>
+    private static void FinalizeBreakMatchPairsRound(Match match)
+    {
+        var ranking = match.Players
+            .OrderByDescending(p => match.MatchPairsCount.GetValueOrDefault(p.UserId))
+            .ThenBy(p => p.SeatIndex)
+            .ToList();
+        for (int rank = 0; rank < ranking.Count; rank++)
+            ranking[rank].FinalRank = rank + 1;
+        match.MatchPairsFlipped.Clear();
+        match.MatchPairsMismatchUntil = null;
+        match.MatchPairsDeadline = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    public IEnumerable<Match> AllBreakMatchSpin() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMatchSpin);
+    public IEnumerable<Match> AllBreakMatchPlay() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMatchPlay);
 
     /// <summary>
     /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
@@ -2637,6 +2808,56 @@ public class MatchManager
         return scores;
     }
 
+    /// <summary>
+    /// Điểm game "Cơ hội" (Match Pairs), 4 người, theo SỐ CẶP match. Xếp giảm dần rồi gom thành các TIER bằng nhau.
+    /// Bảng điểm theo cấu trúc tier (đều zero-sum; người cùng tier điểm bằng nhau):
+    ///  [1,1,1,1] → +2/+1/-1/-2 · [4] (cả 4 bằng) → 0/0/0/0 · [1,3] → +6 / -2 mỗi
+    ///  [2,2] → +2/+2 / -2/-2 · [2,1,1] → +2/+2 / -1 / -3 · [3,1] → +2/+2/+2 / -6
+    ///  [1,2,1] → +4 / +1/+1 / -6 · [1,1,2] → +3 / +1 / -2/-2.
+    /// </summary>
+    private int[] ComputeMatchPairsScores(Match match)
+    {
+        int n = match.Players.Count;
+        var scores = new int[n];
+
+        // Sắp xếp người theo số cặp giảm dần (tie-break seat để ổn định), giữ index gốc (theo seat order Players).
+        var ordered = Enumerable.Range(0, n)
+            .OrderByDescending(i => match.MatchPairsCount.GetValueOrDefault(match.Players[i].UserId))
+            .ThenBy(i => match.Players[i].SeatIndex)
+            .ToList();
+        var counts = ordered.Select(i => match.MatchPairsCount.GetValueOrDefault(match.Players[i].UserId)).ToList();
+
+        // Gom tier theo số cặp bằng nhau (đã giảm dần).
+        var tierSizes = new List<int>();
+        int k = 0;
+        while (k < n)
+        {
+            int j = k;
+            while (j + 1 < n && counts[j + 1] == counts[k]) j++;
+            tierSizes.Add(j - k + 1);
+            k = j + 1;
+        }
+
+        // Điểm cho TỪNG NGƯỜI (theo thứ tự đã xếp hạng) ứng với mỗi mẫu tier.
+        string pattern = string.Join(",", tierSizes);
+        int[] perRank = pattern switch
+        {
+            "4" => new[] { 0, 0, 0, 0 },
+            "1,1,1,1" => new[] { 2, 1, -1, -2 },
+            "1,3" => new[] { 6, -2, -2, -2 },
+            "2,2" => new[] { 2, 2, -2, -2 },
+            "2,1,1" => new[] { 2, 2, -1, -3 },
+            "3,1" => new[] { 2, 2, 2, -6 },
+            "1,2,1" => new[] { 4, 1, 1, -6 },
+            "1,1,2" => new[] { 3, 1, -2, -2 },
+            _ => new[] { 2, 1, -1, -2 }, // fallback an toàn (không nên tới)
+        };
+
+        for (int rank = 0; rank < n; rank++)
+            scores[ordered[rank]] = perRank[rank];
+        return scores;
+    }
+
     public int[] ComputeRoundScores(Match match)
     {
         // Returns score for each player in seat order
@@ -2650,6 +2871,10 @@ public class MatchManager
             // Không ai đúng → hoà 0 hết. Cả 4 đúng → bảng hạng chuẩn +2/+1/-1/-2. Còn lại: bảng đặc biệt theo VD.
             if (match.BreakGame is BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku)
                 return ComputeQuizBreakScores(match);
+
+            // Cơ hội (Match Pairs): tính theo SỐ CẶP match từng người (bảng hạng nhóm riêng).
+            if (match.BreakGame == BreakGameType.MatchPairs)
+                return ComputeMatchPairsScores(match);
 
             // Oẳn Tù Xì (May mắn): theo hạng bracket 1..4 → +2/+1/-1/-2. Zero-sum.
             int[] breakTable = { 2, 1, -1, -2 };

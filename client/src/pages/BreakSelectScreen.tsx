@@ -63,9 +63,21 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
       'Hạng: tùy số người giải được — nhất +6/+3, nhì +2/+1… người không xong bị trừ.',
     ],
   },
+  [BreakGameType.MatchPairs]: {
+    label: 'Cơ hội',
+    emoji: '🎴',
+    tagline: 'Tìm cặp lá bài giống nhau',
+    rules: [
+      'Lưới 4×4 = 16 lá úp, gồm 8 cặp giống hệt nhau.',
+      'Quay xác định thứ tự đi. Tới lượt: lật 2 lá — trúng cặp thì được đi tiếp.',
+      'Lật trật → 2 lá úp lại, qua lượt người kế. Nhớ vị trí để ăn cặp!',
+      'Hết 8 cặp hoặc hết 120 giây thì kết thúc.',
+      'Ai tìm được nhiều cặp nhất → hạng cao; không ai có cặp → hòa.',
+    ],
+  },
 };
 
-const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku];
+const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs];
 
 // Pha 1: người tổ chức chọn game (modal option). Người khác chờ.
 export function BreakSelectScreen({

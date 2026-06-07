@@ -816,6 +816,34 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task SpinMatchPairsOrder()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SpinMatchPairsOrder(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task FlipMatchPairsCell(int cellIndex)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.FlipMatchPairsCell(roomId.Value, auth.Value.UserId, cellIndex); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitRpsChoice(int choice)
     {
         var auth = await AuthenticateAsync();
@@ -1080,7 +1108,11 @@ public class RoomHub : Hub
             m.ReflexAnswerDeadline,
             m.ReflexRevealUntil,
             BuildSudokuState(m),
-            m.SudokuDeadline);
+            m.SudokuDeadline,
+            BuildMatchPairsState(m),
+            m.MatchPairsSpinDeadline,
+            m.MatchPairsDeadline,
+            m.MatchPairsMismatchUntil);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -1167,6 +1199,40 @@ public class RoomHub : Hub
             return new SudokuPlayerProgressDto(p.UserId, filled, solved, ms);
         }).ToList();
         return new SudokuGameStateDto(given, blanks, progress);
+    }
+
+    /// <summary>
+    /// Build state Cơ hội (Match Pairs) cho broadcast. CHỈ lộ card ở ô ĐÃ match hoặc ĐANG lật ngửa lượt này
+    /// (ô còn úp = null để không lộ). Gửi thứ tự lượt + số cặp từng người + người đang tới lượt.
+    /// </summary>
+    private static MatchPairsStateDto? BuildMatchPairsState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.MatchPairs || m.MatchPairsBoard == null) return null;
+        bool spun = m.MatchPairsTurnOrder.Count > 0;
+        int phase = m.Status == MatchStatus.BreakMatchSpin ? 0 : 1;
+        var flipped = new HashSet<int>(m.MatchPairsFlipped);
+
+        var cells = new List<CardDto?>(MatchPairsGameEngine.GridSize);
+        var matched = new List<bool>(MatchPairsGameEngine.GridSize);
+        for (int i = 0; i < MatchPairsGameEngine.GridSize; i++)
+        {
+            bool isMatched = i < m.MatchPairsMatched.Length && m.MatchPairsMatched[i];
+            matched.Add(isMatched);
+            bool reveal = isMatched || flipped.Contains(i);
+            cells.Add(reveal ? new CardDto(m.MatchPairsBoard[i].Rank, (int)m.MatchPairsBoard[i].Suit) : null);
+        }
+
+        Guid? turnUser = spun && phase == 1
+            ? m.MatchPairsTurnOrder[m.MatchPairsTurnIdx % m.MatchPairsTurnOrder.Count]
+            : (Guid?)null;
+
+        var players = m.Players.Select(p =>
+        {
+            int order = m.MatchPairsTurnOrder.IndexOf(p.UserId);
+            return new MatchPairsPlayerDto(p.UserId, m.MatchPairsCount.GetValueOrDefault(p.UserId), order >= 0 ? order + 1 : 0);
+        }).ToList();
+
+        return new MatchPairsStateDto(phase, cells, matched, new List<int>(m.MatchPairsFlipped), turnUser, spun, players);
     }
 
     /// <summary>
