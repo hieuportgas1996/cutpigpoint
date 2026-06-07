@@ -160,10 +160,13 @@ public record MathPlayerResultDto(
     long ElapsedMs,
     int CorrectCount,       // tổng số câu đúng tới thời điểm này
     long TotalCorrectMs);   // tổng thời gian các câu đúng (để hiển thị tốc độ)
+// 1 token hiển thị trong biểu thức: lá bài (IsCard, Rank/Suit) hoặc text thuần (toán tử/ngoặc/"0").
+public record MathTokenDto(bool IsCard, string Text, int Rank, int Suit);
 public record MathQuestionDto(
-    string Expression,
+    string Expression,                  // text thuần (fallback/log)
     List<int> Options,
-    int CorrectIndex);      // CHỈ gửi (≥0) ở pha reveal; -1 khi đang trả lời
+    int CorrectIndex,                   // CHỈ gửi (≥0) ở pha reveal; -1 khi đang trả lời
+    List<MathTokenDto>? ExprTokens = null); // biểu thức dạng token (số 1-9 → lá bài) — client render
 public record MathQuizStateDto(
     int Phase,              // 0 = đang chọn số (BreakMathPick), 1 = đang trả lời, 2 = đang hiện đáp án (reveal)
     List<MathPickDto> Picks,

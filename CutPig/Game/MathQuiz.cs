@@ -14,10 +14,25 @@ namespace CutPig.GameEngine;
 /// </summary>
 public enum MathOp { Add, Sub, Mul, Div }
 
+/// <summary>
+/// 1 token hiển thị trong biểu thức. IsCard=true → 1 lá bài (Rank/Suit, dùng cho chữ số 1-9, suit random,
+/// 1→A/Xì rank14, 2→rank15, 3-9→rank đó); IsCard=false → text thuần (toán tử, ngoặc, hoặc số "0").
+/// </summary>
+public class MathToken
+{
+    public bool IsCard { get; set; }
+    public string Text { get; set; } = "";   // chỉ ý nghĩa khi !IsCard ("+", "(", "0"…)
+    public int Rank { get; set; }             // chỉ ý nghĩa khi IsCard (3..15)
+    public int Suit { get; set; }             // chỉ ý nghĩa khi IsCard (0..3, random)
+
+    public static MathToken T(string text) => new() { IsCard = false, Text = text };
+}
+
 /// <summary>1 phép tính: biểu thức hiển thị (có ngoặc) + đáp số đúng + 4 đáp án trắc nghiệm.</summary>
 public class MathQuestion
 {
-    public string Expression { get; set; } = "";   // vd "1 + (3 × 5) - 5"
+    public string Expression { get; set; } = "";   // vd "1 + (3 × 5) - 5" (text thuần, để log/dedup)
+    public List<MathToken> ExprTokens { get; set; } = new(); // biểu thức dạng token (số 1-9 → lá bài)
     public int Answer { get; set; }                 // đáp số đúng
     public List<int> Options { get; set; } = new(); // 4 đáp án (đã xáo), chứa Answer
     public int CorrectIndex { get; set; }           // index của Answer trong Options
@@ -89,22 +104,25 @@ public static class MathQuizEngine
         }
         var ops = new[] { AllOps[rng.Next(4)], AllOps[rng.Next(4)], AllOps[rng.Next(4)] };
 
+        // Mỗi toán hạng (theo VỊ TRÍ a/b/c/d) → 1 token HIỂN THỊ: số 1-9 thành lá bài (suit random), số 0 giữ "0".
+        var tokA = OperandToken(nums[0], rng);
+        var tokB = OperandToken(nums[1], rng);
+        var tokC = OperandToken(nums[2], rng);
+        var tokD = OperandToken(nums[3], rng);
+        // Token SỐ (giá trị thuần) — chỉ để dựng chuỗi Expression numeric (log/dedup/test).
+        MathToken numTok(int n) => MathToken.T(n.ToString());
+
         // 5 dạng đặt ngoặc cho 4 toán hạng a b c d với 3 toán tử (chọn ngẫu nhiên 1 dạng).
         // Mỗi dạng là 1 cây nhị phân; eval theo dạng (KHÔNG theo precedence chuỗi — ngoặc đã định hình thứ tự).
         int shape = rng.Next(5);
         double a = nums[0], b = nums[1], c = nums[2], d = nums[3];
-        var (val, expr) = shape switch
+        double val = shape switch
         {
-            // ((a ∘ b) ∘ c) ∘ d
-            0 => EvalLeftChain(a, ops, b, c, d),
-            // (a ∘ (b ∘ c)) ∘ d
-            1 => EvalChainLeftGroup(a, ops, b, c, d),
-            // (a ∘ b) ∘ (c ∘ d)
-            2 => EvalTwoGroups(a, ops, b, c, d),
-            // a ∘ ((b ∘ c) ∘ d)
-            3 => EvalRightHeavy(a, ops, b, c, d),
-            // a ∘ (b ∘ (c ∘ d))
-            _ => EvalRightChain(a, ops, b, c, d),
+            0 => ApplyOp(ApplyOp(ApplyOp(a, ops[0], b), ops[1], c), ops[2], d),                 // ((a∘b)∘c)∘d
+            1 => ApplyOp(ApplyOp(a, ops[0], ApplyOp(b, ops[1], c)), ops[2], d),                 // (a∘(b∘c))∘d
+            2 => ApplyOp(ApplyOp(a, ops[0], b), ops[1], ApplyOp(c, ops[2], d)),                 // (a∘b)∘(c∘d)
+            3 => ApplyOp(a, ops[0], ApplyOp(ApplyOp(b, ops[1], c), ops[2], d)),                 // a∘((b∘c)∘d)
+            _ => ApplyOp(a, ops[0], ApplyOp(b, ops[1], ApplyOp(c, ops[2], d))),                 // a∘(b∘(c∘d))
         };
 
         if (double.IsNaN(val) || double.IsInfinity(val)) return null;
@@ -112,61 +130,57 @@ public static class MathQuizEngine
         if (Math.Abs(val - Math.Round(val)) > 1e-9) return null;
         int answer = (int)Math.Round(val);
         if (answer < -200 || answer > 999) return null;
-        return new MathQuestion { Expression = expr, Answer = answer };
+
+        var tokens = BuildTokens(shape, ops, tokA, tokB, tokC, tokD);
+        // Chuỗi numeric (giá trị thuần, có khoảng trắng) cho Expression — giữ tương thích log/dedup/test.
+        var numTokens = BuildTokens(shape, ops, numTok(nums[0]), numTok(nums[1]), numTok(nums[2]), numTok(nums[3]));
+        return new MathQuestion { Expression = NumericString(numTokens), ExprTokens = tokens, Answer = answer };
     }
 
-    private static string F(double x) => ((int)Math.Round(x)).ToString();
-
-    // ---- Các helper eval: trả về (giá trị, biểu thức chuỗi). Kiểm tra chia hết/chia-0 trong ApplyOp. ----
-
-    // ((a ∘ b) ∘ c) ∘ d
-    private static (double, string) EvalLeftChain(double a, MathOp[] ops, double b, double c, double d)
+    /// <summary>Chữ số → token hiển thị: 1-9 thành lá bài (1→A rank14, 2→rank15, 3-9→rank đó; suit random 0-3); 0 giữ text "0".</summary>
+    private static MathToken OperandToken(int digit, Random rng)
     {
-        double l1 = ApplyOp(a, ops[0], b);
-        double l2 = ApplyOp(l1, ops[1], c);
-        double v = ApplyOp(l2, ops[2], d);
-        string e = $"(({F(a)} {OpSymbol(ops[0])} {F(b)}) {OpSymbol(ops[1])} {F(c)}) {OpSymbol(ops[2])} {F(d)}";
-        return (v, e);
+        if (digit == 0) return MathToken.T("0");
+        int rank = digit == 1 ? 14 : digit == 2 ? 15 : digit; // 1→A(14), 2→"2"(15), 3-9→rank
+        return new MathToken { IsCard = true, Rank = rank, Suit = rng.Next(4) };
     }
 
-    // (a ∘ (b ∘ c)) ∘ d
-    private static (double, string) EvalChainLeftGroup(double a, MathOp[] ops, double b, double c, double d)
+    /// <summary>Ghép token toán hạng + toán tử + ngoặc theo 1 trong 5 dạng cây (khớp shape ở TryBuildOne).</summary>
+    private static List<MathToken> BuildTokens(int shape, MathOp[] ops, MathToken a, MathToken b, MathToken c, MathToken d)
     {
-        double inner = ApplyOp(b, ops[1], c);
-        double left = ApplyOp(a, ops[0], inner);
-        double v = ApplyOp(left, ops[2], d);
-        string e = $"({F(a)} {OpSymbol(ops[0])} ({F(b)} {OpSymbol(ops[1])} {F(c)})) {OpSymbol(ops[2])} {F(d)}";
-        return (v, e);
+        MathToken op(int i) => MathToken.T(OpSymbol(ops[i]));
+        MathToken lp() => MathToken.T("(");
+        MathToken rp() => MathToken.T(")");
+        return shape switch
+        {
+            // ((a ∘ b) ∘ c) ∘ d
+            0 => new() { lp(), lp(), a, op(0), b, rp(), op(1), c, rp(), op(2), d },
+            // (a ∘ (b ∘ c)) ∘ d
+            1 => new() { lp(), a, op(0), lp(), b, op(1), c, rp(), rp(), op(2), d },
+            // (a ∘ b) ∘ (c ∘ d)
+            2 => new() { lp(), a, op(0), b, rp(), op(1), lp(), c, op(2), d, rp() },
+            // a ∘ ((b ∘ c) ∘ d)
+            3 => new() { a, op(0), lp(), lp(), b, op(1), c, rp(), op(2), d, rp() },
+            // a ∘ (b ∘ (c ∘ d))
+            _ => new() { a, op(0), lp(), b, op(1), lp(), c, op(2), d, rp(), rp() },
+        };
     }
 
-    // (a ∘ b) ∘ (c ∘ d)
-    private static (double, string) EvalTwoGroups(double a, MathOp[] ops, double b, double c, double d)
+    /// <summary>
+    /// Chuỗi numeric có khoảng trắng từ các token SỐ thuần (toán tử/ngoặc + số) — dùng cho Expression
+    /// (log/dedup/test). Quy tắc cách: cách quanh toán tử, không cách sau "(" / trước ")".
+    /// </summary>
+    private static string NumericString(List<MathToken> tokens)
     {
-        double l = ApplyOp(a, ops[0], b);
-        double r = ApplyOp(c, ops[2], d);
-        double v = ApplyOp(l, ops[1], r);
-        string e = $"({F(a)} {OpSymbol(ops[0])} {F(b)}) {OpSymbol(ops[1])} ({F(c)} {OpSymbol(ops[2])} {F(d)})";
-        return (v, e);
-    }
-
-    // a ∘ ((b ∘ c) ∘ d)
-    private static (double, string) EvalRightHeavy(double a, MathOp[] ops, double b, double c, double d)
-    {
-        double inner = ApplyOp(b, ops[1], c);
-        double right = ApplyOp(inner, ops[2], d);
-        double v = ApplyOp(a, ops[0], right);
-        string e = $"{F(a)} {OpSymbol(ops[0])} (({F(b)} {OpSymbol(ops[1])} {F(c)}) {OpSymbol(ops[2])} {F(d)})";
-        return (v, e);
-    }
-
-    // a ∘ (b ∘ (c ∘ d))
-    private static (double, string) EvalRightChain(double a, MathOp[] ops, double b, double c, double d)
-    {
-        double inner = ApplyOp(c, ops[2], d);
-        double right = ApplyOp(b, ops[1], inner);
-        double v = ApplyOp(a, ops[0], right);
-        string e = $"{F(a)} {OpSymbol(ops[0])} ({F(b)} {OpSymbol(ops[1])} ({F(c)} {OpSymbol(ops[2])} {F(d)}))";
-        return (v, e);
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string s = tokens[i].Text;
+            bool isOp = s is "+" or "-" or "×" or "÷";
+            if (isOp) { sb.Append(' ').Append(s).Append(' '); }
+            else sb.Append(s);
+        }
+        return sb.ToString().Trim();
     }
 
     /// <summary>Áp toán tử. Chia: trả NaN nếu chia 0 hoặc không chia hết (→ caller loại bỏ phép này).</summary>
@@ -204,7 +218,7 @@ public static class MathQuizEngine
 
     private static MathQuestion CloneWithFreshOptions(MathQuestion src, Random rng)
     {
-        var q = new MathQuestion { Expression = src.Expression, Answer = src.Answer };
+        var q = new MathQuestion { Expression = src.Expression, ExprTokens = src.ExprTokens, Answer = src.Answer };
         BuildOptions(q, rng);
         return q;
     }

@@ -1,9 +1,27 @@
 import { useMemo } from 'react';
-import type { MatchPlayerPublic, MathQuizState } from '../api';
+import type { MatchPlayerPublic, MathQuizState, MathToken } from '../api';
 import { Avatar } from '../ui/Avatar';
+import { CardSvg } from '../game/CardSvg';
+import { cardFromDto } from '../game/cards';
 import './math-break.css';
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+// Render biểu thức: số 1-9 hiện thành LÁ BÀI nhỏ, toán tử/ngoặc/"0" hiện text.
+function ExprTokens({ tokens, fallback }: { tokens: MathToken[] | null; fallback: string }) {
+  if (!tokens || tokens.length === 0) return <>{fallback}</>;
+  return (
+    <span className="math-expr-tokens">
+      {tokens.map((t, i) =>
+        t.isCard ? (
+          <CardSvg key={i} card={cardFromDto({ rank: t.rank, suit: t.suit })} size="sm" />
+        ) : (
+          <span key={i} className={`math-expr-text ${t.text === '(' || t.text === ')' ? 'paren' : ''}`}>{t.text}</span>
+        )
+      )}
+    </span>
+  );
+}
 
 /**
  * Màn "Giải lao — Tính toán" full-screen overlay. 3 pha (math.phase):
@@ -95,8 +113,11 @@ export function MathBreakScreen({
           {!reveal && <> · <b className={answerLeftSec <= 2 ? 'low' : ''}>{answerLeftSec}s</b></>}
         </div>
 
-        {/* Phép tính */}
-        <div className="math-expr">{q?.expression} <span className="math-eq">= ?</span></div>
+        {/* Phép tính — số 1-9 hiện thành lá bài */}
+        <div className="math-expr">
+          <ExprTokens tokens={q?.exprTokens ?? null} fallback={q?.expression ?? ''} />
+          <span className="math-eq">= ?</span>
+        </div>
 
         {/* 4 đáp án */}
         <div className="math-options">

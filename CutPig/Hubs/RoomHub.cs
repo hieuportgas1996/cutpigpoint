@@ -1096,7 +1096,8 @@ public class RoomHub : Hub
         if (!isPick && m.MathQuestions != null && qIdx < m.MathQuestions.Count)
         {
             var q = m.MathQuestions[qIdx];
-            question = new MathQuestionDto(q.Expression, new List<int>(q.Options), reveal ? q.CorrectIndex : -1);
+            var exprTokens = q.ExprTokens.Select(t => new MathTokenDto(t.IsCard, t.Text, t.Rank, t.Suit)).ToList();
+            question = new MathQuestionDto(q.Expression, new List<int>(q.Options), reveal ? q.CorrectIndex : -1, exprTokens);
             foreach (var p in m.Players)
                 if (m.MathAnswers.TryGetValue(p.UserId, out var l) && l.Count > qIdx && l[qIdx].Answered)
                     answered.Add(p.UserId);

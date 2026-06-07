@@ -99,6 +99,37 @@ public class MathQuizTests
     }
 
     [Fact]
+    public void BuildQuestions_ExprTokens_MapDigitsToCards()
+    {
+        var rng = new Random(99);
+        for (int trial = 0; trial < 200; trial++)
+        {
+            var digits = Enumerable.Range(0, 4).Select(_ => rng.Next(0, 10)).ToList();
+            var qs = MathQuizEngine.BuildQuestions(digits, rng);
+            foreach (var q in qs)
+            {
+                Assert.NotEmpty(q.ExprTokens);
+                foreach (var t in q.ExprTokens)
+                {
+                    if (t.IsCard)
+                    {
+                        // Lá bài: rank ∈ {3..9, 14(A), 15(2)} (số 1→14, 2→15, 3-9→rank đó). 0 KHÔNG ra lá.
+                        Assert.True((t.Rank >= 3 && t.Rank <= 9) || t.Rank == 14 || t.Rank == 15, $"rank {t.Rank}");
+                        Assert.InRange(t.Suit, 0, 3);
+                    }
+                    else
+                    {
+                        // Text: toán tử, ngoặc, hoặc "0" (số 0 giữ nguyên).
+                        Assert.Contains(t.Text, new[] { "+", "-", "×", "÷", "(", ")", "0" });
+                    }
+                }
+                // Không bao giờ có lá bài rank 1 hay 2-as-digit nhầm: số 1 phải là A(14), số 2 phải là rank15.
+                Assert.DoesNotContain(q.ExprTokens, t => t.IsCard && (t.Rank == 1 || t.Rank == 2));
+            }
+        }
+    }
+
+    [Fact]
     public void Rank_MoreCorrect_RanksHigher()
     {
         var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };

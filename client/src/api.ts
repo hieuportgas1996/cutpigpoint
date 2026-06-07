@@ -388,10 +388,17 @@ export interface MathPlayerResult {
   correctCount: number;
   totalCorrectMs: number;
 }
+export interface MathToken {
+  isCard: boolean;
+  text: string;             // toán tử/ngoặc/"0" khi !isCard
+  rank: number;             // 3..15 khi isCard
+  suit: number;             // 0..3 khi isCard
+}
 export interface MathQuestion {
   expression: string;
   options: number[];
   correctIndex: number;     // -1 khi đang trả lời, ≥0 ở pha reveal
+  exprTokens: MathToken[] | null;  // biểu thức dạng token (số 1-9 → lá bài) — client render
 }
 export interface MathQuizState {
   phase: number;            // 0 chọn số, 1 trả lời, 2 hiện đáp án
