@@ -29,6 +29,7 @@
 .mpr-sub { font-size: 14px; color: #e2c089; margin: 5px 0 14px; font-weight: 600; }
 .mpr-sub .low { color: #ff7a6b; }
 .mpr-myturn { color: #8fe388; }
+.mpr-total { font-size: 12px; color: #c9a86f; }
 
 .mpr-spin-btn {
   margin: 6px 0 14px;

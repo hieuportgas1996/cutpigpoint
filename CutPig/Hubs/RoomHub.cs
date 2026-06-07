@@ -1112,7 +1112,8 @@ public class RoomHub : Hub
             BuildMatchPairsState(m),
             m.MatchPairsSpinDeadline,
             m.MatchPairsDeadline,
-            m.MatchPairsMismatchUntil);
+            m.MatchPairsMismatchUntil,
+            m.MatchPairsTurnDeadline);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)

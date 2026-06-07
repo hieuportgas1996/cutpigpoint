@@ -14,7 +14,7 @@ const ORDER_MEDAL = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
  * Ô còn úp = mặt sau; ô đã match / đang ngửa = hiện lá. Đồng bộ qua server.
  */
 export function MatchPairsBreakScreen({
-  mp, players, myUserId, isOrganizer, spinLeftSec, totalLeftSec, mismatchActive, onSpin, onFlip,
+  mp, players, myUserId, isOrganizer, spinLeftSec, totalLeftSec, turnLeftSec, mismatchActive, onSpin, onFlip,
 }: {
   mp: MatchPairsState;
   players: MatchPlayerPublic[];
@@ -22,6 +22,7 @@ export function MatchPairsBreakScreen({
   isOrganizer: boolean;
   spinLeftSec: number;
   totalLeftSec: number;
+  turnLeftSec: number;       // 10s đồng hồ lượt hiện tại
   mismatchActive: boolean;   // đang chờ úp 2 lá trật (khoá click)
   onSpin: () => void;
   onFlip: (cellIndex: number) => void;
@@ -79,7 +80,8 @@ export function MatchPairsBreakScreen({
         <div className="mpr-title">🎴 Cơ hội</div>
         <div className="mpr-sub">
           {isMyTurn ? <b className="mpr-myturn">Lượt của bạn — lật 2 lá!</b> : <>Lượt: <b>{turnName}</b></>}
-          {' · '}<b className={totalLeftSec <= 15 ? 'low' : ''}>{totalLeftSec}s</b>
+          {!mismatchActive && <> · ⏱ <b className={turnLeftSec <= 3 ? 'low' : ''}>{turnLeftSec}s</b></>}
+          {' · '}<span className="mpr-total">⌛ {totalLeftSec}s</span>
         </div>
 
         {/* Lưới 4×4 */}

@@ -568,6 +568,7 @@ export interface MatchPublicState {
   matchPairsSpinDeadline: string | null;
   matchPairsDeadline: string | null;
   matchPairsMismatchUntil: string | null;
+  matchPairsTurnDeadline: string | null;
 }
 
 export interface PrivateHand {

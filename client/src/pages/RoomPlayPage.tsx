@@ -870,6 +870,9 @@ export default function RoomPlayPage() {
   const mprMismatchActive = matchState?.matchPairsMismatchUntil
     ? new Date(matchState.matchPairsMismatchUntil).getTime() > now
     : false;
+  const mprTurnLeftSec = matchState?.matchPairsTurnDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.matchPairsTurnDeadline).getTime() - now) / 1000))
+    : 0;
 
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
@@ -1877,6 +1880,7 @@ export default function RoomPlayPage() {
             isOrganizer={matchState.breakOrganizerId === myUserId}
             spinLeftSec={mprSpinLeftSec}
             totalLeftSec={mprTotalLeftSec}
+            turnLeftSec={mprTurnLeftSec}
             mismatchActive={mprMismatchActive}
             onSpin={handleSpinMatchPairs}
             onFlip={handleFlipMatchPairs}

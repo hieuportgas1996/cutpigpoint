@@ -150,6 +150,34 @@ public class MatchPairsGameTests
     }
 
     [Fact]
+    public void Flow_TurnTimeout_AutoFlipsMismatch_NoPairGained()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.IsBreakRound = true; match.BreakGame = BreakGameType.MatchPairs;
+        typeof(MatchManager).GetMethod("DealBreakMatchPairsRound", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, new object[] { match });
+        match.BreakOrganizerId = ids[0];
+        mgr.SpinMatchPairsOrder(roomId, ids[0]);
+        var first = match.MatchPairsTurnOrder[0];
+
+        // Hết 10s lượt mà chưa lật gì → auto lật 2 lá TRẬT (8 cặp còn nguyên nên luôn tạo được trật).
+        Assert.NotNull(match.MatchPairsTurnDeadline);
+        match.MatchPairsTurnDeadline = DateTime.UtcNow.AddSeconds(-1);
+        Assert.True(mgr.TryAutoFlipMatchPairsTurn(roomId));
+
+        // Auto lật trật → vào pha chờ úp 1.5s, KHÔNG ai được cặp.
+        Assert.NotNull(match.MatchPairsMismatchUntil);
+        Assert.Equal(2, match.MatchPairsFlipped.Count);
+        Assert.Equal(0, match.MatchPairsCount[first]);
+
+        // Hết 1.5s → úp + qua lượt người kế.
+        match.MatchPairsMismatchUntil = DateTime.UtcNow.AddSeconds(-1);
+        Assert.True(mgr.TryResolveMatchPairsMismatch(roomId));
+        Assert.Equal(match.MatchPairsTurnOrder[1], match.MatchPairsTurnOrder[match.MatchPairsTurnIdx % 4]);
+        Assert.NotNull(match.MatchPairsTurnDeadline); // lượt mới có đồng hồ 10s
+    }
+
+    [Fact]
     public void Flow_NotYourTurn_Throws()
     {
         var (mgr, match, roomId, ids) = Setup();

@@ -105,7 +105,7 @@ public class MathBreakFlowTests
 
         Assert.True(mgr.TryAutoSelectBreakGame(roomId));
         Assert.Equal(MatchStatus.BreakIntro, match.Status);
-        Assert.Contains(match.BreakGame, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
+        Assert.Contains(match.BreakGame, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs });
         Assert.NotNull(match.BreakIntroDeadline);
     }
 

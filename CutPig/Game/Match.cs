@@ -267,8 +267,10 @@ public class Match
     public int MatchPairsTurnIdx { get; set; }
     /// <summary>Hết hạn 20s pha quay (tổ chức chưa bấm → server tự quay). Null ngoài pha quay.</summary>
     public DateTime? MatchPairsSpinDeadline { get; set; }
-    /// <summary>Hết hạn 120s TỔNG ván Cơ hội (hết → kết thúc, xếp hạng theo số cặp). Null ngoài round này.</summary>
+    /// <summary>Hết hạn 300s TỔNG ván Cơ hội (hết → kết thúc, xếp hạng theo số cặp). Null ngoài round này.</summary>
     public DateTime? MatchPairsDeadline { get; set; }
+    /// <summary>Hết hạn 10s LƯỢT hiện tại; hết → auto lật ngẫu nhiên 2 lá TRẬT rồi qua lượt. Reset mỗi lượt.</summary>
+    public DateTime? MatchPairsTurnDeadline { get; set; }
     /// <summary>Khi lật 2 lá KHÔNG khớp: hiện ~1.5s rồi úp lại + qua lượt. Null khi không chờ úp.</summary>
     public DateTime? MatchPairsMismatchUntil { get; set; }
 

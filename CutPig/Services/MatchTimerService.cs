@@ -270,7 +270,9 @@ public class MatchTimerService : BackgroundService
                 }
                 foreach (var match in _matches.AllBreakMatchPlay().ToList())
                 {
-                    bool changed = _matches.TryResolveMatchPairsMismatch(match.RoomId) || _matches.TryFinalizeMatchPairs(match.RoomId);
+                    bool changed = _matches.TryResolveMatchPairsMismatch(match.RoomId)
+                        || _matches.TryAutoFlipMatchPairsTurn(match.RoomId)
+                        || _matches.TryFinalizeMatchPairs(match.RoomId);
                     if (changed)
                     {
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);

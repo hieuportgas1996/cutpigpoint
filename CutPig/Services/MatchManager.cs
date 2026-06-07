@@ -34,7 +34,8 @@ public class MatchManager
     public static TimeSpan ReflexRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s hiện ô đúng giữa các lượt
     public static TimeSpan SudokuTimeout { get; } = TimeSpan.FromSeconds(60);         // 60s giải Sudoku 4×4 (Trí tuệ)
     public static TimeSpan MatchPairsSpinTimeout { get; } = TimeSpan.FromSeconds(20); // 20s pha quay thứ tự (Cơ hội)
-    public static TimeSpan MatchPairsTimeout { get; } = TimeSpan.FromSeconds(120);    // 120s tổng ván lật cặp (Cơ hội)
+    public static TimeSpan MatchPairsTimeout { get; } = TimeSpan.FromSeconds(300);    // 300s tổng ván lật cặp (Cơ hội)
+    public static TimeSpan MatchPairsTurnTimeout { get; } = TimeSpan.FromSeconds(10); // 10s/lượt; hết → auto lật trật + qua lượt
     public static TimeSpan MatchPairsMismatchTimeout { get; } = TimeSpan.FromMilliseconds(1500); // 1.5s hiện 2 lá trật rồi úp
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
@@ -154,6 +155,7 @@ public class MatchManager
         match.MatchPairsTurnIdx = 0;
         match.MatchPairsSpinDeadline = null;
         match.MatchPairsDeadline = null;
+        match.MatchPairsTurnDeadline = null;
         match.MatchPairsMismatchUntil = null;
         foreach (var p in match.Players)
         {
@@ -1207,7 +1209,12 @@ public class MatchManager
         match.MatchPairsMismatchUntil = null;
         match.Status = MatchStatus.BreakMatchPlay;
         match.MatchPairsDeadline = DateTime.UtcNow + MatchPairsTimeout;
+        match.MatchPairsTurnDeadline = DateTime.UtcNow + MatchPairsTurnTimeout;
     }
+
+    /// <summary>Bắt đầu lượt mới: reset đồng hồ 10s/lượt (gọi sau quay / sau trúng giữ lượt / sau qua lượt).</summary>
+    private static void StartMatchPairsTurn(Match match)
+        => match.MatchPairsTurnDeadline = DateTime.UtcNow + MatchPairsTurnTimeout;
 
     /// <summary>UserId người đang tới lượt lật (theo MatchPairsTurnOrder + Idx). Null nếu chưa quay.</summary>
     private static Guid? MatchPairsCurrentTurn(Match match)
@@ -1243,17 +1250,19 @@ public class MatchManager
             int a = match.MatchPairsFlipped[0], b = match.MatchPairsFlipped[1];
             if (MatchPairsGameEngine.IsMatch(match.MatchPairsBoard, a, b))
             {
-                // Trúng cặp: cố định lộ, +1 cặp, GIỮ lượt (được đi tiếp).
+                // Trúng cặp: cố định lộ, +1 cặp, GIỮ lượt (được đi tiếp) → reset 10s/lượt.
                 match.MatchPairsMatched[a] = true;
                 match.MatchPairsMatched[b] = true;
                 match.MatchPairsFlipped.Clear();
                 match.MatchPairsCount[userId] = match.MatchPairsCount.GetValueOrDefault(userId) + 1;
                 if (match.MatchPairsMatched.All(x => x)) FinalizeBreakMatchPairsRound(match); // hết 8 cặp
+                else StartMatchPairsTurn(match);
             }
             else
             {
-                // Trật: để ngửa 1.5s rồi úp lại + qua lượt (timer ResolveMatchPairsMismatch).
+                // Trật: để ngửa 1.5s rồi úp lại + qua lượt (timer ResolveMatchPairsMismatch). Tắt đồng hồ lượt.
                 match.MatchPairsMismatchUntil = DateTime.UtcNow + MatchPairsMismatchTimeout;
+                match.MatchPairsTurnDeadline = null;
             }
             return match;
         }
@@ -1269,6 +1278,75 @@ public class MatchManager
             match.MatchPairsFlipped.Clear();
             match.MatchPairsMismatchUntil = null;
             match.MatchPairsTurnIdx++; // qua lượt người kế
+            StartMatchPairsTurn(match); // reset 10s cho lượt mới
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Timer: hết 10s lượt hiện tại (chưa lật đủ 2 lá) → auto lật ngẫu nhiên cho ĐỦ 2 lá TRẬT với nhau
+    /// (nếu chỉ còn 1 cặp cuối thì buộc lật trúng), rồi vào pha hiện 1.5s như lật trật. Trả về true nếu vừa xử lý.
+    /// </summary>
+    public bool TryAutoFlipMatchPairsTurn(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchPlay || match.MatchPairsBoard == null) return false;
+            if (match.MatchPairsMismatchUntil.HasValue) return false; // đang chờ úp, không phải lượt sống
+            if (!match.MatchPairsTurnDeadline.HasValue || match.MatchPairsTurnDeadline.Value > DateTime.UtcNow) return false;
+
+            // Các ô úp còn lại (chưa match, chưa đang ngửa).
+            var avail = Enumerable.Range(0, MatchPairsGameEngine.GridSize)
+                .Where(i => !match.MatchPairsMatched[i] && !match.MatchPairsFlipped.Contains(i))
+                .ToList();
+
+            // Lật ngẫu nhiên cho đủ 2 lá, ƯU TIÊN tạo cặp TRẬT (không khớp với lá đã ngửa).
+            while (match.MatchPairsFlipped.Count < 2 && avail.Count > 0)
+            {
+                int pick;
+                if (match.MatchPairsFlipped.Count == 1)
+                {
+                    int first = match.MatchPairsFlipped[0];
+                    var nonMatch = avail.Where(i => !MatchPairsGameEngine.IsMatch(match.MatchPairsBoard, first, i)).ToList();
+                    var pool = nonMatch.Count > 0 ? nonMatch : avail; // chỉ còn cặp cuối → buộc trúng
+                    pick = pool[Random.Shared.Next(pool.Count)];
+                }
+                else
+                {
+                    pick = avail[Random.Shared.Next(avail.Count)];
+                }
+                match.MatchPairsFlipped.Add(pick);
+                avail.Remove(pick);
+            }
+
+            // Chốt như FlipMatchPairsCell lá thứ 2.
+            match.MatchPairsTurnDeadline = null;
+            if (match.MatchPairsFlipped.Count == 2)
+            {
+                int a = match.MatchPairsFlipped[0], b = match.MatchPairsFlipped[1];
+                if (MatchPairsGameEngine.IsMatch(match.MatchPairsBoard, a, b))
+                {
+                    // Buộc trúng (cặp cuối): cố định + +1 cho người đang tới lượt, giữ lượt.
+                    var cur = MatchPairsCurrentTurn(match);
+                    match.MatchPairsMatched[a] = true;
+                    match.MatchPairsMatched[b] = true;
+                    match.MatchPairsFlipped.Clear();
+                    if (cur is Guid g) match.MatchPairsCount[g] = match.MatchPairsCount.GetValueOrDefault(g) + 1;
+                    if (match.MatchPairsMatched.All(x => x)) FinalizeBreakMatchPairsRound(match);
+                    else StartMatchPairsTurn(match);
+                }
+                else
+                {
+                    // Trật → hiện 1.5s rồi úp + qua lượt.
+                    match.MatchPairsMismatchUntil = DateTime.UtcNow + MatchPairsMismatchTimeout;
+                }
+            }
+            else
+            {
+                // Không còn ô để lật (cực hiếm) → qua lượt luôn.
+                match.MatchPairsTurnIdx++;
+                StartMatchPairsTurn(match);
+            }
             return true;
         }
     }
@@ -1309,6 +1387,7 @@ public class MatchManager
         match.MatchPairsFlipped.Clear();
         match.MatchPairsMismatchUntil = null;
         match.MatchPairsDeadline = null;
+        match.MatchPairsTurnDeadline = null;
         match.Status = MatchStatus.WaitingNextRound;
         match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
