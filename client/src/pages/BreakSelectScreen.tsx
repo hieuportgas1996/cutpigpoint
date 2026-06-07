@@ -70,31 +70,33 @@ export function BreakSelectScreen({
     <div className="brk-overlay">
       <div className="brk-card" onClick={e => e.stopPropagation()}>
         <div className="brk-title">🎮 Giải lao zui zẻ</div>
-        {iAmOrganizer ? (
-          <>
-            <div className="brk-sub">Chọn một trò chơi cho cả bàn ({leftSec}s)</div>
-            <div className="brk-options">
-              {GAME_ORDER.map(gt => {
-                const meta = BREAK_GAME_META[gt];
-                return (
-                  <button key={gt} className="brk-opt" onClick={() => onSelect(gt)}>
-                    <span className="brk-opt-emoji">{meta.emoji}</span>
-                    <span className="brk-opt-label">{meta.label}</span>
-                    <span className="brk-opt-tag">{meta.tagline}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="brk-note">Không chọn kịp sẽ bốc ngẫu nhiên 1 trò.</div>
-          </>
-        ) : (
-          <div className="brk-waiting">
-            <div className="brk-spinner" />
-            <div className="brk-sub">
-              <b>{organizerName || 'Người tổ chức'}</b> đang chọn trò chơi… ({leftSec}s)
-            </div>
-          </div>
-        )}
+        <div className="brk-sub">
+          {iAmOrganizer
+            ? <>Chọn một trò chơi cho cả bàn ({leftSec}s)</>
+            : <><b>{organizerName || 'Người tổ chức'}</b> đang chọn trò chơi… ({leftSec}s)</>}
+        </div>
+        <div className="brk-options">
+          {GAME_ORDER.map(gt => {
+            const meta = BREAK_GAME_META[gt];
+            return (
+              <button
+                key={gt}
+                className="brk-opt"
+                disabled={!iAmOrganizer}
+                onClick={iAmOrganizer ? () => onSelect(gt) : undefined}
+              >
+                <span className="brk-opt-emoji">{meta.emoji}</span>
+                <span className="brk-opt-label">{meta.label}</span>
+                <span className="brk-opt-tag">{meta.tagline}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="brk-note">
+          {iAmOrganizer
+            ? 'Không chọn kịp sẽ bốc ngẫu nhiên 1 trò.'
+            : 'Chỉ người tổ chức được chọn — bạn cùng xem nhé.'}
+        </div>
       </div>
     </div>
   );
