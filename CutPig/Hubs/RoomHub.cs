@@ -814,6 +814,9 @@ public class RoomHub : Hub
         catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
 
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Mọi người giải xong → round finalize NGAY trong hub → tự emit RoundEnd.
+        if (match.Status == GameEngine.MatchStatus.WaitingNextRound)
+            await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
     }
 
     public async Task SpinMatchPairsOrder()
@@ -842,6 +845,9 @@ public class RoomHub : Hub
         catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
 
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Lật trúng cặp cuối → round finalize NGAY trong hub (không qua timer) → phải tự emit RoundEnd.
+        if (match.Status == GameEngine.MatchStatus.WaitingNextRound)
+            await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
     }
 
     public async Task SubmitRpsChoice(int choice)
