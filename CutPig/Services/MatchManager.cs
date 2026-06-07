@@ -16,6 +16,8 @@ public class MatchManager
     private const int VoteResetThreshold = 2; // số phiếu "Đồng ý" cần để chia bài lại
     public const int GambleStreakThreshold = 5; // số ván về Nhất liên tiếp để được mời "Liều Ăn Nhiều"
     public static TimeSpan GambleOfferTimeout { get; } = TimeSpan.FromSeconds(30); // hết hạn lời mời liều → auto từ chối
+    public static TimeSpan BreakSelectTimeout { get; } = TimeSpan.FromSeconds(30);  // 30s người tổ chức chọn game giải lao → hết giờ random
+    public static TimeSpan BreakIntroTimeout { get; } = TimeSpan.FromSeconds(30);   // 30s hiện luật chơi game đã chọn → tự bắt đầu
     public static TimeSpan RpsChoiceTimeout { get; } = TimeSpan.FromSeconds(20);    // 20s chọn kéo/búa/bao MỖI ván giải lao
     public static TimeSpan RpsRevealTimeout { get; } = TimeSpan.FromSeconds(4);     // 4s xem kết quả ván RPS (lắc ~0.7s + lật + ngắm) trước khi qua ván kế
     public static TimeSpan FestivalRevealViewTimeout { get; } = TimeSpan.FromSeconds(5);  // xem bài sau khi lật hết
@@ -107,6 +109,8 @@ public class MatchManager
         match.IsGambleRound = false;
         match.IsBreakRound = false;
         match.BreakGame = BreakGameType.None;
+        match.BreakSelectDeadline = null;
+        match.BreakIntroDeadline = null;
         match.Rps = null;
         match.RpsChoiceDeadline = null;
         match.RpsRevealUntil = null;
@@ -177,21 +181,18 @@ public class MatchManager
             match.StarOfHopeScheduledUserId = null;
         }
 
-        // Round Giải Lao: tiêu cờ BreakScheduled → round này là 1 game giải lao (Oẳn Tù Xì hoặc Tính toán).
+        // Round Giải Lao: tiêu cờ BreakScheduled → round này là giải lao. KHÔNG chọn game ngay:
+        // vào pha BreakSelect (người tổ chức chọn game, 30s → random) → BreakIntro (hiện luật, 30s → bắt đầu).
         match.IsBreakRound = match.BreakScheduled;
         if (match.IsBreakRound)
         {
-            match.BreakGame = match.BreakScheduledType;
             match.BreakScheduled = false;
-            match.BreakScheduledType = BreakGameType.None;
-            if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
-            else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
-            else if (match.BreakGame == BreakGameType.Reflex) DealBreakReflexRound(match);
-            else DealBreakRound(match); // Rps
+            match.BreakGame = BreakGameType.None; // chưa chọn — pha BreakSelect quyết định
+            match.Status = MatchStatus.BreakSelect;
+            match.BreakSelectDeadline = DateTime.UtcNow + BreakSelectTimeout;
             return;
         }
         match.BreakScheduled = false;
-        match.BreakScheduledType = BreakGameType.None;
         match.BreakOrganizerId = null; // round thường: xoá người tổ chức giải lao
 
         // Round Sát Phạt (Xì Dách): tiêu cờ XiDachScheduledUserId → round này là xì dách, người đó là Nhà Cái.
@@ -313,10 +314,11 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là 1 game giải lao RANDOM rút từ pool (chơi rồi mất khỏi pool).
+    /// Player đặt lịch "Giải lao zui zẻ": round KẾ TIẾP là round giải lao. KHÔNG chọn game ở đây — game được
+    /// người tổ chức chọn ở pha BreakSelect đầu round (modal option, 30s → random nếu không chọn).
     /// Bất kỳ lúc nào trong round InProgress. Chỉ 1 người/round (BreakScheduled), 1 lần/TRẬN (HasUsedBreak). CHỈ đủ 4 người.
-    /// Loại trừ lẫn nhau với các biến tấu khác. Pool mặc định [Rps,Rps,Math,Memory]; hết → reset đầy lại.
-    /// (Tham số gameType BỎ QUA — giữ chữ ký cho tương thích hub; game do server random chọn.)
+    /// Loại trừ lẫn nhau với các biến tấu khác.
+    /// (Tham số gameType BỎ QUA — giữ chữ ký cho tương thích hub; game chọn ở đầu round.)
     /// </summary>
     public Match ScheduleBreak(Guid roomId, Guid userId, BreakGameType gameType = BreakGameType.None)
     {
@@ -332,20 +334,78 @@ public class MatchManager
             if (player.HasUsedBreak)
                 throw new InvalidOperationException("Bạn đã dùng quyền Giải lao trong trận này.");
 
-            // Random rút 1 game khỏi pool. Hết pool → nạp đầy lại rồi rút.
-            if (match.BreakGamePool.Count == 0)
-                match.BreakGamePool.AddRange(new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
-            int pick = Random.Shared.Next(match.BreakGamePool.Count);
-            var chosen = match.BreakGamePool[pick];
-            match.BreakGamePool.RemoveAt(pick);
-
             match.BreakScheduled = true;
-            match.BreakScheduledType = chosen;
             match.BreakOrganizerId = userId;
             player.HasUsedBreak = true;
             return match;
         }
     }
+
+    /// <summary>
+    /// Người tổ chức chọn game ở pha BreakSelect → sang pha BreakIntro (hiện luật, 30s → tự bắt đầu).
+    /// Chỉ BreakOrganizerId được chọn; chỉ hợp lệ trong status BreakSelect; gameType phải là 1 trong 4 game.
+    /// </summary>
+    public Match SelectBreakGame(Guid roomId, Guid userId, BreakGameType gameType)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSelect)
+                throw new InvalidOperationException("Không trong pha chọn game giải lao.");
+            if (match.BreakOrganizerId != userId)
+                throw new InvalidOperationException("Chỉ người tổ chức được chọn game.");
+            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex))
+                throw new InvalidOperationException("Game không hợp lệ.");
+            EnterBreakIntro(match, gameType);
+            return match;
+        }
+    }
+
+    /// <summary>Vào pha hiện luật cho game đã chọn (BreakIntro). 30s sau timer tự bắt đầu game (StartBreakGame).</summary>
+    private static void EnterBreakIntro(Match match, BreakGameType gameType)
+    {
+        match.BreakGame = gameType;
+        match.BreakSelectDeadline = null;
+        match.Status = MatchStatus.BreakIntro;
+        match.BreakIntroDeadline = DateTime.UtcNow + BreakIntroTimeout;
+    }
+
+    /// <summary>Hết 30s pha chọn game mà người tổ chức chưa chọn → random 1 trong 4 game rồi sang pha hiện luật.</summary>
+    public bool TryAutoSelectBreakGame(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSelect) return false;
+            if (!match.BreakSelectDeadline.HasValue || match.BreakSelectDeadline.Value > DateTime.UtcNow) return false;
+            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex };
+            EnterBreakIntro(match, games[Random.Shared.Next(games.Length)]);
+            return true;
+        }
+    }
+
+    /// <summary>Hết 30s pha hiện luật → bắt đầu game đã chọn (deal game tương ứng, set status gameplay).</summary>
+    public bool TryStartBreakGame(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakIntro) return false;
+            if (!match.BreakIntroDeadline.HasValue || match.BreakIntroDeadline.Value > DateTime.UtcNow) return false;
+            StartBreakGame(match);
+            return true;
+        }
+    }
+
+    /// <summary>Deal game giải lao đã chọn (BreakGame) — chuyển từ pha hiện luật vào gameplay thực.</summary>
+    private static void StartBreakGame(Match match)
+    {
+        match.BreakIntroDeadline = null;
+        if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
+        else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
+        else if (match.BreakGame == BreakGameType.Reflex) DealBreakReflexRound(match);
+        else DealBreakRound(match); // Rps
+    }
+
+    public IEnumerable<Match> AllBreakSelect() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakSelect);
+    public IEnumerable<Match> AllBreakIntro() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakIntro);
 
     /// <summary>
     /// Player chọn kéo/búa/bao trong ván Oẳn Tù Xì hiện tại (chỉ 2 người của cặp đang đấu được chọn).

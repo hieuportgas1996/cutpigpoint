@@ -37,57 +37,57 @@ public class MathBreakFlowTests
             .Invoke(null, new object[] { match });
 
     [Fact]
-    public void Schedule_PicksRandomGameFromPool_RemovesIt()
+    public void Schedule_SetsFlag_NoGameChosenYet()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.Status = MatchStatus.InProgress;
-        int before = match.BreakGamePool.Count; // 4 mặc định
-        mgr.ScheduleBreak(roomId, ids[0]); // gameType bỏ qua — server random
+        mgr.ScheduleBreak(roomId, ids[0]); // KHÔNG chọn game ở đây
         Assert.True(match.BreakScheduled);
-        // Chọn 1 game hợp lệ trong pool ban đầu + rút khỏi pool.
-        Assert.Contains(match.BreakScheduledType, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
-        Assert.Equal(before - 1, match.BreakGamePool.Count);
         Assert.Equal(ids[0], match.BreakOrganizerId);
+        Assert.Equal(BreakGameType.None, match.BreakGame); // game chọn ở đầu round
         Assert.True(match.Players[0].HasUsedBreak);
+    }
 
-        // Giả lập DealRound tiêu cờ → deal game tương ứng (test math path).
+    [Fact]
+    public void Select_OrganizerOnly_EntersIntroThenStarts()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        // Giả lập DealRound đã tiêu cờ → vào pha chọn game.
         match.IsBreakRound = true;
-        match.BreakGame = BreakGameType.Math;
-        Invoke("DealBreakMathRound", match);
+        match.BreakOrganizerId = ids[0];
+        match.Status = MatchStatus.BreakSelect;
+        match.BreakSelectDeadline = DateTime.UtcNow.AddSeconds(30);
+
+        // Người KHÔNG phải tổ chức không được chọn.
+        Assert.Throws<InvalidOperationException>(() => mgr.SelectBreakGame(roomId, ids[1], BreakGameType.Math));
+
+        // Người tổ chức chọn Math → vào pha hiện luật.
+        mgr.SelectBreakGame(roomId, ids[0], BreakGameType.Math);
+        Assert.Equal(MatchStatus.BreakIntro, match.Status);
+        Assert.Equal(BreakGameType.Math, match.BreakGame);
+        Assert.NotNull(match.BreakIntroDeadline);
+        Assert.Null(match.BreakSelectDeadline);
+
+        // Hết 30s hiện luật → tự bắt đầu game.
+        match.BreakIntroDeadline = DateTime.UtcNow.AddSeconds(-1);
+        Assert.True(mgr.TryStartBreakGame(roomId));
         Assert.Equal(MatchStatus.BreakMathPick, match.Status);
         Assert.NotNull(match.MathPickDeadline);
     }
 
     [Fact]
-    public void Schedule_PoolDefaultsToFourDistinctGames()
-    {
-        var (_, match, _, _) = Setup();
-        Assert.Equal(4, match.BreakGamePool.Count);
-        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Rps));
-        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Math));
-        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Memory));
-        Assert.Equal(1, match.BreakGamePool.Count(g => g == BreakGameType.Reflex));
-    }
-
-    [Fact]
-    public void Schedule_FourTimes_DrainsPoolAllDistinct()
+    public void Select_Timeout_RandomsGame_EntersIntro()
     {
         var (mgr, match, roomId, ids) = Setup();
-        match.Status = MatchStatus.InProgress;
-        var drawn = new List<BreakGameType>();
-        for (int i = 0; i < 4; i++)
-        {
-            // Reset cờ schedule giữa các lần (giả lập đã deal xong round trước).
-            match.BreakScheduled = false; match.BreakScheduledType = BreakGameType.None;
-            match.IsBreakRound = false; match.BreakGame = BreakGameType.None;
-            mgr.ScheduleBreak(roomId, ids[i]);
-            drawn.Add(match.BreakScheduledType);
-        }
-        Assert.Empty(match.BreakGamePool); // hết pool sau 4 lần
-        // 4 lần rút = đúng 4 game KHÁC nhau.
-        Assert.Equal(4, drawn.Distinct().Count());
-        foreach (var g in new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex })
-            Assert.Contains(g, drawn);
+        match.IsBreakRound = true;
+        match.BreakOrganizerId = ids[0];
+        match.Status = MatchStatus.BreakSelect;
+        match.BreakSelectDeadline = DateTime.UtcNow.AddSeconds(-1); // hết giờ chọn
+
+        Assert.True(mgr.TryAutoSelectBreakGame(roomId));
+        Assert.Equal(MatchStatus.BreakIntro, match.Status);
+        Assert.Contains(match.BreakGame, new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex });
+        Assert.NotNull(match.BreakIntroDeadline);
     }
 
     [Fact]

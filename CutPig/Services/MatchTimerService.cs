@@ -170,6 +170,19 @@ public class MatchTimerService : BackgroundService
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
 
+                // Giải Lao: pha chọn game (BreakSelect) hết 30s mà người tổ chức chưa chọn → random rồi sang pha luật.
+                foreach (var match in _matches.AllBreakSelect().ToList())
+                {
+                    if (_matches.TryAutoSelectBreakGame(match.RoomId))
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                }
+                // Giải Lao: pha hiện luật (BreakIntro) hết 30s → tự bắt đầu game đã chọn.
+                foreach (var match in _matches.AllBreakIntro().ToList())
+                {
+                    if (_matches.TryStartBreakGame(match.RoomId))
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                }
+
                 // Giải Lao (Oẳn Tù Xì): hết 20s chọn → auto random rồi chốt ván (vào pha hiện kết quả 2s);
                 // hết 2s hiện kết quả → qua ván/giai đoạn kế (hoặc finalize giải → WaitingNextRound).
                 foreach (var match in _matches.AllBreakRps().ToList())

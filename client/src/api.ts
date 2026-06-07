@@ -345,6 +345,8 @@ export const MatchStatus = {
   BreakMemoryQuiz: 13,
   BreakReflexCooldown: 14,
   BreakReflexPlay: 15,
+  BreakSelect: 16,
+  BreakIntro: 17,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
@@ -501,13 +503,14 @@ export interface MatchPublicState {
   isGambleRound: boolean;
   gambleOfferDeadline: string | null;
   breakScheduled: boolean;
-  breakScheduledType: number;   // BreakGameType: 1 Rps, 2 Math
   breakOrganizerId: string | null;
   isBreakRound: boolean;
+  breakSelectDeadline: string | null;   // pha chọn game (30s → random)
+  breakIntroDeadline: string | null;    // pha hiện luật (30s → tự bắt đầu)
   rps: RpsState | null;
   rpsChoiceDeadline: string | null;
   rpsRevealUntil: string | null;
-  breakGame: number;        // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory
+  breakGame: number;        // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory, 4 Reflex
   math: MathQuizState | null;
   mathPickDeadline: string | null;
   mathAnswerDeadline: string | null;

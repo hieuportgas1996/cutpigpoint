@@ -106,13 +106,14 @@ public record MatchPublicStateDto(
     bool IsGambleRound = false,
     DateTime? GambleOfferDeadline = null,
     bool BreakScheduled = false,
-    int BreakScheduledType = 0,        // BreakGameType: 1 Rps, 2 Math (khi BreakScheduled)
     Guid? BreakOrganizerId = null,
     bool IsBreakRound = false,
+    DateTime? BreakSelectDeadline = null,   // pha BreakSelect: hết hạn người tổ chức chọn game (30s → random)
+    DateTime? BreakIntroDeadline = null,    // pha BreakIntro: hết hạn hiện luật (30s → tự bắt đầu)
     RpsStateDto? Rps = null,
     DateTime? RpsChoiceDeadline = null,
     DateTime? RpsRevealUntil = null,
-    int BreakGame = 0,                 // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory
+    int BreakGame = 0,                 // BreakGameType: 0 none, 1 Rps, 2 Math, 3 Memory, 4 Reflex
     MathQuizStateDto? Math = null,
     DateTime? MathPickDeadline = null,
     DateTime? MathAnswerDeadline = null,

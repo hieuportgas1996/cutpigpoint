@@ -12,6 +12,7 @@ import { MathBreakScreen } from './MathBreakScreen';
 import { MemoryBreakScreen } from './MemoryBreakScreen';
 import { XiDachMobilePanel } from './XiDachMobilePanel';
 import { ReflexBreakScreen } from './ReflexBreakScreen';
+import { BreakSelectScreen, BreakIntroScreen } from './BreakSelectScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
 import { playSound, stopSound, type SoundKey } from '../sounds';
@@ -384,7 +385,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -799,6 +800,16 @@ export default function RoomPlayPage() {
   const breakOrganizerName = matchState?.breakOrganizerId
     ? matchState.players.find(p => p.userId === matchState.breakOrganizerId)?.displayName ?? ''
     : '';
+  // Giải Lao — pha chọn game (người tổ chức chọn) + pha hiện luật (đếm ngược tự bắt đầu).
+  const isBreakSelect = matchState?.status === MatchStatus.BreakSelect;
+  const isBreakIntro = matchState?.status === MatchStatus.BreakIntro;
+  const breakSelectLeftSec = matchState?.breakSelectDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.breakSelectDeadline).getTime() - now) / 1000))
+    : 0;
+  const breakIntroLeftSec = matchState?.breakIntroDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.breakIntroDeadline).getTime() - now) / 1000))
+    : 0;
+
   const isBreakRound = matchState?.status === MatchStatus.BreakRps;
   const rps = matchState?.rps ?? null;
   const rpsLeftSec = matchState?.rpsChoiceDeadline
@@ -988,19 +999,15 @@ export default function RoomPlayPage() {
     toast.push('info', `🔥 ${who} quyết định LIỀU ĂN NHIỀU — round sau điểm thắng/thua của ${gambleScheduledUserId === myUserId ? 'bạn' : 'họ'} ×3!`);
   }, [gambleScheduledUserId, matchState?.roundNumber]);
 
-  // Thông báo (mọi người) khi có người tổ chức Giải lao — round sau là Oẳn Tù Xì.
+  // Thông báo (mọi người) khi có người tổ chức Giải lao — game sẽ được chọn ở đầu round sau.
   useEffect(() => {
     if (!breakScheduled) return;
     const key = `${matchState?.roundNumber}|${matchState?.breakOrganizerId ?? ''}`;
     if (lastBreakAnnouncedRef.current === key) return;
     lastBreakAnnouncedRef.current = key;
     const who = matchState?.breakOrganizerId === myUserId ? 'Bạn' : breakOrganizerName;
-    const gameLabel = matchState?.breakScheduledType === 2 ? 'Tính toán'
-      : matchState?.breakScheduledType === 3 ? 'Trí nhớ'
-      : matchState?.breakScheduledType === 4 ? 'Phản xạ'
-      : 'Oẳn Tù Xì';
-    toast.push('info', `🎮 ${who} đã tổ chức Giải lao zui zẻ — round sau chơi ${gameLabel}!`);
-  }, [breakScheduled, matchState?.breakOrganizerId, matchState?.roundNumber, matchState?.breakScheduledType]);
+    toast.push('info', `🎮 ${who} đã tổ chức Giải lao zui zẻ — round sau ${who === 'Bạn' ? 'bạn' : who} sẽ chọn trò chơi!`);
+  }, [breakScheduled, matchState?.breakOrganizerId, matchState?.roundNumber]);
 
   // Đóng menu "Tùy chọn" khi bấm ra ngoài.
   useEffect(() => {
@@ -1159,8 +1166,13 @@ export default function RoomPlayPage() {
   }
 
   async function handleScheduleBreak() {
-    // Game do server random chọn từ pool (không truyền gameType nữa).
+    // Đặt lịch giải lao; game được chọn ở pha BreakSelect đầu round sau.
     try { await scheduleBreak(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleSelectBreakGame(gameType: number) {
+    try { await selectBreakGame(gameType); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -1735,6 +1747,23 @@ export default function RoomPlayPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {isBreakSelect && (
+          <BreakSelectScreen
+            organizerId={matchState.breakOrganizerId}
+            organizerName={breakOrganizerName}
+            myUserId={myUserId}
+            leftSec={breakSelectLeftSec}
+            onSelect={handleSelectBreakGame}
+          />
+        )}
+
+        {isBreakIntro && (
+          <BreakIntroScreen
+            gameType={matchState.breakGame}
+            leftSec={breakIntroLeftSec}
+          />
         )}
 
         {isBreakRound && rps && (

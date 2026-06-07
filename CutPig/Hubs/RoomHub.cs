@@ -717,6 +717,20 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task SelectBreakGame(int gameType)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SelectBreakGame(roomId.Value, auth.Value.UserId, (GameEngine.BreakGameType)gameType); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitMathNumber(int number)
     {
         var auth = await AuthenticateAsync();
@@ -1017,9 +1031,10 @@ public class RoomHub : Hub
             m.IsGambleRound,
             m.GambleOfferDeadline,
             m.BreakScheduled,
-            (int)m.BreakScheduledType,
             m.BreakOrganizerId,
             m.IsBreakRound,
+            m.BreakSelectDeadline,
+            m.BreakIntroDeadline,
             BuildRpsState(m.Rps),
             m.RpsChoiceDeadline,
             m.RpsRevealUntil,

@@ -18,6 +18,8 @@ public enum MatchStatus
     BreakMemoryQuiz = 13,        // round Giải lao Trí nhớ: pha trả lời "ô X là đội nào?"
     BreakReflexCooldown = 14,    // round Giải lao Phản xạ: pha cooldown 3s chuẩn bị (đã hiện lưới)
     BreakReflexPlay = 15,        // round Giải lao Phản xạ: pha click đúng ô theo đề
+    BreakSelect = 16,            // round Giải lao: người tổ chức đang chọn game (modal option, 30s → random)
+    BreakIntro = 17,             // round Giải lao: hiện luật chơi game đã chọn (30s → tự bắt đầu)
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
@@ -159,23 +161,19 @@ public class Match
     /// <summary>True khi round HIỆN TẠI là round liều của GambleScheduledUserId (set ở DealRound khi tiêu cờ).</summary>
     public bool IsGambleRound { get; set; }
 
-    // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán / Trí nhớ) ----
-    /// <summary>
-    /// Pool game giải lao CÒN LẠI trong trận. Bấm "Giải lao" → random rút 1 game khỏi pool (chơi rồi mất khỏi pool).
-    /// Khởi tạo 4 game khác nhau (4 lượt = 4 player × 1 lần). Hết pool → reset đầy lại.
-    /// </summary>
-    public List<BreakGameType> BreakGamePool { get; set; } = new()
-        { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex };
+    // ---- Giải Lao Zui Zẻ (framework: Oẳn Tù Xì / Tính toán / Trí nhớ / Phản xạ) ----
     /// <summary>True khi đã đặt lịch giải lao → round KẾ TIẾP là 1 game giải lao. Chỉ 1 người/round. 1 lần/TRẬN.</summary>
     public bool BreakScheduled { get; set; }
-    /// <summary>Loại game giải lao ĐÃ ĐẶT cho round kế (Rps/Math/Memory). None khi chưa đặt. Tiêu ở DealRound.</summary>
-    public BreakGameType BreakScheduledType { get; set; } = BreakGameType.None;
-    /// <summary>UserId người tổ chức giải lao (hiển thị + toast).</summary>
+    /// <summary>UserId người tổ chức giải lao (hiển thị + toast + là người DUY NHẤT được chọn game ở pha BreakSelect).</summary>
     public Guid? BreakOrganizerId { get; set; }
-    /// <summary>True khi round HIỆN TẠI là round giải lao (bất kỳ game nào).</summary>
+    /// <summary>True khi round HIỆN TẠI là round giải lao (bất kỳ game nào — kể cả pha chọn game / hiện luật).</summary>
     public bool IsBreakRound { get; set; }
-    /// <summary>Loại game giải lao của round HIỆN TẠI (Rps/Math). None khi không phải round giải lao.</summary>
+    /// <summary>Loại game giải lao của round HIỆN TẠI. None khi chưa chọn (pha BreakSelect) hoặc không phải round giải lao.</summary>
     public BreakGameType BreakGame { get; set; } = BreakGameType.None;
+    /// <summary>Hết hạn 30s pha chọn game (BreakSelect): người tổ chức chưa chọn → server random rồi sang pha hiện luật.</summary>
+    public DateTime? BreakSelectDeadline { get; set; }
+    /// <summary>Hết hạn 30s pha hiện luật (BreakIntro): hết → tự bắt đầu game đã chọn.</summary>
+    public DateTime? BreakIntroDeadline { get; set; }
 
     // -- Oẳn Tù Xì --
     /// <summary>State bracket Oẳn Tù Xì của round giải lao hiện tại (null khi không phải round Oẳn Tù Xì).</summary>
