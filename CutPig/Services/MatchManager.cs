@@ -2452,15 +2452,98 @@ public class MatchManager
 
     public IEnumerable<Match> AllBreakRps() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakRps);
 
+    /// <summary>
+    /// Điểm 3 game trắc nghiệm Giải lao (Tính toán/Trí nhớ/Phản xạ), 4 người. Phân nhóm:
+    /// W = người đúng ≥1 câu (xếp theo số câu đúng desc, tổng thời gian câu đúng asc), L = 0 câu đúng.
+    /// - 0 W → hoà 0 hết.
+    /// - 4 W (không có L) → bảng hạng chuẩn +2/+1/-1/-2.
+    /// - 1 W → W +6, mỗi L -2.
+    /// - 2 W → bậc +3/+1 (tie thời gian → +2/+2), mỗi L -2.
+    /// - 3 W → bậc +3/+2/+1 (tie thời gian → chia đều phần các bậc đó), L -6.
+    /// Người tie (cùng số câu đúng VÀ cùng tổng thời-gian-đúng) chia đều tổng các bậc họ chiếm. Zero-sum.
+    /// </summary>
+    private int[] ComputeQuizBreakScores(Match match)
+    {
+        var n = match.Players.Count;
+        var scores = new int[n];
+        var answers = match.BreakGame == BreakGameType.Memory ? match.MemoryAnswers
+            : match.BreakGame == BreakGameType.Reflex ? match.ReflexAnswers
+            : match.MathAnswers;
+
+        // (seatIndex, correctCount, totalCorrectMs) cho từng người.
+        var stats = new (int idx, int correct, long ms)[n];
+        for (int i = 0; i < n; i++)
+        {
+            answers.TryGetValue(match.Players[i].UserId, out var list);
+            list ??= new();
+            int correct = list.Count(a => a.Correct);
+            long ms = list.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+            stats[i] = (i, correct, ms);
+        }
+
+        var winners = stats.Where(s => s.correct > 0).ToList();
+        int w = winners.Count;
+        if (w == 0) return scores;                       // không ai đúng → hoà 0 hết
+
+        // Xếp nhóm thắng: nhiều câu đúng hơn → trước; bằng → tổng thời gian câu đúng ít hơn → trước.
+        var sortedW = winners.OrderByDescending(s => s.correct).ThenBy(s => s.ms).ToList();
+
+        if (w == 4)
+        {
+            // Không có người thua trắng → bảng hạng chuẩn +2/+1/-1/-2 theo thứ tự đã xếp.
+            int[] table = { 2, 1, -1, -2 };
+            for (int rank = 0; rank < 4; rank++) scores[sortedW[rank].idx] = table[rank];
+            return scores;
+        }
+
+        // Bậc điểm cho nhóm thắng theo số người thắng (khớp các ví dụ; tổng = -(điểm nhóm thua)).
+        int[] tiers = w switch
+        {
+            1 => new[] { 6 },
+            2 => new[] { 3, 1 },
+            _ => new[] { 3, 2, 1 },   // w == 3
+        };
+        int loserScore = w == 3 ? -6 : -2;               // 3W → 1 loser -6; còn lại mỗi loser -2
+
+        // Gán bậc cho winner; người TIE (cùng correct & cùng ms) chia đều tổng các bậc họ chiếm.
+        int gi = 0;
+        while (gi < sortedW.Count)
+        {
+            int gj = gi;
+            while (gj + 1 < sortedW.Count
+                   && sortedW[gj + 1].correct == sortedW[gi].correct
+                   && sortedW[gj + 1].ms == sortedW[gi].ms)
+                gj++;
+            // Nhóm tie [gi..gj] chiếm các bậc tiers[gi..gj] → chia đều (làm tròn, dư cho người xếp trước).
+            int sum = 0;
+            for (int k = gi; k <= gj; k++) sum += tiers[k];
+            int cnt = gj - gi + 1;
+            int per = sum / cnt, rem = sum % cnt;
+            for (int k = gi; k <= gj; k++)
+                scores[sortedW[k].idx] = per + (k - gi < rem ? 1 : 0);
+            gi = gj + 1;
+        }
+        // Người thua (0 đúng).
+        for (int i = 0; i < n; i++)
+            if (stats[i].correct == 0) scores[i] = loserScore;
+        return scores;
+    }
+
     public int[] ComputeRoundScores(Match match)
     {
         // Returns score for each player in seat order
         var n = match.Players.Count;
         var scores = new int[n];
 
-        // Giải Lao (Oẳn Tù Xì): theo hạng bracket 1..4 → +2/+1/-1/-2. Zero-sum. KHÔNG áp star/liều.
+        // Giải Lao. KHÔNG áp star/liều.
         if (match.IsBreakRound)
         {
+            // 3 game trắc nghiệm (Tính toán/Trí nhớ/Phản xạ): tính theo nhóm THẮNG (đúng ≥1 câu) / THUA (0 đúng).
+            // Không ai đúng → hoà 0 hết. Cả 4 đúng → bảng hạng chuẩn +2/+1/-1/-2. Còn lại: bảng đặc biệt theo VD.
+            if (match.BreakGame is BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex)
+                return ComputeQuizBreakScores(match);
+
+            // Oẳn Tù Xì (May mắn): theo hạng bracket 1..4 → +2/+1/-1/-2. Zero-sum.
             int[] breakTable = { 2, 1, -1, -2 };
             for (int i = 0; i < n; i++)
             {

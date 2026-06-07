@@ -204,4 +204,93 @@ public class MathBreakFlowTests
         Assert.Equal(MatchStatus.BreakMathQuiz, match.Status);
         Assert.Equal(4, match.MathPicks.Count); // 3 người còn lại được random
     }
+
+    // ---- Scoring nhóm thắng/thua cho 3 game trắc nghiệm ----
+    // Helper: set MathAnswers cho mỗi seat = (số câu đúng, tổng thời gian các câu đúng ms).
+    private static void SetQuiz(Match match, Guid[] ids, params (int correct, long ms)[] perSeat)
+    {
+        match.IsBreakRound = true;
+        match.BreakGame = BreakGameType.Math;
+        match.MathAnswers.Clear();
+        for (int i = 0; i < perSeat.Length; i++)
+        {
+            var (correct, ms) = perSeat[i];
+            var list = new List<MathAnswer>();
+            // 1 câu đúng mang toàn bộ ms (đủ cho ranking); các câu đúng còn lại ms=0.
+            for (int k = 0; k < correct; k++)
+                list.Add(new MathAnswer { Correct = true, ChosenIndex = 0, ElapsedMs = k == 0 ? ms : 0 });
+            match.MathAnswers[ids[i]] = list;
+        }
+    }
+
+    [Fact]
+    public void QuizScore_NobodyCorrect_AllZero()
+    {
+        var (mgr, match, _, ids) = Setup();
+        SetQuiz(match, ids, (0, 0), (0, 0), (0, 0), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 0, 0, 0, 0 }, s);
+    }
+
+    [Fact]
+    public void QuizScore_OneWinner_Plus6_OthersMinus2()
+    {
+        var (mgr, match, _, ids) = Setup();
+        SetQuiz(match, ids, (2, 500), (0, 0), (0, 0), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 6, -2, -2, -2 }, s);
+        Assert.Equal(0, s.Sum());
+    }
+
+    [Fact]
+    public void QuizScore_TwoWinners_DiffTime_3and1()
+    {
+        var (mgr, match, _, ids) = Setup();
+        // seat0 & seat1 cùng 2 đúng; seat0 nhanh hơn (300<800).
+        SetQuiz(match, ids, (2, 300), (2, 800), (0, 0), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 3, 1, -2, -2 }, s);
+        Assert.Equal(0, s.Sum());
+    }
+
+    [Fact]
+    public void QuizScore_TwoWinners_SameTime_2and2()
+    {
+        var (mgr, match, _, ids) = Setup();
+        SetQuiz(match, ids, (2, 500), (2, 500), (0, 0), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 2, 2, -2, -2 }, s);
+        Assert.Equal(0, s.Sum());
+    }
+
+    [Fact]
+    public void QuizScore_ThreeWinners_DiffTime_3_2_1_LoserMinus6()
+    {
+        var (mgr, match, _, ids) = Setup();
+        SetQuiz(match, ids, (2, 300), (2, 500), (2, 900), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 3, 2, 1, -6 }, s);
+        Assert.Equal(0, s.Sum());
+    }
+
+    [Fact]
+    public void QuizScore_ThreeWinners_SameTime_2each_LoserMinus6()
+    {
+        var (mgr, match, _, ids) = Setup();
+        SetQuiz(match, ids, (2, 500), (2, 500), (2, 500), (0, 0));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 2, 2, 2, -6 }, s);
+        Assert.Equal(0, s.Sum());
+    }
+
+    [Fact]
+    public void QuizScore_AllFourCorrect_StandardRankTable()
+    {
+        var (mgr, match, _, ids) = Setup();
+        // 4 người đều có câu đúng → bảng hạng chuẩn +2/+1/-1/-2 theo (đúng desc, time asc).
+        SetQuiz(match, ids, (2, 100), (2, 200), (1, 100), (1, 300));
+        var s = mgr.ComputeRoundScores(match);
+        Assert.Equal(new[] { 2, 1, -1, -2 }, s);
+        Assert.Equal(0, s.Sum());
+    }
 }
