@@ -20,6 +20,7 @@ public enum MatchStatus
     BreakReflexPlay = 15,        // round Giải lao Phản xạ: pha click đúng ô theo đề
     BreakSelect = 16,            // round Giải lao: người tổ chức đang chọn game (modal option, 30s → random)
     BreakIntro = 17,             // round Giải lao: hiện luật chơi game đã chọn (30s → tự bắt đầu)
+    BreakSudoku = 18,            // round Giải lao Trí tuệ: giải Sudoku 4×4 (60s, chung 1 đề)
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
@@ -30,6 +31,7 @@ public enum BreakGameType
     Math = 2,     // Tính toán (tính nhẩm trắc nghiệm)
     Memory = 3,   // Trí nhớ (ghi nhớ logo CLB)
     Reflex = 4,   // Phản xạ (click đúng hình/màu nhanh nhất)
+    Sudoku = 5,   // Trí tuệ (giải Sudoku 4×4)
 }
 
 public class MatchPlayer
@@ -234,6 +236,18 @@ public class Match
     public Dictionary<Guid, List<MathAnswer>> ReflexAnswers { get; set; } = new();
     /// <summary>Pha hiện đáp án lượt vừa xong (tô 3 ô đúng + ai nhanh nhất) trước khi qua lượt kế.</summary>
     public DateTime? ReflexRevealUntil { get; set; }
+
+    // -- Trí tuệ (Sudoku 4×4) -- chung 1 đề, 60s, dùng chung MathAnswer cho ranking
+    /// <summary>Đề Sudoku của round hiện tại (null khi không phải round Trí tuệ). CHUNG cho cả 4 người.</summary>
+    public SudokuGameEngine.SudokuPuzzle? Sudoku { get; set; }
+    /// <summary>Bài điền hiện tại của từng người (key = UserId → 16 ô, 0=trống). Ô cho sẵn copy từ đề.</summary>
+    public Dictionary<Guid, int[]> SudokuFills { get; set; } = new();
+    /// <summary>Kết quả mỗi người (key = UserId; 1 phần tử = cả puzzle: Correct khi giải xong, ElapsedMs lúc xong).</summary>
+    public Dictionary<Guid, List<MathAnswer>> SudokuAnswers { get; set; } = new();
+    /// <summary>Thời điểm mở pha giải (tính ElapsedMs). Null ngoài round Trí tuệ.</summary>
+    public DateTime? SudokuStart { get; set; }
+    /// <summary>Hết hạn 60s giải; hết → ai chưa xong tính sai (max time) rồi finalize.</summary>
+    public DateTime? SudokuDeadline { get; set; }
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

@@ -12,6 +12,7 @@ import { MathBreakScreen } from './MathBreakScreen';
 import { MemoryBreakScreen } from './MemoryBreakScreen';
 import { XiDachMobilePanel } from './XiDachMobilePanel';
 import { ReflexBreakScreen } from './ReflexBreakScreen';
+import { SudokuBreakScreen } from './SudokuBreakScreen';
 import { BreakSelectScreen, BreakIntroScreen } from './BreakSelectScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
@@ -385,7 +386,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -849,6 +850,13 @@ export default function RoomPlayPage() {
     ? Math.max(0, Math.ceil((new Date(matchState.reflexAnswerDeadline).getTime() - now) / 1000))
     : 0;
 
+  // Giải Lao (Trí tuệ — Sudoku): 1 pha giải, đếm ngược 60s.
+  const isSudokuRound = matchState?.status === MatchStatus.BreakSudoku;
+  const sudoku = matchState?.sudoku ?? null;
+  const sudokuLeftSec = matchState?.sudokuDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.sudokuDeadline).getTime() - now) / 1000))
+    : 0;
+
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
@@ -1215,6 +1223,11 @@ export default function RoomPlayPage() {
       setReflexMySelected(prev => prev.filter(c => c !== cellIndex));
       toast.push('error', (e as Error).message);
     }
+  }
+
+  async function handleSudokuFill(cellIndex: number, value: number) {
+    try { await submitSudokuCell(cellIndex, value); }
+    catch (e) { toast.push('error', (e as Error).message); }
   }
 
   async function handleDrawXiDach() {
@@ -1822,6 +1835,16 @@ export default function RoomPlayPage() {
           />
         )}
 
+        {isSudokuRound && sudoku && (
+          <SudokuBreakScreen
+            sudoku={sudoku}
+            players={matchState.players}
+            myUserId={myUserId}
+            leftSec={sudokuLeftSec}
+            onFill={handleSudokuFill}
+          />
+        )}
+
         {isXiDachRound && isMobile && (
           <XiDachMobilePanel
             players={matchState.players}
@@ -1920,6 +1943,8 @@ export default function RoomPlayPage() {
                       ? `🧠 Giải lao Trí nhớ — Ván ${delayedRoundEnd.roundNumber}`
                       : delayedRoundEnd.breakGame === 4
                       ? `⚡ Giải lao Phản xạ — Ván ${delayedRoundEnd.roundNumber}`
+                      : delayedRoundEnd.breakGame === 5
+                      ? `🧩 Giải lao Trí tuệ — Ván ${delayedRoundEnd.roundNumber}`
                       : `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`)
                   : delayedRoundEnd.wasXiDach
                   ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
@@ -1935,7 +1960,7 @@ export default function RoomPlayPage() {
                 ? <XiDachResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasFestival
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
-                : delayedRoundEnd.wasBreak && (delayedRoundEnd.breakGame === 2 || delayedRoundEnd.breakGame === 3 || delayedRoundEnd.breakGame === 4)
+                : delayedRoundEnd.wasBreak && (delayedRoundEnd.breakGame === 2 || delayedRoundEnd.breakGame === 3 || delayedRoundEnd.breakGame === 4 || delayedRoundEnd.breakGame === 5)
                 ? <MathResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
               <div className="match-end-actions">
@@ -2003,7 +2028,7 @@ export default function RoomPlayPage() {
                       : r.wasJudge
                       ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
                       : r.wasBreak
-                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : 'Oẳn Tù Xì'}`
+                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : r.breakGame === 5 ? 'Trí tuệ' : 'Oẳn Tù Xì'}`
                       : `Ván ${r.roundNumber}${winner ? ` · ${winner.displayName} Nhất` : ''}`;
                     return (
                       <details key={`${r.matchId}-${r.roundNumber}`} className="history-item" open={r === roundHistory[roundHistory.length - 1]}>
@@ -2025,7 +2050,7 @@ export default function RoomPlayPage() {
                           ? <XiDachResultRows round={r} myUserId={myUserId} />
                           : r.wasFestival
                           ? <FestivalResultRows round={r} myUserId={myUserId} />
-                          : r.wasBreak && (r.breakGame === 2 || r.breakGame === 3 || r.breakGame === 4)
+                          : r.wasBreak && (r.breakGame === 2 || r.breakGame === 3 || r.breakGame === 4 || r.breakGame === 5)
                           ? <MathResultRows round={r} myUserId={myUserId} />
                           : <RoundResultRows round={r} myUserId={myUserId} />}
                       </details>

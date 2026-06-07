@@ -347,11 +347,12 @@ export const MatchStatus = {
   BreakReflexPlay: 15,
   BreakSelect: 16,
   BreakIntro: 17,
+  BreakSudoku: 18,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -438,6 +439,19 @@ export interface ReflexGameState {
   targetIndexes: number[] | null; // 3 ô đúng (chỉ ở reveal)
   answeredUserIds: string[];
   results: MathPlayerResult[];
+}
+
+// ---- Giải Lao (Trí tuệ) — Sudoku 4×4, chung 1 đề ----
+export interface SudokuPlayerProgress {
+  userId: string;
+  filled: number;   // số ô đã điền (không lộ giá trị)
+  solved: boolean;
+  elapsedMs: number;
+}
+export interface SudokuGameState {
+  given: number[];  // 16 ô: 1-4 nếu cho sẵn, 0 nếu trống (KHÔNG lộ lời giải)
+  blanks: number;
+  progress: SudokuPlayerProgress[];
 }
 
 export interface MatchPlayerPublic {
@@ -530,6 +544,8 @@ export interface MatchPublicState {
   reflexCooldownUntil: string | null;
   reflexAnswerDeadline: string | null;
   reflexRevealUntil: string | null;
+  sudoku: SudokuGameState | null;
+  sudokuDeadline: string | null;
 }
 
 export interface PrivateHand {

@@ -51,9 +51,21 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
       'Hạng: Nhất +2 · Nhì +1 · Ba −1 · Bét −2 điểm.',
     ],
   },
+  [BreakGameType.Sudoku]: {
+    label: 'Trí tuệ',
+    emoji: '🧩',
+    tagline: 'Giải Sudoku 4×4',
+    rules: [
+      'Lưới Sudoku 4×4: mỗi hàng, mỗi cột và mỗi ô vuông 2×2 phải đủ 1-2-3-4.',
+      'Cả 4 người giải CHUNG 1 đề; điền các ô trống bằng lá bài 1-4.',
+      'Ai điền đủ + đúng toàn bộ + nhanh nhất → hạng cao. Có 60 giây.',
+      'Không ai giải xong → hòa 0 điểm. Có người xong thì xếp hạng theo thời gian.',
+      'Hạng: tùy số người giải được — nhất +6/+3, nhì +2/+1… người không xong bị trừ.',
+    ],
+  },
 };
 
-const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex];
+const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku];
 
 // Pha 1: người tổ chức chọn game (modal option). Người khác chờ.
 export function BreakSelectScreen({

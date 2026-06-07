@@ -32,6 +32,7 @@ public class MatchManager
     public static TimeSpan ReflexCooldownTimeout { get; } = TimeSpan.FromSeconds(3);  // 3s cooldown chuẩn bị mỗi lượt Phản xạ
     public static TimeSpan ReflexAnswerTimeout { get; } = TimeSpan.FromSeconds(15);   // 15s tìm + chọn đúng 3 lá theo đề
     public static TimeSpan ReflexRevealTimeout { get; } = TimeSpan.FromSeconds(3);    // 3s hiện ô đúng giữa các lượt
+    public static TimeSpan SudokuTimeout { get; } = TimeSpan.FromSeconds(60);         // 60s giải Sudoku 4×4 (Trí tuệ)
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
 
@@ -137,6 +138,11 @@ public class MatchManager
         match.ReflexPicks.Clear();
         match.ReflexAnswers.Clear();
         match.ReflexRevealUntil = null;
+        match.Sudoku = null;
+        match.SudokuFills.Clear();
+        match.SudokuAnswers.Clear();
+        match.SudokuStart = null;
+        match.SudokuDeadline = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -353,7 +359,7 @@ public class MatchManager
                 throw new InvalidOperationException("Không trong pha chọn game giải lao.");
             if (match.BreakOrganizerId != userId)
                 throw new InvalidOperationException("Chỉ người tổ chức được chọn game.");
-            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex))
+            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku))
                 throw new InvalidOperationException("Game không hợp lệ.");
             EnterBreakIntro(match, gameType);
             return match;
@@ -376,7 +382,7 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSelect) return false;
             if (!match.BreakSelectDeadline.HasValue || match.BreakSelectDeadline.Value > DateTime.UtcNow) return false;
-            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex };
+            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku };
             EnterBreakIntro(match, games[Random.Shared.Next(games.Length)]);
             return true;
         }
@@ -415,6 +421,7 @@ public class MatchManager
         if (match.BreakGame == BreakGameType.Math) DealBreakMathRound(match);
         else if (match.BreakGame == BreakGameType.Memory) DealBreakMemoryRound(match);
         else if (match.BreakGame == BreakGameType.Reflex) DealBreakReflexRound(match);
+        else if (match.BreakGame == BreakGameType.Sudoku) DealBreakSudokuRound(match);
         else DealBreakRound(match); // Rps
     }
 
@@ -1037,6 +1044,106 @@ public class MatchManager
 
     /// <summary>Mọi match đang ở pha click Phản xạ (timer scan auto-close / finalize).</summary>
     public IEnumerable<Match> AllBreakReflexPlay() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakReflexPlay);
+
+    // ---- Giải Lao — Trí tuệ (Sudoku 4×4) ----
+    /// <summary>
+    /// Deal round "Giải Lao — Trí tuệ": sinh 1 đề Sudoku 4×4 (CHUNG cả 4 người), khởi tạo bài điền = ô cho sẵn,
+    /// vào pha giải 60s. KHÔNG đụng PreviousRoundWinnerId.
+    /// </summary>
+    private static void DealBreakSudokuRound(Match match)
+    {
+        match.BreakGame = BreakGameType.Sudoku;
+        var puzzle = SudokuGameEngine.Build(Random.Shared);
+        match.Sudoku = puzzle;
+        match.SudokuFills.Clear();
+        match.SudokuAnswers.Clear();
+        foreach (var p in match.Players)
+        {
+            // Bài điền ban đầu = các ô cho sẵn (ô trống = 0).
+            var fills = new int[SudokuGameEngine.Cells];
+            for (int i = 0; i < SudokuGameEngine.Cells; i++)
+                fills[i] = puzzle.Given[i] ? puzzle.Solution[i] : 0;
+            match.SudokuFills[p.UserId] = fills;
+            // 1 slot answer (cả puzzle): mặc định chưa giải xong = sai + max time.
+            match.SudokuAnswers[p.UserId] = new List<MathAnswer>
+            {
+                new() { ChosenIndex = -1, Correct = false, ElapsedMs = (long)SudokuTimeout.TotalMilliseconds }
+            };
+        }
+        match.SudokuStart = DateTime.UtcNow;
+        match.SudokuDeadline = DateTime.UtcNow + SudokuTimeout;
+        match.Status = MatchStatus.BreakSudoku;
+    }
+
+    /// <summary>
+    /// Player điền 1 ô Sudoku (cellIndex 0-15, value 1-4 hoặc 0=xoá). Không sửa ô cho sẵn / sau khi đã giải xong /
+    /// sau khi hết giờ. Nếu điền xong khớp lời giải → chốt slot (Correct=true, ElapsedMs). Mọi người xong → finalize ngay.
+    /// </summary>
+    public Match SubmitSudokuCell(Guid roomId, Guid userId, int cellIndex, int value)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSudoku || match.Sudoku == null)
+                throw new InvalidOperationException("Không trong pha giải Sudoku.");
+            if (cellIndex < 0 || cellIndex >= SudokuGameEngine.Cells)
+                throw new InvalidOperationException("Ô không hợp lệ.");
+            if (value < 0 || value > SudokuGameEngine.N)
+                throw new InvalidOperationException("Giá trị không hợp lệ.");
+            if (match.Sudoku.Given[cellIndex])
+                throw new InvalidOperationException("Ô này cho sẵn, không sửa được.");
+            if (!match.SudokuFills.TryGetValue(userId, out var fills) || !match.SudokuAnswers.TryGetValue(userId, out var ans) || ans.Count == 0)
+                throw new InvalidOperationException("Bạn không ở trong ván này.");
+            if (ans[0].Correct) throw new InvalidOperationException("Bạn đã giải xong rồi.");
+
+            fills[cellIndex] = value;
+
+            // Điền đủ + khớp lời giải → chốt.
+            if (SudokuGameEngine.IsSolved(match.Sudoku, fills))
+            {
+                long elapsed = match.SudokuStart.HasValue
+                    ? (long)(DateTime.UtcNow - match.SudokuStart.Value).TotalMilliseconds
+                    : (long)SudokuTimeout.TotalMilliseconds;
+                ans[0].Correct = true;
+                ans[0].ChosenIndex = 0; // đánh dấu đã trả lời
+                ans[0].ElapsedMs = Math.Clamp(elapsed, 0, (long)SudokuTimeout.TotalMilliseconds);
+
+                bool allDone = match.Players.All(p =>
+                    match.SudokuAnswers.TryGetValue(p.UserId, out var l) && l.Count > 0 && l[0].Correct);
+                if (allDone) FinalizeBreakSudokuRound(match);
+            }
+            return match;
+        }
+    }
+
+    /// <summary>Trí tuệ xong: xếp hạng (đúng desc, thời gian asc) → FinalRank 1..4 → WaitingNextRound.</summary>
+    private static void FinalizeBreakSudokuRound(Match match)
+    {
+        var ids = match.Players.OrderBy(p => p.SeatIndex).Select(p => p.UserId).ToList();
+        var ranking = SudokuGameEngine.Rank(ids, match.SudokuAnswers);
+        for (int rank = 0; rank < ranking.Count; rank++)
+        {
+            var p = match.Players.FirstOrDefault(x => x.UserId == ranking[rank]);
+            if (p != null) p.FinalRank = rank + 1;
+        }
+        match.SudokuStart = null;
+        match.SudokuDeadline = null;
+        match.Status = MatchStatus.WaitingNextRound;
+        match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
+    }
+
+    /// <summary>Timer: hết 60s giải Sudoku → ai chưa xong tính sai (đã set sẵn) rồi finalize. Trả về true nếu vừa xử lý.</summary>
+    public bool TryFinalizeSudoku(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSudoku) return false;
+            if (!match.SudokuDeadline.HasValue || match.SudokuDeadline.Value > DateTime.UtcNow) return false;
+            FinalizeBreakSudokuRound(match);
+            return true;
+        }
+    }
+
+    public IEnumerable<Match> AllBreakSudoku() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakSudoku);
 
     /// <summary>
     /// Deal round "Lễ hội" Cào Rùa: chia 3 lá/người, xác định người bài mạnh nhất (FestivalWinner),
@@ -2468,6 +2575,7 @@ public class MatchManager
         var scores = new int[n];
         var answers = match.BreakGame == BreakGameType.Memory ? match.MemoryAnswers
             : match.BreakGame == BreakGameType.Reflex ? match.ReflexAnswers
+            : match.BreakGame == BreakGameType.Sudoku ? match.SudokuAnswers
             : match.MathAnswers;
 
         // (seatIndex, correctCount, totalCorrectMs) cho từng người.
@@ -2538,9 +2646,9 @@ public class MatchManager
         // Giải Lao. KHÔNG áp star/liều.
         if (match.IsBreakRound)
         {
-            // 3 game trắc nghiệm (Tính toán/Trí nhớ/Phản xạ): tính theo nhóm THẮNG (đúng ≥1 câu) / THUA (0 đúng).
+            // 4 game đếm "câu đúng" (Tính toán/Trí nhớ/Phản xạ/Trí tuệ): tính theo nhóm THẮNG (đúng ≥1) / THUA (0 đúng).
             // Không ai đúng → hoà 0 hết. Cả 4 đúng → bảng hạng chuẩn +2/+1/-1/-2. Còn lại: bảng đặc biệt theo VD.
-            if (match.BreakGame is BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex)
+            if (match.BreakGame is BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku)
                 return ComputeQuizBreakScores(match);
 
             // Oẳn Tù Xì (May mắn): theo hạng bracket 1..4 → +2/+1/-1/-2. Zero-sum.
@@ -2971,6 +3079,7 @@ public class MatchManager
                 var quizAnswers = match.BreakGame == BreakGameType.Memory ? match.MemoryAnswers
                     : match.BreakGame == BreakGameType.Math ? match.MathAnswers
                     : match.BreakGame == BreakGameType.Reflex ? match.ReflexAnswers
+                    : match.BreakGame == BreakGameType.Sudoku ? match.SudokuAnswers
                     : null;
                 if (match.IsBreakRound && quizAnswers != null && quizAnswers.TryGetValue(p.UserId, out var mAns))
                 {

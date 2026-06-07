@@ -802,6 +802,20 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task SubmitSudokuCell(int cellIndex, int value)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SubmitSudokuCell(roomId.Value, auth.Value.UserId, cellIndex, value); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitRpsChoice(int choice)
     {
         var auth = await AuthenticateAsync();
@@ -1064,7 +1078,9 @@ public class RoomHub : Hub
             BuildReflexState(m),
             m.ReflexCooldownUntil,
             m.ReflexAnswerDeadline,
-            m.ReflexRevealUntil);
+            m.ReflexRevealUntil,
+            BuildSudokuState(m),
+            m.SudokuDeadline);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -1125,6 +1141,32 @@ public class RoomHub : Hub
             phase, picks,
             m.MathQuestions?.Count ?? MathQuizEngine.NumQuestions,
             qIdx, question, answered, results, new List<Guid>());
+    }
+
+    /// <summary>
+    /// Build state Trí tuệ (Sudoku) cho broadcast. KHÔNG lộ lời giải: chỉ gửi ô cho sẵn (giá trị), ô trống = 0.
+    /// Mỗi người client TỰ giữ bài điền của mình; public chỉ gửi tiến độ (số ô đã điền) + đã giải chưa + thời gian.
+    /// </summary>
+    private static SudokuGameStateDto? BuildSudokuState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.Sudoku || m.Sudoku == null) return null;
+        var given = new List<int>(SudokuGameEngine.Cells);
+        int blanks = 0;
+        for (int i = 0; i < SudokuGameEngine.Cells; i++)
+        {
+            if (m.Sudoku.Given[i]) given.Add(m.Sudoku.Solution[i]);
+            else { given.Add(0); blanks++; }
+        }
+        var progress = m.Players.Select(p =>
+        {
+            m.SudokuFills.TryGetValue(p.UserId, out var fills);
+            m.SudokuAnswers.TryGetValue(p.UserId, out var ans);
+            int filled = fills?.Count(v => v != 0) ?? 0;
+            bool solved = ans is { Count: > 0 } && ans[0].Correct;
+            long ms = solved ? ans![0].ElapsedMs : 0;
+            return new SudokuPlayerProgressDto(p.UserId, filled, solved, ms);
+        }).ToList();
+        return new SudokuGameStateDto(given, blanks, progress);
     }
 
     /// <summary>

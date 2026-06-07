@@ -125,7 +125,9 @@ public record MatchPublicStateDto(
     ReflexGameStateDto? Reflex = null,
     DateTime? ReflexCooldownUntil = null,
     DateTime? ReflexAnswerDeadline = null,
-    DateTime? ReflexRevealUntil = null);
+    DateTime? ReflexRevealUntil = null,
+    SudokuGameStateDto? Sudoku = null,
+    DateTime? SudokuDeadline = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -202,6 +204,17 @@ public record ReflexGameStateDto(
     List<int>? TargetIndexes,   // 3 ô đúng (CHỈ ở pha reveal; null khi đang click/cooldown)
     List<Guid> AnsweredUserIds, // ai đã chốt (đủ 3 lá) — client tự nhớ lá MÌNH đã chọn
     List<MathPlayerResultDto> Results);
+
+// ---- Giải Lao (Trí tuệ) — Sudoku 4×4, chung 1 đề ----
+public record SudokuPlayerProgressDto(
+    Guid UserId,
+    int Filled,              // số ô đã điền (kể cả cho sẵn) — hiển thị tiến độ, KHÔNG lộ giá trị
+    bool Solved,             // đã giải xong chưa
+    long ElapsedMs);         // thời gian giải (CHỈ ý nghĩa khi Solved)
+public record SudokuGameStateDto(
+    List<int> Given,         // 16 ô: giá trị 1-4 nếu cho sẵn, 0 nếu ô trống (KHÔNG lộ lời giải)
+    int Blanks,              // số ô trống cần điền
+    List<SudokuPlayerProgressDto> Progress);  // tiến độ + kết quả từng người
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

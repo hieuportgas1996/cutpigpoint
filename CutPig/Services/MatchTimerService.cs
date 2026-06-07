@@ -250,6 +250,17 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Giải Lao (Trí tuệ — Sudoku): hết 60s → finalize (ai chưa xong = sai) → xếp hạng → WaitingNextRound.
+                foreach (var match in _matches.AllBreakSudoku().ToList())
+                {
+                    if (_matches.TryFinalizeSudoku(match.RoomId))
+                    {
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                        if (match.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(match, stoppingToken);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {
