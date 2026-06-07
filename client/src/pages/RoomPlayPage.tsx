@@ -385,7 +385,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -1176,6 +1176,11 @@ export default function RoomPlayPage() {
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
+  async function handleStartBreakGameNow() {
+    try { await startBreakGameNow(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
   async function handleRps(choice: number) {
     try { await submitRpsChoice(choice); }
     catch (e) { toast.push('error', (e as Error).message); }
@@ -1763,6 +1768,8 @@ export default function RoomPlayPage() {
           <BreakIntroScreen
             gameType={matchState.breakGame}
             leftSec={breakIntroLeftSec}
+            iAmOrganizer={matchState.breakOrganizerId === myUserId}
+            onStart={handleStartBreakGameNow}
           />
         )}
 

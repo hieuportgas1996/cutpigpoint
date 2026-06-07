@@ -382,6 +382,20 @@ public class MatchManager
         }
     }
 
+    /// <summary>Người tổ chức bấm "Chơi ngay" ở pha hiện luật → bắt đầu game ngay (skip 30s đếm ngược).</summary>
+    public Match StartBreakGameNow(Guid roomId, Guid userId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakIntro)
+                throw new InvalidOperationException("Không trong pha giới thiệu luật.");
+            if (match.BreakOrganizerId != userId)
+                throw new InvalidOperationException("Chỉ người tổ chức được bắt đầu sớm.");
+            StartBreakGame(match);
+            return match;
+        }
+    }
+
     /// <summary>Hết 30s pha hiện luật → bắt đầu game đã chọn (deal game tương ứng, set status gameplay).</summary>
     public bool TryStartBreakGame(Guid roomId)
     {

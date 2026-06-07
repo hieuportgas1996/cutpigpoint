@@ -6,7 +6,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Rps]: {
     label: 'May mắn',
     emoji: '🎲',
-    tagline: 'Oẳn tù xì đối kháng — ăn nhau bằng may mắn',
+    tagline: 'Oẳn tù xì đối kháng',
     rules: [
       'Giải đấu Oẳn Tù Xì (búa ✊ / bao ✋ / kéo ✌️) cho cả 4 người.',
       'Vòng 1 chia 2 cặp đấu (Bo3 — ai thắng trước 2 ván). 2 người thắng vào Chung kết, 2 người thua tranh hạng 3.',
@@ -18,7 +18,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Math]: {
     label: 'Tính toán',
     emoji: '🧮',
-    tagline: 'Tính nhẩm nhanh — ai đúng & nhanh nhất thắng',
+    tagline: 'Tính nhẩm nhanh',
     rules: [
       'Mỗi người chọn 1 chữ số (0–9), 4 số ghép thành 2 phép tính.',
       'Mỗi phép tính là 1 câu trắc nghiệm 4 đáp án — chọn kết quả đúng.',
@@ -30,7 +30,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Memory]: {
     label: 'Trí nhớ',
     emoji: '🧠',
-    tagline: 'Ghi nhớ logo đội bóng — đố vị trí ô nào',
+    tagline: 'Ghi nhớ logo đội bóng',
     rules: [
       'Hiện lưới 3×3 gồm 9 logo CLB bóng đá khác nhau trong 10 giây — ghi nhớ.',
       'Lưới ẩn đi, hỏi "Ô số X là đội nào?" với 4 logo đáp án.',
@@ -42,7 +42,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Reflex]: {
     label: 'Phản xạ',
     emoji: '⚡',
-    tagline: 'Tìm đúng 3 lá bài nhanh nhất',
+    tagline: 'Tìm 3 lá bài nhanh nhất',
     rules: [
       'Lưới 4×4 gồm 16 lá bài. Đề yêu cầu tìm đúng 3 lá nhất định.',
       'Lưới bị che 3 giây (đếm ngược) trước khi cho click — không nhìn trước được.',
@@ -100,12 +100,14 @@ export function BreakSelectScreen({
   );
 }
 
-// Pha 2: hiện luật chơi game đã chọn (chỉ hiển thị, 30s tự bắt đầu).
+// Pha 2: hiện luật chơi game đã chọn (30s tự bắt đầu; người tổ chức có thể bấm "Chơi ngay" skip).
 export function BreakIntroScreen({
-  gameType, leftSec,
+  gameType, leftSec, iAmOrganizer, onStart,
 }: {
   gameType: number;
   leftSec: number;
+  iAmOrganizer: boolean;
+  onStart: () => void;
 }) {
   const meta = BREAK_GAME_META[gameType];
   if (!meta) return null;
@@ -118,7 +120,13 @@ export function BreakIntroScreen({
         <ul className="brk-rules">
           {meta.rules.map((r, i) => <li key={i}>{r}</li>)}
         </ul>
-        <div className="brk-countdown">Bắt đầu sau <b>{leftSec}s</b>…</div>
+        {iAmOrganizer ? (
+          <button className="brk-start-btn" onClick={onStart}>
+            ▶ Chơi ngay <span className="brk-start-sub">({leftSec}s)</span>
+          </button>
+        ) : (
+          <div className="brk-countdown">Bắt đầu sau <b>{leftSec}s</b>…</div>
+        )}
       </div>
     </div>
   );

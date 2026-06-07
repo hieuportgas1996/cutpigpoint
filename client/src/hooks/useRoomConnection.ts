@@ -32,6 +32,7 @@ interface UseRoomConnectionResult {
   respondGamble: (accept: boolean) => Promise<void>;
   scheduleBreak: (gameType?: number) => Promise<void>;
   selectBreakGame: (gameType: number) => Promise<void>;
+  startBreakGameNow: () => Promise<void>;
   submitRpsChoice: (choice: number) => Promise<void>;
   submitMathNumber: (number: number) => Promise<void>;
   submitMathAnswer: (optionIndex: number) => Promise<void>;
@@ -280,6 +281,12 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     await conn.invoke('SelectBreakGame', gameType);
   }, []);
 
+  const startBreakGameNow = useCallback(async () => {
+    const conn = connectionRef.current;
+    if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
+    await conn.invoke('StartBreakGameNow');
+  }, []);
+
   const submitRpsChoice = useCallback(async (choice: number) => {
     const conn = connectionRef.current;
     if (!conn || conn.state !== HubConnectionState.Connected) throw new Error('Chưa kết nối phòng.');
@@ -373,7 +380,7 @@ export function useRoomConnection(code: string | undefined): UseRoomConnectionRe
     status, state, matchState, privateHand, roundEnd, roundHistory, matchEnd, chatMessages, error,
     takeSeat, leaveSeat, startGame, startNextRound, endMatch,
     playCards, passTurn, surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
     respondWhiteWin, cutNewTrick, declineTrickCut,
     sendChat, requestMatchState, clearRoundEnd, onGameStarted, setShowOpponentCardCount
   };

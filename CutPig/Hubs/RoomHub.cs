@@ -731,6 +731,20 @@ public class RoomHub : Hub
         await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
     }
 
+    public async Task StartBreakGameNow()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.StartBreakGameNow(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
     public async Task SubmitMathNumber(int number)
     {
         var auth = await AuthenticateAsync();

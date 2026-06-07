@@ -76,6 +76,25 @@ public class MathBreakFlowTests
     }
 
     [Fact]
+    public void StartBreakGameNow_OrganizerOnly_SkipsCountdown()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.IsBreakRound = true;
+        match.BreakOrganizerId = ids[0];
+        match.BreakGame = BreakGameType.Math;
+        match.Status = MatchStatus.BreakIntro;
+        match.BreakIntroDeadline = DateTime.UtcNow.AddSeconds(30); // còn 30s
+
+        // Người khác KHÔNG được bắt đầu sớm.
+        Assert.Throws<InvalidOperationException>(() => mgr.StartBreakGameNow(roomId, ids[1]));
+
+        // Người tổ chức bấm "Chơi ngay" → vào game ngay dù còn 30s.
+        mgr.StartBreakGameNow(roomId, ids[0]);
+        Assert.Equal(MatchStatus.BreakMathPick, match.Status);
+        Assert.Null(match.BreakIntroDeadline);
+    }
+
+    [Fact]
     public void Select_Timeout_RandomsGame_EntersIntro()
     {
         var (mgr, match, roomId, ids) = Setup();
