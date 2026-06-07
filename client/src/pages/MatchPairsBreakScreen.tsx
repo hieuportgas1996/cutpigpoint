@@ -14,13 +14,14 @@ const ORDER_MEDAL = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
  * Ô còn úp = mặt sau; ô đã match / đang ngửa = hiện lá. Đồng bộ qua server.
  */
 export function MatchPairsBreakScreen({
-  mp, players, myUserId, isOrganizer, spinLeftSec, totalLeftSec, turnLeftSec, mismatchActive, onSpin, onFlip,
+  mp, players, myUserId, isOrganizer, spinLeftSec, revealLeftSec, totalLeftSec, turnLeftSec, mismatchActive, onSpin, onFlip,
 }: {
   mp: MatchPairsState;
   players: MatchPlayerPublic[];
   myUserId: string;
   isOrganizer: boolean;
   spinLeftSec: number;
+  revealLeftSec: number;     // 5s hiện thứ tự sau khi quay
   totalLeftSec: number;
   turnLeftSec: number;       // 10s đồng hồ lượt hiện tại
   mismatchActive: boolean;   // đang chờ úp 2 lá trật (khoá click)
@@ -52,22 +53,50 @@ export function MatchPairsBreakScreen({
       <div className="mpr-overlay">
         <div className="mpr-card">
           <div className="mpr-title">🎴 Cơ hội — Tìm cặp giống nhau</div>
-          {isOrganizer ? (
+          {mp.spun ? (
+            // Đã quay → hiện thứ tự đi 5s cho mọi người xem.
+            <>
+              <div className="mpr-sub">🎲 Thứ tự đi — vào game sau <b>{revealLeftSec}s</b></div>
+              <div className="mpr-players">
+                {[...seats].sort((a, b) => (playerOf[a.userId]?.turnOrder ?? 9) - (playerOf[b.userId]?.turnOrder ?? 9)).map(p => {
+                  const pp = playerOf[p.userId];
+                  return (
+                    <div key={p.userId} className={`mpr-player reveal ${p.userId === myUserId ? 'me' : ''} ${pp?.turnOrder === 1 ? 'first' : ''}`}>
+                      <span className="mpr-order">{ORDER_MEDAL[(pp?.turnOrder ?? 1) - 1] ?? ''}</span>
+                      <Avatar name={nameOf[p.userId] ?? '?'} hasAvatar={avatarOf[p.userId]} playerId={p.userId} size="sm" />
+                      <div className="mpr-player-name">{nameOf[p.userId] ?? '?'}</div>
+                      {pp?.turnOrder === 1 && <span className="mpr-first-tag">đi trước</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : isOrganizer ? (
             <>
               <div className="mpr-sub">Bấm để quay thứ tự đi ({spinLeftSec}s)</div>
               <button className="mpr-spin-btn" onClick={onSpin}>🎲 Quay thứ tự</button>
+              <div className="mpr-players">
+                {seats.map(p => (
+                  <div key={p.userId} className={`mpr-player ${p.userId === myUserId ? 'me' : ''}`}>
+                    <Avatar name={nameOf[p.userId] ?? '?'} hasAvatar={avatarOf[p.userId]} playerId={p.userId} size="sm" />
+                    <div className="mpr-player-name">{nameOf[p.userId] ?? '?'}</div>
+                  </div>
+                ))}
+              </div>
             </>
           ) : (
-            <div className="mpr-sub">Chờ người tổ chức quay thứ tự… ({spinLeftSec}s)</div>
-          )}
-          <div className="mpr-players">
-            {seats.map(p => (
-              <div key={p.userId} className={`mpr-player ${p.userId === myUserId ? 'me' : ''}`}>
-                <Avatar name={nameOf[p.userId] ?? '?'} hasAvatar={avatarOf[p.userId]} playerId={p.userId} size="sm" />
-                <div className="mpr-player-name">{nameOf[p.userId] ?? '?'}</div>
+            <>
+              <div className="mpr-sub">Chờ người tổ chức quay thứ tự… ({spinLeftSec}s)</div>
+              <div className="mpr-players">
+                {seats.map(p => (
+                  <div key={p.userId} className={`mpr-player ${p.userId === myUserId ? 'me' : ''}`}>
+                    <Avatar name={nameOf[p.userId] ?? '?'} hasAvatar={avatarOf[p.userId]} playerId={p.userId} size="sm" />
+                    <div className="mpr-player-name">{nameOf[p.userId] ?? '?'}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
     );

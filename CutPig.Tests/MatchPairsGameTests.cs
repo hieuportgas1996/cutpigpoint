@@ -40,6 +40,37 @@ public class MatchPairsGameTests
         return mgr.ComputeRoundScores(match);
     }
 
+    // Quay thứ tự + bỏ qua pha hiện 5s để vào pha chơi (cho test flow).
+    private static void SpinAndStart(MatchManager mgr, Match match, Guid roomId, Guid organizer)
+    {
+        mgr.SpinMatchPairsOrder(roomId, organizer);
+        match.MatchPairsRevealUntil = DateTime.UtcNow.AddSeconds(-1);
+        mgr.TryStartMatchPairsPlay(roomId);
+    }
+
+    [Fact]
+    public void Spin_EntersRevealThenPlay()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.IsBreakRound = true; match.BreakGame = BreakGameType.MatchPairs;
+        typeof(MatchManager).GetMethod("DealBreakMatchPairsRound", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, new object[] { match });
+        match.BreakOrganizerId = ids[0];
+
+        mgr.SpinMatchPairsOrder(roomId, ids[0]);
+        // Quay xong → VẪN BreakMatchSpin (pha hiện thứ tự 5s) + đã có order + reveal deadline.
+        Assert.Equal(MatchStatus.BreakMatchSpin, match.Status);
+        Assert.Equal(4, match.MatchPairsTurnOrder.Count);
+        Assert.NotNull(match.MatchPairsRevealUntil);
+
+        // Hết 5s → vào pha chơi.
+        match.MatchPairsRevealUntil = DateTime.UtcNow.AddSeconds(-1);
+        Assert.True(mgr.TryStartMatchPairsPlay(roomId));
+        Assert.Equal(MatchStatus.BreakMatchPlay, match.Status);
+        Assert.NotNull(match.MatchPairsTurnDeadline);
+        Assert.NotNull(match.MatchPairsDeadline);
+    }
+
     [Fact]
     public void Board_Has8DistinctPairs_EachTwice()
     {
@@ -113,7 +144,7 @@ public class MatchPairsGameTests
         Assert.Equal(MatchStatus.BreakMatchSpin, match.Status);
         match.BreakOrganizerId = ids[0];
 
-        mgr.SpinMatchPairsOrder(roomId, ids[0]);
+        SpinAndStart(mgr, match, roomId, ids[0]);
         Assert.Equal(MatchStatus.BreakMatchPlay, match.Status);
         Assert.Equal(4, match.MatchPairsTurnOrder.Count);
 
@@ -157,7 +188,7 @@ public class MatchPairsGameTests
         typeof(MatchManager).GetMethod("DealBreakMatchPairsRound", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, new object[] { match });
         match.BreakOrganizerId = ids[0];
-        mgr.SpinMatchPairsOrder(roomId, ids[0]);
+        SpinAndStart(mgr, match, roomId, ids[0]);
         var first = match.MatchPairsTurnOrder[0];
 
         // Hết 10s lượt mà chưa lật gì → auto lật 2 lá TRẬT (8 cặp còn nguyên nên luôn tạo được trật).
@@ -185,7 +216,7 @@ public class MatchPairsGameTests
         typeof(MatchManager).GetMethod("DealBreakMatchPairsRound", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, new object[] { match });
         match.BreakOrganizerId = ids[0];
-        mgr.SpinMatchPairsOrder(roomId, ids[0]);
+        SpinAndStart(mgr, match, roomId, ids[0]);
         var notTurn = match.MatchPairsTurnOrder[1];
         Assert.Throws<InvalidOperationException>(() => mgr.FlipMatchPairsCell(roomId, notTurn, 0));
     }

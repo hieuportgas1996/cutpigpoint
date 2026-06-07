@@ -313,6 +313,31 @@ function XiDachResultRows({ round, myUserId }: { round: RoundEnd; myUserId: stri
 }
 
 const MATH_MEDALS = ['🥇', '🥈', '🥉', '4️⃣'];
+
+// Modal tổng kết "Cơ hội" — hiện SỐ CẶP match từng người (mathCorrectCount tái dùng làm số cặp).
+function MatchPairsResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  const rows = [...round.results].sort((a, b) => (a.finalRank || 99) - (b.finalRank || 99));
+  return (
+    <div className="match-end-list festival-list">
+      {rows.map(r => (
+        <div key={r.userId} className={`match-end-row festival-row ${r.finalRank === 1 ? 'festival-winner' : ''}`}>
+          <span className="rank-tag">{MATH_MEDALS[(r.finalRank || 1) - 1] ?? `#${r.finalRank}`}</span>
+          <div className="match-end-name">
+            <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+            <div className="math-result-detail">
+              <span className="math-result-correct">🎴 {r.mathCorrectCount} cặp</span>
+            </div>
+          </div>
+          <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+            {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+          </span>
+          <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MathResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
   // Theo hạng (FinalRank 1..4).
   const rows = [...round.results].sort((a, b) => (a.finalRank || 99) - (b.finalRank || 99));
@@ -872,6 +897,9 @@ export default function RoomPlayPage() {
     : false;
   const mprTurnLeftSec = matchState?.matchPairsTurnDeadline
     ? Math.max(0, Math.ceil((new Date(matchState.matchPairsTurnDeadline).getTime() - now) / 1000))
+    : 0;
+  const mprRevealLeftSec = matchState?.matchPairsRevealUntil
+    ? Math.max(0, Math.ceil((new Date(matchState.matchPairsRevealUntil).getTime() - now) / 1000))
     : 0;
 
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
@@ -1879,6 +1907,7 @@ export default function RoomPlayPage() {
             myUserId={myUserId}
             isOrganizer={matchState.breakOrganizerId === myUserId}
             spinLeftSec={mprSpinLeftSec}
+            revealLeftSec={mprRevealLeftSec}
             totalLeftSec={mprTotalLeftSec}
             turnLeftSec={mprTurnLeftSec}
             mismatchActive={mprMismatchActive}
@@ -2004,6 +2033,8 @@ export default function RoomPlayPage() {
                 ? <XiDachResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasFestival
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
+                : delayedRoundEnd.wasBreak && delayedRoundEnd.breakGame === 6
+                ? <MatchPairsResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasBreak && (delayedRoundEnd.breakGame === 2 || delayedRoundEnd.breakGame === 3 || delayedRoundEnd.breakGame === 4 || delayedRoundEnd.breakGame === 5)
                 ? <MathResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
@@ -2094,6 +2125,8 @@ export default function RoomPlayPage() {
                           ? <XiDachResultRows round={r} myUserId={myUserId} />
                           : r.wasFestival
                           ? <FestivalResultRows round={r} myUserId={myUserId} />
+                          : r.wasBreak && r.breakGame === 6
+                          ? <MatchPairsResultRows round={r} myUserId={myUserId} />
                           : r.wasBreak && (r.breakGame === 2 || r.breakGame === 3 || r.breakGame === 4 || r.breakGame === 5)
                           ? <MathResultRows round={r} myUserId={myUserId} />
                           : <RoundResultRows round={r} myUserId={myUserId} />}

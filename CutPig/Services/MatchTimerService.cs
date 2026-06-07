@@ -265,7 +265,8 @@ public class MatchTimerService : BackgroundService
                 // hết 120s tổng → finalize (xếp hạng theo số cặp) → WaitingNextRound.
                 foreach (var match in _matches.AllBreakMatchSpin().ToList())
                 {
-                    if (_matches.TryAutoSpinMatchPairs(match.RoomId))
+                    // Auto quay nếu tổ chức chưa bấm; hoặc hết 5s hiện thứ tự → vào pha chơi.
+                    if (_matches.TryAutoSpinMatchPairs(match.RoomId) || _matches.TryStartMatchPairsPlay(match.RoomId))
                         await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
                 }
                 foreach (var match in _matches.AllBreakMatchPlay().ToList())

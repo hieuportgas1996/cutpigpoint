@@ -271,6 +271,8 @@ public class Match
     public DateTime? MatchPairsDeadline { get; set; }
     /// <summary>Hết hạn 10s LƯỢT hiện tại; hết → auto lật ngẫu nhiên 2 lá TRẬT rồi qua lượt. Reset mỗi lượt.</summary>
     public DateTime? MatchPairsTurnDeadline { get; set; }
+    /// <summary>Sau khi quay: hiện thứ tự 5s cho mọi người xem (vẫn status BreakMatchSpin, đã có TurnOrder) rồi mới vào chơi. Null = chưa quay / đã vào chơi.</summary>
+    public DateTime? MatchPairsRevealUntil { get; set; }
     /// <summary>Khi lật 2 lá KHÔNG khớp: hiện ~1.5s rồi úp lại + qua lượt. Null khi không chờ úp.</summary>
     public DateTime? MatchPairsMismatchUntil { get; set; }
 

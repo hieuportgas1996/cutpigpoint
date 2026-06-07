@@ -132,7 +132,8 @@ public record MatchPublicStateDto(
     DateTime? MatchPairsSpinDeadline = null,
     DateTime? MatchPairsDeadline = null,
     DateTime? MatchPairsMismatchUntil = null,
-    DateTime? MatchPairsTurnDeadline = null);
+    DateTime? MatchPairsTurnDeadline = null,
+    DateTime? MatchPairsRevealUntil = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(

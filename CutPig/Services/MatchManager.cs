@@ -36,6 +36,7 @@ public class MatchManager
     public static TimeSpan MatchPairsSpinTimeout { get; } = TimeSpan.FromSeconds(20); // 20s pha quay thứ tự (Cơ hội)
     public static TimeSpan MatchPairsTimeout { get; } = TimeSpan.FromSeconds(300);    // 300s tổng ván lật cặp (Cơ hội)
     public static TimeSpan MatchPairsTurnTimeout { get; } = TimeSpan.FromSeconds(10); // 10s/lượt; hết → auto lật trật + qua lượt
+    public static TimeSpan MatchPairsRevealTimeout { get; } = TimeSpan.FromSeconds(5); // 5s hiện thứ tự đi sau khi quay rồi mới chơi
     public static TimeSpan MatchPairsMismatchTimeout { get; } = TimeSpan.FromMilliseconds(1500); // 1.5s hiện 2 lá trật rồi úp
 
     private object LockFor(Guid roomId) => _locks.GetOrAdd(roomId, _ => new object());
@@ -157,6 +158,7 @@ public class MatchManager
         match.MatchPairsDeadline = null;
         match.MatchPairsTurnDeadline = null;
         match.MatchPairsMismatchUntil = null;
+        match.MatchPairsRevealUntil = null;
         foreach (var p in match.Players)
         {
             p.Hand.Clear();
@@ -1195,6 +1197,7 @@ public class MatchManager
         }
     }
 
+    /// <summary>Quay random thứ tự → vào pha HIỆN KẾT QUẢ 5s (vẫn BreakMatchSpin, đã có order). Timer StartPlay sau.</summary>
     private static void SpinMatchPairsOrderInternal(Match match)
     {
         var order = match.Players.Select(p => p.UserId).ToList();
@@ -1207,9 +1210,22 @@ public class MatchManager
         match.MatchPairsTurnIdx = 0;
         match.MatchPairsSpinDeadline = null;
         match.MatchPairsMismatchUntil = null;
-        match.Status = MatchStatus.BreakMatchPlay;
-        match.MatchPairsDeadline = DateTime.UtcNow + MatchPairsTimeout;
-        match.MatchPairsTurnDeadline = DateTime.UtcNow + MatchPairsTurnTimeout;
+        match.MatchPairsRevealUntil = DateTime.UtcNow + MatchPairsRevealTimeout; // hiện thứ tự 5s
+    }
+
+    /// <summary>Hết 5s hiện thứ tự → vào pha chơi thật (đếm tổng + đồng hồ lượt). Trả về true nếu vừa xử lý.</summary>
+    public bool TryStartMatchPairsPlay(Guid roomId)
+    {
+        lock (LockFor(roomId))
+        {
+            if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakMatchSpin) return false;
+            if (!match.MatchPairsRevealUntil.HasValue || match.MatchPairsRevealUntil.Value > DateTime.UtcNow) return false;
+            match.MatchPairsRevealUntil = null;
+            match.Status = MatchStatus.BreakMatchPlay;
+            match.MatchPairsDeadline = DateTime.UtcNow + MatchPairsTimeout;
+            match.MatchPairsTurnDeadline = DateTime.UtcNow + MatchPairsTurnTimeout;
+            return true;
+        }
     }
 
     /// <summary>Bắt đầu lượt mới: reset đồng hồ 10s/lượt (gọi sau quay / sau trúng giữ lượt / sau qua lượt).</summary>
@@ -3390,6 +3406,11 @@ public class MatchManager
                     mathResults = mAns.Select(a => new Dtos.MathQuestionResultDto(a.Correct, a.Answered, a.ElapsedMs)).ToList();
                     mathCorrect = mAns.Count(a => a.Correct);
                     mathTotalMs = mAns.Where(a => a.Correct).Sum(a => a.ElapsedMs);
+                }
+                // Cơ hội: tái dùng MathCorrectCount để mang SỐ CẶP match (hiển thị ở modal).
+                else if (match.IsBreakRound && match.BreakGame == BreakGameType.MatchPairs)
+                {
+                    mathCorrect = match.MatchPairsCount.GetValueOrDefault(p.UserId);
                 }
                 return new Dtos.RoundResultEntryDto(
                     p.UserId, p.DisplayName,

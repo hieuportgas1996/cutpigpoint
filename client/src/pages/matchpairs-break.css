@@ -97,6 +97,8 @@
 }
 .mpr-player.me { border-color: #ffe26b; }
 .mpr-player.turn { box-shadow: 0 0 0 2px #8fe388; background: rgba(143,227,136,0.12); }
+.mpr-player.first { box-shadow: 0 0 0 2px #ffe26b; background: rgba(255,210,80,0.12); }
+.mpr-first-tag { font-size: 11px; font-weight: 700; color: #ffe26b; }
 .mpr-order { font-size: 15px; }
 .mpr-player-name { font-size: 13px; font-weight: 600; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mpr-player-pairs { font-size: 13px; font-weight: 700; color: #ffe26b; }
