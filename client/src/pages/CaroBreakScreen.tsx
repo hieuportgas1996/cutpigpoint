@@ -64,6 +64,16 @@ export function CaroBreakScreen({
   const iVotedDraw = playerOf[myUserId]?.drawVote ?? false;
   const inCurrentPair = playerOf[myUserId]?.inCurrentPair ?? false;
   const winSet = useMemo(() => new Set(caro.winLine), [caro.winLine]);
+  // 2 đầu mút đường gạch chuỗi thắng (toạ độ theo "ô" 0..10, tâm ô = col+0.5/row+0.5).
+  const winLineEnds = useMemo(() => {
+    if (!caro.winLine || caro.winLine.length < 2) return null;
+    const sorted = [...caro.winLine].sort((a, b) => a - b);
+    const a = sorted[0], b = sorted[sorted.length - 1];
+    return {
+      x1: (a % SIZE) + 0.5, y1: Math.floor(a / SIZE) + 0.5,
+      x2: (b % SIZE) + 0.5, y2: Math.floor(b / SIZE) + 0.5,
+    };
+  }, [caro.winLine]);
 
   // Đếm số cặp mỗi team đã thắng (từ kết quả các cặp đã xong).
   const xPairWins = caro.pairs.filter(p => p.winner === 1).length;
@@ -184,29 +194,36 @@ export function CaroBreakScreen({
             <div className="car-total">⌛ {totalLeftSec}s</div>
           </div>
 
-          {/* Bàn cờ 10×10 */}
-          <div className="car-board" style={{ gridTemplateColumns: `repeat(${SIZE}, var(--car-cell))` }}>
-            {caro.board.map((v, i) => {
-              const filled = v !== 0;
-              const isLast = i === caro.lastMove;
-              const isWin = winSet.has(i);
-              const cls = [
-                'car-cell',
-                v === 1 ? 'x' : v === 2 ? 'o' : 'empty',
-                isLast ? 'last' : '',
-                isWin ? 'win' : '',
-              ].join(' ');
-              return (
-                <button
-                  key={i}
-                  className={cls}
-                  disabled={!isMyTurn || filled || decided}
-                  onClick={() => onPlace(i)}
-                >
-                  {v === 1 ? <Mark kind="x" /> : v === 2 ? <Mark kind="o" /> : null}
-                </button>
-              );
-            })}
+          {/* Bàn cờ 10×10 + đường gạch chuỗi thắng overlay */}
+          <div className="car-board-wrap">
+            <div className="car-board">
+              {caro.board.map((v, i) => {
+                const filled = v !== 0;
+                const isLast = i === caro.lastMove;
+                const isWin = winSet.has(i);
+                const cls = [
+                  'car-cell',
+                  v === 1 ? 'x' : v === 2 ? 'o' : 'empty',
+                  isLast ? 'last' : '',
+                  isWin ? 'win' : '',
+                ].join(' ');
+                return (
+                  <button
+                    key={i}
+                    className={cls}
+                    disabled={!isMyTurn || filled || decided}
+                    onClick={() => onPlace(i)}
+                  >
+                    {v === 1 ? <Mark kind="x" /> : v === 2 ? <Mark kind="o" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+            {winLineEnds && (
+              <svg className="car-winline" viewBox={`0 0 ${SIZE} ${SIZE}`} preserveAspectRatio="none">
+                <line x1={winLineEnds.x1} y1={winLineEnds.y1} x2={winLineEnds.x2} y2={winLineEnds.y2} />
+              </svg>
+            )}
           </div>
         </div>
 

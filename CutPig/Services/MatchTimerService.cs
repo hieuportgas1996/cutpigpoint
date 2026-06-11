@@ -282,8 +282,8 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
-                // Giải Lao (Caro đồng đội): pha quay 20s → auto quay; hết 5s hiện team → vào chơi;
-                // pha chơi: hết 10s/lượt → bỏ lượt qua người kế; hết backstop tổng → hòa → WaitingNextRound.
+                // Giải Lao (Caro đồng đội): pha quay 20s → auto quay; hết 10s hiện cặp → vào ván cặp;
+                // pha chơi: thắng → giữ 4s hiện gạch chuỗi thắng rồi qua cặp; hết 10s/lượt → bỏ lượt; hết backstop → hòa.
                 foreach (var match in _matches.AllBreakCaroSpin().ToList())
                 {
                     if (_matches.TryAutoSpinCaro(match.RoomId) || _matches.TryStartCaroPlay(match.RoomId))
@@ -291,7 +291,8 @@ public class MatchTimerService : BackgroundService
                 }
                 foreach (var match in _matches.AllBreakCaroPlay().ToList())
                 {
-                    bool changed = _matches.TryAutoSkipCaroTurn(match.RoomId)
+                    bool changed = _matches.TryEndCaroWinShow(match.RoomId)
+                        || _matches.TryAutoSkipCaroTurn(match.RoomId)
                         || _matches.TryFinalizeCaro(match.RoomId);
                     if (changed)
                     {

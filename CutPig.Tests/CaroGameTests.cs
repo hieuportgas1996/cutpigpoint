@@ -163,6 +163,7 @@ public class CaroGameTests
     }
 
     // Cho cặp hiện tại thắng nhanh: gài sẵn 4 quân cho người đi đầu (X) rồi đặt quân thứ 5.
+    // Thắng → pha hiện gạch chuỗi 4s (CaroWinShowUntil); ta tua nhanh + TryEndCaroWinShow để EndCaroPair.
     private static int WinCurrentPairForX(MatchManager mgr, Match match, Guid roomId)
     {
         var xPlayer = match.CaroTurnOrder[0]; // X đi đầu trong cặp
@@ -170,7 +171,9 @@ public class CaroGameTests
         var board = match.CaroBoard!;
         for (int c = 0; c < 4; c++) board[Idx(0, c)] = xTeam;
         match.CaroTurnIdx = 0;
-        mgr.PlaceCaroStone(roomId, xPlayer, Idx(0, 4)); // thắng cặp
+        mgr.PlaceCaroStone(roomId, xPlayer, Idx(0, 4)); // thắng cặp → vào pha hiện gạch
+        match.CaroWinShowUntil = DateTime.UtcNow.AddSeconds(-1);
+        mgr.TryEndCaroWinShow(roomId);
         return xTeam;
     }
 
@@ -340,7 +343,9 @@ public class CaroGameTests
         // Đưa lượt về O: X đánh 1 nước vu vơ trước.
         var xPlayer = match.CaroTurnOrder[0];
         mgr.PlaceCaroStone(roomId, xPlayer, Idx(9, 9));
-        mgr.PlaceCaroStone(roomId, oPlayer, Idx(2, 4)); // O thắng cặp 2
+        mgr.PlaceCaroStone(roomId, oPlayer, Idx(2, 4)); // O thắng cặp 2 → pha hiện gạch
+        match.CaroWinShowUntil = DateTime.UtcNow.AddSeconds(-1);
+        mgr.TryEndCaroWinShow(roomId);
 
         // 1-1 → hòa chung cuộc, 0 điểm.
         Assert.Equal(MatchStatus.WaitingNextRound, match.Status);

@@ -314,6 +314,8 @@ public class Match
     public DateTime? CaroTurnDeadline { get; set; }
     /// <summary>Hết hạn TỔNG ván của cặp hiện tại (backstop: hết → cặp đó hòa). Null ngoài round này.</summary>
     public DateTime? CaroDeadline { get; set; }
+    /// <summary>Khi 1 cặp THẮNG (5 liên tiếp): giữ bàn + gạch chuỗi thắng vài giây cho mọi người xem rồi mới EndCaroPair. Null khi không trong pha hiện thắng.</summary>
+    public DateTime? CaroWinShowUntil { get; set; }
     /// <summary>Phiếu xin hòa CẶP hiện tại: key = UserId, true = Đồng ý hòa. Reset mỗi cặp. Đủ 2 người của cặp đồng ý → cặp đó hòa.</summary>
     public Dictionary<Guid, bool> CaroDrawVotes { get; set; } = new();
 
