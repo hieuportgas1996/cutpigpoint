@@ -474,21 +474,30 @@ export interface MatchPairsState {
   players: MatchPairsPlayer[];
 }
 
-// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 4 người chia 2 team ----
+// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 2 team, 2 cặp đấu 1v1 tuần tự ----
 export interface CaroPlayer {
   userId: string;
-  team: number;        // 1 = X, 2 = O
-  turnOrder: number;   // 1-4 (0 nếu chưa quay)
-  drawVote: boolean;   // đã bấm xin hòa chưa
+  team: number;          // 1 = X, 2 = O
+  inCurrentPair: boolean; // có trong cặp đang đấu
+  drawVote: boolean;     // đã bấm xin hòa chưa
+}
+export interface CaroPair {
+  playerX: string;
+  playerO: string;
+  winner: number;        // 0 chưa xong/đang chơi/hòa, 1 X, 2 O
 }
 export interface CaroState {
-  phase: number;             // 0 quay chia team, 1 đang chơi
-  board: number[];           // 100 ô (10×10): 0 trống, 1 team X, 2 team O
+  phase: number;             // 0 quay/hiện cặp, 1 đang chơi ván
+  board: number[];           // 100 ô (10×10): 0 trống, 1 team X, 2 team O (cặp đang chơi)
   lastMove: number;          // index ô vừa đặt (-1 nếu chưa)
   turnUserId: string | null; // người đang tới lượt
-  winnerTeam: number;        // 0 chưa/hòa, 1 X thắng, 2 O thắng
-  winLine: number[];         // index các ô chuỗi thắng (tô sáng)
+  winnerTeam: number;        // CẶP hiện tại: 0 chưa/hòa, 1 X, 2 O
+  matchWinnerTeam: number;   // CHUNG CUỘC: 0 chưa/hòa, 1 X, 2 O
+  winLine: number[];         // index các ô chuỗi thắng cặp hiện tại (tô sáng)
   spun: boolean;             // đã quay chia team chưa
+  pairIndex: number;         // cặp đang chơi (0 hoặc 1)
+  pairCount: number;         // tổng số cặp (2)
+  pairs: CaroPair[];         // 2 cặp đấu + kết quả
   players: CaroPlayer[];
 }
 

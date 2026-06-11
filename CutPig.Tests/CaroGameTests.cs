@@ -116,7 +116,7 @@ public class CaroGameTests
     {
         match.IsBreakRound = true;
         match.BreakGame = BreakGameType.Caro;
-        match.CaroWinnerTeam = winnerTeam;
+        match.CaroMatchWinnerTeam = winnerTeam; // điểm theo team thắng CHUNG CUỘC
         match.CaroTeam = new Dictionary<Guid, int>();
         for (int i = 0; i < 4; i++) match.CaroTeam[ids[i]] = teams[i];
         return mgr.ComputeRoundScores(match);
@@ -148,12 +148,13 @@ public class CaroGameTests
         Assert.Equal(new[] { 0, 0, 0, 0 }, Score(mgr, match, ids, 0, new[] { 1, 2, 1, 2 }));
     }
 
-    // ============================== Flow ==============================
+    // ============================== Flow (mô hình 2 cặp đấu tuần tự) ==============================
 
     private static void Deal(Match match)
         => typeof(MatchManager).GetMethod("DealBreakCaroRound", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, new object[] { match });
 
+    // Quay chia team/cặp + bỏ qua pha hiện 5s → vào ván cặp hiện tại.
     private static void SpinAndStart(MatchManager mgr, Match match, Guid roomId, Guid organizer)
     {
         mgr.SpinCaroOrder(roomId, organizer);
@@ -161,20 +162,31 @@ public class CaroGameTests
         mgr.TryStartCaroPlay(roomId);
     }
 
-    [Fact]
-    public void Deal_EntersSpinPhase()
+    // Cho cặp hiện tại thắng nhanh: gài sẵn 4 quân cho người đi đầu (X) rồi đặt quân thứ 5.
+    private static int WinCurrentPairForX(MatchManager mgr, Match match, Guid roomId)
     {
-        var (_, match, _, ids) = Setup();
+        var xPlayer = match.CaroTurnOrder[0]; // X đi đầu trong cặp
+        int xTeam = match.CaroTeam[xPlayer];  // = 1
+        var board = match.CaroBoard!;
+        for (int c = 0; c < 4; c++) board[Idx(0, c)] = xTeam;
+        match.CaroTurnIdx = 0;
+        mgr.PlaceCaroStone(roomId, xPlayer, Idx(0, 4)); // thắng cặp
+        return xTeam;
+    }
+
+    [Fact]
+    public void Deal_EntersSpinPhase_NoBoardYet()
+    {
+        var (_, match, _, _) = Setup();
         match.IsBreakRound = true;
         Deal(match);
         Assert.Equal(MatchStatus.BreakCaroSpin, match.Status);
-        Assert.NotNull(match.CaroBoard);
-        Assert.Equal(CaroGameEngine.CellCount, match.CaroBoard!.Length);
+        Assert.Null(match.CaroBoard);          // bàn deal khi vào ván cặp
         Assert.NotNull(match.CaroSpinDeadline);
     }
 
     [Fact]
-    public void Spin_AssignsTwoTeams_AlternatingOrder()
+    public void Spin_AssignsTwoTeams_TwoPairs()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true;
@@ -182,28 +194,32 @@ public class CaroGameTests
         match.BreakOrganizerId = ids[0];
 
         mgr.SpinCaroOrder(roomId, ids[0]);
-        // Quay xong → VẪN BreakCaroSpin (pha hiện 5s).
-        Assert.Equal(MatchStatus.BreakCaroSpin, match.Status);
+        Assert.Equal(MatchStatus.BreakCaroSpin, match.Status); // pha hiện 5s
         Assert.NotNull(match.CaroRevealUntil);
-        Assert.Equal(4, match.CaroTurnOrder.Count);
 
-        // 2 người team X, 2 người team O.
+        // 2 team, mỗi team 2 người.
         Assert.Equal(2, match.CaroTeam.Count(kv => kv.Value == 1));
         Assert.Equal(2, match.CaroTeam.Count(kv => kv.Value == 2));
 
-        // Thứ tự xen kẽ X(1) → O(2) → X(1) → O(2).
-        var order = match.CaroTurnOrder;
-        Assert.Equal(1, match.CaroTeam[order[0]]);
-        Assert.Equal(2, match.CaroTeam[order[1]]);
-        Assert.Equal(1, match.CaroTeam[order[2]]);
-        Assert.Equal(2, match.CaroTeam[order[3]]);
+        // 2 cặp đấu, mỗi cặp [X, O].
+        Assert.Equal(2, match.CaroPairs.Count);
+        Assert.All(match.CaroPairs, pr =>
+        {
+            Assert.Equal(1, match.CaroTeam[pr[0]]); // phần tử 0 = team X
+            Assert.Equal(2, match.CaroTeam[pr[1]]); // phần tử 1 = team O
+        });
+        // 4 người xuất hiện đúng 1 lần trong 2 cặp.
+        var all = match.CaroPairs.SelectMany(p => p).ToHashSet();
+        Assert.Equal(4, all.Count);
 
-        // Hết 5s → vào pha chơi.
+        // Hết 5s → vào ván cặp 1.
         match.CaroRevealUntil = DateTime.UtcNow.AddSeconds(-1);
         Assert.True(mgr.TryStartCaroPlay(roomId));
         Assert.Equal(MatchStatus.BreakCaroPlay, match.Status);
+        Assert.Equal(0, match.CaroPairIndex);
+        Assert.Equal(2, match.CaroTurnOrder.Count); // chỉ 2 người của cặp đánh
+        Assert.NotNull(match.CaroBoard);
         Assert.NotNull(match.CaroTurnDeadline);
-        Assert.NotNull(match.CaroDeadline);
     }
 
     [Fact]
@@ -235,7 +251,7 @@ public class CaroGameTests
     }
 
     [Fact]
-    public void Place_AdvancesTurn_AfterNonWinningMove()
+    public void Place_AdvancesTurn_WithinPair()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true;
@@ -246,11 +262,11 @@ public class CaroGameTests
         var first = match.CaroTurnOrder[0];
         mgr.PlaceCaroStone(roomId, first, 0);
         Assert.Equal(1, match.CaroTurnIdx);
-        Assert.Equal(match.CaroTurnOrder[1], match.CaroTurnOrder[match.CaroTurnIdx % 4]);
+        Assert.Equal(match.CaroTurnOrder[1], match.CaroTurnOrder[match.CaroTurnIdx % 2]);
     }
 
     [Fact]
-    public void Place_FiveInARow_TeamWins_Finalizes()
+    public void Pair1Win_GoesToReveal_ThenPair2()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true;
@@ -258,25 +274,52 @@ public class CaroGameTests
         match.BreakOrganizerId = ids[0];
         SpinAndStart(mgr, match, roomId, ids[0]);
 
-        // Ép thứ tự cố định để team X (đi đầu) đặt được 4 quân hàng ngang sẵn, rồi đặt quân thứ 5 thắng.
-        var xPlayer = match.CaroTurnOrder[0]; // team X đi đầu
-        int xTeam = match.CaroTeam[xPlayer];  // = 1
-        var board = match.CaroBoard!;
-        for (int c = 0; c < 4; c++) board[Idx(0, c)] = xTeam; // gài sẵn 4 quân X
-        // Bảo đảm tới lượt xPlayer.
-        match.CaroTurnIdx = 0;
+        // Cặp 1: X thắng.
+        WinCurrentPairForX(mgr, match, roomId);
+        // Còn cặp 2 → quay lại pha hiện 5s (BreakCaroSpin), CHƯA finalize chung cuộc.
+        Assert.Equal(MatchStatus.BreakCaroSpin, match.Status);
+        Assert.Equal(1, match.CaroPairIndex);
+        Assert.Single(match.CaroPairWinners);
+        Assert.Equal(1, match.CaroPairWinners[0]); // cặp 1: team X
+        Assert.Equal(0, match.CaroMatchWinnerTeam); // chưa xong
 
-        mgr.PlaceCaroStone(roomId, xPlayer, Idx(0, 4)); // quân thứ 5 → thắng
-        Assert.Equal(xTeam, match.CaroWinnerTeam);
-        Assert.True(match.CaroWinLine.Count >= 5);
+        // Vào ván cặp 2.
+        match.CaroRevealUntil = DateTime.UtcNow.AddSeconds(-1);
+        Assert.True(mgr.TryStartCaroPlay(roomId));
+        Assert.Equal(MatchStatus.BreakCaroPlay, match.Status);
+        Assert.Equal(1, match.CaroPairIndex);
+    }
+
+    [Fact]
+    public void BothPairsX_TeamXWinsMatch_2to0()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.IsBreakRound = true;
+        Deal(match);
+        match.BreakOrganizerId = ids[0];
+        SpinAndStart(mgr, match, roomId, ids[0]);
+
+        int xTeam = WinCurrentPairForX(mgr, match, roomId); // cặp 1: X
+        match.CaroRevealUntil = DateTime.UtcNow.AddSeconds(-1);
+        mgr.TryStartCaroPlay(roomId);
+        WinCurrentPairForX(mgr, match, roomId);             // cặp 2: X
+
+        // Cả 2 cặp xong → finalize chung cuộc: team X thắng 2-0.
         Assert.Equal(MatchStatus.WaitingNextRound, match.Status);
-        // FinalRank: team thắng = 1, team thua = 3.
+        Assert.Equal(xTeam, match.CaroMatchWinnerTeam);
+        Assert.Equal(new[] { 1, 1 }, match.CaroPairWinners.ToArray());
         Assert.All(match.Players, p =>
             Assert.Equal(match.CaroTeam[p.UserId] == xTeam ? 1 : 3, p.FinalRank));
+
+        // Điểm: team X +2/người, team O -2/người.
+        var scores = mgr.ComputeRoundScores(match);
+        Assert.Equal(0, scores.Sum());
+        for (int i = 0; i < 4; i++)
+            Assert.Equal(match.CaroTeam[match.Players[i].UserId] == xTeam ? 2 : -2, scores[i]);
     }
 
     [Fact]
-    public void DrawVote_NeedsBothTeams()
+    public void SplitOneEach_MatchIsDraw()
     {
         var (mgr, match, roomId, ids) = Setup();
         match.IsBreakRound = true;
@@ -284,22 +327,52 @@ public class CaroGameTests
         match.BreakOrganizerId = ids[0];
         SpinAndStart(mgr, match, roomId, ids[0]);
 
-        var teamXplayers = match.CaroTeam.Where(kv => kv.Value == 1).Select(kv => kv.Key).ToList();
-        var teamOplayers = match.CaroTeam.Where(kv => kv.Value == 2).Select(kv => kv.Key).ToList();
+        // Cặp 1: X thắng.
+        WinCurrentPairForX(mgr, match, roomId);
+        match.CaroRevealUntil = DateTime.UtcNow.AddSeconds(-1);
+        mgr.TryStartCaroPlay(roomId);
 
-        // Cả 2 người team X xin hòa → CHƯA hòa (thiếu team O).
-        mgr.VoteCaroDraw(roomId, teamXplayersFirst(teamXplayers, 0));
-        mgr.VoteCaroDraw(roomId, teamXplayersFirst(teamXplayers, 1));
-        Assert.Equal(MatchStatus.BreakCaroPlay, match.Status);
+        // Cặp 2: cho O thắng (gài 4 quân O rồi O đặt quân thứ 5). O = người thứ 2 trong cặp.
+        var oPlayer = match.CaroTurnOrder[1];
+        int oTeam = match.CaroTeam[oPlayer]; // = 2
+        var board = match.CaroBoard!;
+        for (int c = 0; c < 4; c++) board[Idx(2, c)] = oTeam;
+        // Đưa lượt về O: X đánh 1 nước vu vơ trước.
+        var xPlayer = match.CaroTurnOrder[0];
+        mgr.PlaceCaroStone(roomId, xPlayer, Idx(9, 9));
+        mgr.PlaceCaroStone(roomId, oPlayer, Idx(2, 4)); // O thắng cặp 2
 
-        // 1 người team O đồng ý → đủ 2 team → hòa.
-        mgr.VoteCaroDraw(roomId, teamOplayers[0]);
-        Assert.Equal(0, match.CaroWinnerTeam);
+        // 1-1 → hòa chung cuộc, 0 điểm.
         Assert.Equal(MatchStatus.WaitingNextRound, match.Status);
+        Assert.Equal(0, match.CaroMatchWinnerTeam);
+        Assert.Equal(new[] { 1, 2 }, match.CaroPairWinners.ToArray());
+        Assert.Equal(new[] { 0, 0, 0, 0 }, mgr.ComputeRoundScores(match));
         Assert.All(match.Players, p => Assert.Equal(1, p.FinalRank)); // hòa = mọi người rank 1
     }
 
-    private static Guid teamXplayersFirst(List<Guid> list, int i) => list[i];
+    [Fact]
+    public void DrawVote_NeedsBothPlayersOfPair()
+    {
+        var (mgr, match, roomId, ids) = Setup();
+        match.IsBreakRound = true;
+        Deal(match);
+        match.BreakOrganizerId = ids[0];
+        SpinAndStart(mgr, match, roomId, ids[0]);
+
+        var a = match.CaroTurnOrder[0];
+        var b = match.CaroTurnOrder[1];
+
+        // Chỉ 1 người trong cặp xin hòa → cặp CHƯA hòa.
+        mgr.VoteCaroDraw(roomId, a);
+        Assert.Equal(MatchStatus.BreakCaroPlay, match.Status);
+
+        // Người thứ 2 đồng ý → cặp hòa → còn cặp 2 nên về pha hiện 5s.
+        mgr.VoteCaroDraw(roomId, b);
+        Assert.Equal(0, match.CaroWinnerTeam);
+        Assert.Single(match.CaroPairWinners);
+        Assert.Equal(0, match.CaroPairWinners[0]); // cặp 1 hòa
+        Assert.Equal(MatchStatus.BreakCaroSpin, match.Status); // vào pha hiện cặp 2
+    }
 
     [Fact]
     public void AutoSkipTurn_AdvancesWithoutPlacing()
@@ -313,7 +386,6 @@ public class CaroGameTests
         int filledBefore = match.CaroBoard!.Count(v => v != 0);
         match.CaroTurnDeadline = DateTime.UtcNow.AddSeconds(-1);
         Assert.True(mgr.TryAutoSkipCaroTurn(roomId));
-        // Bỏ lượt: không đặt quân nào, qua người kế.
         Assert.Equal(filledBefore, match.CaroBoard!.Count(v => v != 0));
         Assert.Equal(1, match.CaroTurnIdx);
         Assert.NotNull(match.CaroTurnDeadline);

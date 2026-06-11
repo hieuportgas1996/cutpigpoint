@@ -78,13 +78,13 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Caro]: {
     label: 'Caro đồng đội',
     emoji: '⭕',
-    tagline: 'Cờ caro 10×10, 2 team đối đầu',
+    tagline: 'Cờ caro 10×10, 2 team · 2 cặp đấu 1v1',
     rules: [
       'Quay chia 4 người thành 2 team (2 người/team): team X ❌ vs team O ⭕.',
-      'Đánh xen kẽ theo lượt X → O → X → O, mỗi lượt 10 giây.',
-      'Đặt được 5 quân liên tiếp (ngang/dọc/chéo) là team đó THẮNG — kể cả bị chặn 2 đầu.',
-      'Hết 10s không đánh → bỏ lượt. Có thể bấm "Xin hòa" — cả 2 team đồng ý thì hòa.',
-      'Team thắng mỗi người +2 điểm; team thua mỗi người −2; hòa thì 0 điểm.',
+      'Chia 2 CẶP ĐẤU 1v1 (1 người team X đấu 1 người team O), chơi TUẦN TỰ từng cặp.',
+      'Mỗi cặp đánh 1 ván caro 10×10; ai đặt 5 quân liên tiếp (ngang/dọc/chéo) thắng cặp — kể cả bị chặn 2 đầu.',
+      'Mỗi lượt 10 giây, hết giờ thì bỏ lượt. Có thể bấm "Xin hòa" — cả 2 người trong cặp đồng ý thì cặp đó hòa.',
+      'Team thắng nhiều cặp hơn → THẮNG: mỗi người +2; team thua −2; hòa (1-1) thì 0 điểm.',
     ],
   },
 };

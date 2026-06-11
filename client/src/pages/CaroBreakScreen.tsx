@@ -23,11 +23,10 @@ function Mark({ kind }: { kind: 'x' | 'o' }) {
 }
 
 /**
- * Màn "Giải lao — Caro đồng đội" full-screen overlay. 2 pha (caro.phase):
- *  0 = quay chia team: người tổ chức bấm "Quay" → hiện 2 team (X/O) + thứ tự đi.
- *  1 = chơi: theo lượt X→O→X→O. Người tới lượt click 1 ô trống → đặt quân team mình.
- *      Đủ 5 liên tiếp (ngang/dọc/chéo) → team đó thắng. Hết 10s → bỏ lượt.
- * Có thể bấm "Xin hòa"; cả 2 team đồng ý → hòa. Đồng bộ qua server.
+ * Màn "Giải lao — Caro đồng đội" full-screen overlay.
+ * Luật: chia team → chia 2 CẶP ĐẤU 1v1 (X vs O) → chơi TUẦN TỰ 2 ván caro (mỗi cặp 1 bàn 10×10 riêng).
+ * Team thắng nhiều cặp hơn → thắng chung cuộc (mỗi người +2; thua -2; hòa 0).
+ *  phase 0 = quay chia team / hiện cặp đấu (giữa các ván); phase 1 = đang chơi ván của cặp hiện tại.
  */
 export function CaroBreakScreen({
   caro, players, myUserId, isOrganizer, spinLeftSec, revealLeftSec, totalLeftSec, turnLeftSec,
@@ -38,7 +37,7 @@ export function CaroBreakScreen({
   myUserId: string;
   isOrganizer: boolean;
   spinLeftSec: number;
-  revealLeftSec: number;     // 5s hiện team + thứ tự sau khi quay
+  revealLeftSec: number;     // 5s hiện team/cặp giữa các ván
   totalLeftSec: number;
   turnLeftSec: number;       // 10s đồng hồ lượt hiện tại
   onSpin: () => void;
@@ -61,32 +60,56 @@ export function CaroBreakScreen({
 
   const myTeam = playerOf[myUserId]?.team ?? 0;
   const isMyTurn = caro.phase === 1 && caro.turnUserId === myUserId;
-  const turnName = caro.turnUserId ? (caro.turnUserId === myUserId ? 'Bạn' : nameOf[caro.turnUserId] ?? '') : '';
   const turnTeam = caro.turnUserId ? (playerOf[caro.turnUserId]?.team ?? 0) : 0;
   const iVotedDraw = playerOf[myUserId]?.drawVote ?? false;
+  const inCurrentPair = playerOf[myUserId]?.inCurrentPair ?? false;
   const winSet = useMemo(() => new Set(caro.winLine), [caro.winLine]);
 
-  // Roster mỗi team theo thứ tự lượt.
-  const teamX = [...caro.players].filter(p => p.team === 1).sort((a, b) => a.turnOrder - b.turnOrder);
-  const teamO = [...caro.players].filter(p => p.team === 2).sort((a, b) => a.turnOrder - b.turnOrder);
+  // Đếm số cặp mỗi team đã thắng (từ kết quả các cặp đã xong).
+  const xPairWins = caro.pairs.filter(p => p.winner === 1).length;
+  const oPairWins = caro.pairs.filter(p => p.winner === 2).length;
 
-  function TeamCard({ team, list }: { team: number; list: CaroState['players'] }) {
-    const isTurnTeam = caro.phase === 1 && turnTeam === team;
+  function Stone({ team }: { team: number }) {
+    return team === 1 ? <Mark kind="x" /> : <Mark kind="o" />;
+  }
+
+  // Bảng 2 cặp đấu + kết quả từng cặp (dùng ở cả 2 pha).
+  function Matchups() {
     return (
-      <div className={`car-team team${team} ${isTurnTeam ? 'active' : ''} ${myTeam === team ? 'me' : ''}`}>
-        <div className="car-team-head">{team === 1 ? '❌ Team X' : '⭕ Team O'}{myTeam === team ? ' (Bạn)' : ''}</div>
-        {list.map(p => (
-          <div key={p.userId} className={`car-team-row ${caro.turnUserId === p.userId ? 'turn' : ''}`}>
-            <Avatar name={nameOf[p.userId] ?? '?'} hasAvatar={avatarOf[p.userId]} playerId={p.userId} size="sm" />
-            <span className="car-team-name">{nameOf[p.userId] ?? '?'}</span>
-            {p.drawVote && <span className="car-draw-tag">🤝</span>}
-          </div>
-        ))}
+      <div className="car-matchups">
+        {caro.pairs.map((pr, i) => {
+          const active = caro.phase === 1 && i === caro.pairIndex;
+          const done = pr.winner !== 0 || i < caro.pairIndex;
+          return (
+            <div key={i} className={`car-matchup ${active ? 'active' : ''} ${done ? 'done' : ''}`}>
+              <span className="car-matchup-label">Cặp {i + 1}</span>
+              <div className="car-vs">
+                <span className={`car-vs-p team1 ${pr.winner === 1 ? 'won' : pr.winner === 2 ? 'lost' : ''}`}>
+                  <span className="car-vs-mark"><svg className="car-mark mark-x" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round"/><line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round"/></svg></span>
+                  {nameOf[pr.playerX] ?? '?'}
+                </span>
+                <span className="car-vs-x">vs</span>
+                <span className={`car-vs-p team2 ${pr.winner === 2 ? 'won' : pr.winner === 1 ? 'lost' : ''}`}>
+                  <span className="car-vs-mark"><svg className="car-mark mark-o" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none"/></svg></span>
+                  {nameOf[pr.playerO] ?? '?'}
+                </span>
+              </div>
+              <span className="car-matchup-status">
+                {i < caro.pairIndex || pr.winner !== 0 || (caro.phase === 1 && i < caro.pairIndex)
+                  ? (pr.winner === 1 ? '❌ thắng' : pr.winner === 2 ? '⭕ thắng' : i < caro.pairIndex ? 'Hòa' : '')
+                  : active ? '⏳ đang đấu' : 'chờ'}
+              </span>
+            </div>
+          );
+        })}
+        <div className="car-score">
+          Tỉ số cặp: <b className="team1">❌ {xPairWins}</b> — <b className="team2">{oPairWins} ⭕</b>
+        </div>
       </div>
     );
   }
 
-  // ---- Pha 0: quay chia team ----
+  // ---- Pha 0: quay chia team / hiện cặp ----
   if (caro.phase === 0) {
     return (
       <div className="car-overlay">
@@ -94,16 +117,16 @@ export function CaroBreakScreen({
           <div className="car-title">⭕ Caro đồng đội</div>
           {caro.spun ? (
             <>
-              <div className="car-sub">🎲 Chia team & thứ tự đi — vào game sau <b>{revealLeftSec}s</b></div>
-              <div className="car-teams">
-                <TeamCard team={1} list={teamX} />
-                <TeamCard team={2} list={teamO} />
+              <div className="car-sub">
+                {caro.matchWinnerTeam !== 0
+                  ? <b className={caro.matchWinnerTeam === myTeam ? 'car-win' : 'car-lose'}>{caro.matchWinnerTeam === 1 ? '❌ Team X' : '⭕ Team O'} thắng chung cuộc!</b>
+                  : <>🎲 Cặp đấu — {caro.pairIndex === 0 ? 'bắt đầu' : `vào cặp ${caro.pairIndex + 1}`} sau <b>{revealLeftSec}s</b></>}
               </div>
-              <div className="car-order-note">Thứ tự đi: ❌ → ⭕ → ❌ → ⭕ (team X đi trước)</div>
+              <Matchups />
             </>
           ) : isOrganizer ? (
             <>
-              <div className="car-sub">Bấm để quay chia team ({spinLeftSec}s)</div>
+              <div className="car-sub">Bấm để quay chia team & cặp đấu ({spinLeftSec}s)</div>
               <button className="car-spin-btn" onClick={onSpin}>🎲 Quay chia team</button>
               <div className="car-roster">
                 {[...players].sort((a, b) => a.seatIndex - b.seatIndex).map(p => (
@@ -132,28 +155,34 @@ export function CaroBreakScreen({
     );
   }
 
-  // ---- Pha 1: chơi ----
-  const decided = caro.winnerTeam !== 0; // có team thắng (hiển thị thoáng trước khi modal)
+  // ---- Pha 1: chơi ván của cặp hiện tại ----
+  const decided = caro.winnerTeam !== 0; // cặp hiện tại đã xong (hiển thị thoáng)
+  const turnUser = caro.turnUserId;
   return (
     <div className="car-overlay">
       <div className="car-card car-card-play">
-        <div className="car-title">⭕ Caro đồng đội</div>
-        <div className="car-sub">
+        <div className="car-title">⭕ Caro đồng đội · Cặp {caro.pairIndex + 1}/{caro.pairCount}</div>
+
+        {/* THÔNG BÁO LƯỢT NỔI BẬT */}
+        <div className={`car-turn-banner ${decided ? 'decided' : isMyTurn ? 'mine' : ''} ${turnTeam === 1 ? 'tb-x' : 'tb-o'}`}>
           {decided ? (
-            <b className={caro.winnerTeam === myTeam ? 'car-win' : 'car-lose'}>
-              {caro.winnerTeam === 1 ? '❌ Team X' : '⭕ Team O'} thắng!
-            </b>
+            <span>{caro.winnerTeam === 1 ? '❌ Team X' : '⭕ Team O'} thắng cặp này!</span>
           ) : isMyTurn ? (
-            <b className="car-myturn">Lượt của bạn — đặt {myTeam === 1 ? '❌' : '⭕'}!</b>
+            <span className="car-turn-big"><span className="car-turn-mark"><Stone team={myTeam} /></span> Tới lượt BẠN — đặt quân!</span>
           ) : (
-            <>Lượt: <b>{turnName}</b> {turnTeam === 1 ? '❌' : '⭕'}</>
+            <span className="car-turn-big">
+              <span className="car-turn-mark"><Stone team={turnTeam} /></span>
+              Tới lượt: <b>{turnUser ? nameOf[turnUser] : ''}</b>
+            </span>
           )}
-          {!decided && <> · ⏱ <b className={turnLeftSec <= 3 ? 'low' : ''}>{turnLeftSec}s</b></>}
-          {' · '}<span className="car-total">⌛ {totalLeftSec}s</span>
+          {!decided && <span className={`car-turn-timer ${turnLeftSec <= 3 ? 'low' : ''}`}>⏱ {turnLeftSec}s</span>}
         </div>
 
         <div className="car-body">
-          <TeamCard team={1} list={teamX} />
+          <div className="car-side">
+            <Matchups />
+            <div className="car-total">⌛ {totalLeftSec}s</div>
+          </div>
 
           {/* Bàn cờ 10×10 */}
           <div className="car-board" style={{ gridTemplateColumns: `repeat(${SIZE}, var(--car-cell))` }}>
@@ -179,13 +208,11 @@ export function CaroBreakScreen({
               );
             })}
           </div>
-
-          <TeamCard team={2} list={teamO} />
         </div>
 
-        {!decided && myTeam !== 0 && (
+        {!decided && inCurrentPair && (
           <button className={`car-draw-btn ${iVotedDraw ? 'voted' : ''}`} onClick={onDraw} disabled={iVotedDraw}>
-            {iVotedDraw ? '🤝 Đã xin hòa — chờ team kia' : '🤝 Xin hòa'}
+            {iVotedDraw ? '🤝 Đã xin hòa — chờ đối thủ' : '🤝 Xin hòa cặp này'}
           </button>
         )}
       </div>

@@ -279,30 +279,42 @@ public class Match
     /// <summary>Khi lật 2 lá KHÔNG khớp: hiện ~1.5s rồi úp lại + qua lượt. Null khi không chờ úp.</summary>
     public DateTime? MatchPairsMismatchUntil { get; set; }
 
-    // -- Caro đồng đội -- cờ caro 10×10, 4 người chia 2 team (2 người/team), đánh xen kẽ X→O→X→O
-    /// <summary>Bàn cờ 100 ô (10×10): 0 = trống, 1 = team X, 2 = team O. Null khi không phải round Caro.</summary>
-    public int[]? CaroBoard { get; set; }
+    // -- Caro đồng đội -- cờ caro 10×10, 4 người chia 2 team (2/team).
+    // Luật: chia team → chia 2 CẶP ĐẤU 1v1 (Xa vs Oc, Xb vs Od) → chơi TUẦN TỰ 2 ván caro
+    // (mỗi cặp 1 ván, mỗi ván 1 bàn riêng). Team thắng nhiều cặp hơn → thắng chung cuộc.
     /// <summary>Team mỗi người (key = UserId → 1 = team X, 2 = team O). Rỗng khi chưa quay chia team.</summary>
     public Dictionary<Guid, int> CaroTeam { get; set; } = new();
-    /// <summary>Thứ tự lượt sau khi quay (UserId): X1 → O1 → X2 → O2. Rỗng khi chưa quay.</summary>
+    /// <summary>2 cặp đấu 1v1: mỗi phần tử [playerX, playerO]. Rỗng khi chưa quay.</summary>
+    public List<Guid[]> CaroPairs { get; set; } = new();
+    /// <summary>Index cặp đang chơi (0 = cặp 1, 1 = cặp 2). Tăng khi 1 cặp xong.</summary>
+    public int CaroPairIndex { get; set; }
+    /// <summary>Kết quả từng cặp đã xong: phần tử = team thắng cặp đó (1/2) hoặc 0 = hòa. Count = số cặp đã chơi xong.</summary>
+    public List<int> CaroPairWinners { get; set; } = new();
+
+    // -- Bàn cờ của CẶP ĐANG chơi (reset mỗi cặp) --
+    /// <summary>Bàn cờ 100 ô (10×10) của cặp hiện tại: 0 = trống, 1 = team X, 2 = team O. Null khi không phải round Caro.</summary>
+    public int[]? CaroBoard { get; set; }
+    /// <summary>2 người của cặp hiện tại theo thứ tự lượt: [X đi trước, O]. Rỗng khi chưa vào cặp.</summary>
     public List<Guid> CaroTurnOrder { get; set; } = new();
-    /// <summary>Index người đang tới lượt trong CaroTurnOrder.</summary>
+    /// <summary>Index người đang tới lượt trong CaroTurnOrder (luân phiên 2 người của cặp).</summary>
     public int CaroTurnIdx { get; set; }
     /// <summary>Index ô vừa đặt gần nhất (để client highlight). -1 = chưa đặt nước nào.</summary>
     public int CaroLastMove { get; set; } = -1;
-    /// <summary>Team thắng (1 hoặc 2); 0 = chưa thắng / hòa. Set khi có 5 liên tiếp.</summary>
+    /// <summary>Team thắng CẶP hiện tại (1 hoặc 2); 0 = chưa/hòa. Set khi có 5 liên tiếp trong ván cặp này.</summary>
     public int CaroWinnerTeam { get; set; }
+    /// <summary>Team thắng CHUNG CUỘC (1/2); 0 = chưa xong / hòa. Set ở finalize sau khi cả 2 cặp xong.</summary>
+    public int CaroMatchWinnerTeam { get; set; }
     /// <summary>Index các ô tạo thành chuỗi thắng (≥5 ô) để client tô sáng. Rỗng khi chưa thắng / hòa.</summary>
     public List<int> CaroWinLine { get; set; } = new();
     /// <summary>Hết hạn 20s pha quay chia team (tổ chức chưa bấm → server tự quay). Null ngoài pha quay.</summary>
     public DateTime? CaroSpinDeadline { get; set; }
-    /// <summary>Sau khi quay: hiện team + thứ tự 5s cho mọi người xem (vẫn status BreakCaroSpin) rồi vào chơi. Null = chưa quay / đã vào chơi.</summary>
+    /// <summary>Sau khi quay (hoặc sau mỗi cặp xong): hiện team/cặp + kết quả 5s rồi vào ván kế. Null khi đang chơi.</summary>
     public DateTime? CaroRevealUntil { get; set; }
     /// <summary>Hết hạn 10s LƯỢT hiện tại; hết → BỎ LƯỢT (không đặt quân nào), qua người kế. Reset mỗi lượt.</summary>
     public DateTime? CaroTurnDeadline { get; set; }
-    /// <summary>Hết hạn TỔNG ván Caro (backstop: hết → hòa). Null ngoài round này.</summary>
+    /// <summary>Hết hạn TỔNG ván của cặp hiện tại (backstop: hết → cặp đó hòa). Null ngoài round này.</summary>
     public DateTime? CaroDeadline { get; set; }
-    /// <summary>Phiếu xin hòa của từng người trong round Caro: key = UserId, true = Đồng ý hòa. Reset khi không phải round Caro. Đủ ≥1 người MỖI team đồng ý → hòa.</summary>
+    /// <summary>Phiếu xin hòa CẶP hiện tại: key = UserId, true = Đồng ý hòa. Reset mỗi cặp. Đủ 2 người của cặp đồng ý → cặp đó hòa.</summary>
     public Dictionary<Guid, bool> CaroDrawVotes { get; set; } = new();
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>

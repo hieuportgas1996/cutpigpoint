@@ -238,17 +238,22 @@ public record MatchPairsStateDto(
     bool Spun,                       // đã quay thứ tự chưa
     List<MatchPairsPlayerDto> Players);  // số cặp + thứ tự lượt từng người
 
-// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 4 người chia 2 team, theo lượt ----
-public record CaroPlayerDto(Guid UserId, int Team, int TurnOrder, bool DrawVote);  // team 1=X/2=O, thứ tự lượt 1-4 (0 nếu chưa quay), đã xin hòa chưa
+// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 2 team, 2 cặp đấu 1v1 tuần tự ----
+public record CaroPlayerDto(Guid UserId, int Team, bool InCurrentPair, bool DrawVote);  // team 1=X/2=O, có trong cặp đang đấu, đã xin hòa
+public record CaroPairDto(Guid PlayerX, Guid PlayerO, int Winner);  // 1 cặp đấu: X vs O; Winner 0=chưa xong/đang chơi/hòa, 1=X, 2=O
 public record CaroStateDto(
-    int Phase,                       // 0 = quay chia team, 1 = đang chơi
-    List<int> Board,                 // 100 ô (10×10): 0 trống, 1 team X, 2 team O
+    int Phase,                       // 0 = quay/hiện cặp, 1 = đang chơi ván
+    List<int> Board,                 // 100 ô (10×10): 0 trống, 1 team X, 2 team O (của cặp đang chơi)
     int LastMove,                    // index ô vừa đặt (-1 nếu chưa)
     Guid? TurnUserId,                // người đang tới lượt (pha chơi)
-    int WinnerTeam,                  // 0 = chưa/hòa, 1 = X thắng, 2 = O thắng
-    List<int> WinLine,               // index các ô chuỗi thắng (để tô sáng)
+    int WinnerTeam,                  // CẶP hiện tại: 0 chưa/hòa, 1 X, 2 O
+    int MatchWinnerTeam,             // CHUNG CUỘC: 0 chưa/hòa, 1 X, 2 O (set khi cả 2 cặp xong)
+    List<int> WinLine,               // index các ô chuỗi thắng cặp hiện tại (tô sáng)
     bool Spun,                       // đã quay chia team chưa
-    List<CaroPlayerDto> Players);    // team + thứ tự + phiếu hòa từng người
+    int PairIndex,                   // cặp đang chơi (0 hoặc 1)
+    int PairCount,                   // tổng số cặp (2)
+    List<CaroPairDto> Pairs,         // 2 cặp đấu + kết quả từng cặp
+    List<CaroPlayerDto> Players);    // team + cặp + phiếu hòa từng người
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 

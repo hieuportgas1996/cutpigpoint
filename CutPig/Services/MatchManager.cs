@@ -165,10 +165,14 @@ public class MatchManager
         match.MatchPairsRevealUntil = null;
         match.CaroBoard = null;
         match.CaroTeam.Clear();
+        match.CaroPairs.Clear();
+        match.CaroPairIndex = 0;
+        match.CaroPairWinners.Clear();
         match.CaroTurnOrder.Clear();
         match.CaroTurnIdx = 0;
         match.CaroLastMove = -1;
         match.CaroWinnerTeam = 0;
+        match.CaroMatchWinnerTeam = 0;
         match.CaroWinLine.Clear();
         match.CaroSpinDeadline = null;
         match.CaroRevealUntil = null;
@@ -1431,20 +1435,28 @@ public class MatchManager
     public IEnumerable<Match> AllBreakMatchPlay() => _matchesByRoom.Values.Where(m => m.Status == MatchStatus.BreakMatchPlay);
 
     // ============================== Caro đồng đội ==============================
+    // Luật: chia team → chia 2 CẶP ĐẤU 1v1 (Xa vs Oc, Xb vs Od) → chơi TUẦN TỰ 2 ván caro.
+    // Mỗi cặp 1 ván (bàn 10×10 riêng); ai 5 liên tiếp → team đó thắng cặp. Team thắng nhiều cặp hơn → thắng chung cuộc.
+
+    public const int CaroPairCount = 2;
 
     /// <summary>
-    /// Deal round "Giải Lao — Caro đồng đội": bàn 10×10 trống, vào pha QUAY chia team (20s; tổ chức bấm hoặc auto).
+    /// Deal round "Giải Lao — Caro đồng đội": vào pha QUAY chia team + cặp đấu (20s; tổ chức bấm hoặc auto).
     /// KHÔNG đụng PreviousRoundWinnerId.
     /// </summary>
     private static void DealBreakCaroRound(Match match)
     {
         match.BreakGame = BreakGameType.Caro;
-        match.CaroBoard = CaroGameEngine.BuildBoard();
+        match.CaroBoard = null;
         match.CaroTeam.Clear();
+        match.CaroPairs.Clear();
+        match.CaroPairIndex = 0;
+        match.CaroPairWinners.Clear();
         match.CaroTurnOrder.Clear();
         match.CaroTurnIdx = 0;
         match.CaroLastMove = -1;
         match.CaroWinnerTeam = 0;
+        match.CaroMatchWinnerTeam = 0;
         match.CaroWinLine.Clear();
         match.CaroDrawVotes.Clear();
         match.CaroRevealUntil = null;
@@ -1454,7 +1466,7 @@ public class MatchManager
         match.CaroSpinDeadline = DateTime.UtcNow + CaroSpinTimeout;
     }
 
-    /// <summary>Người tổ chức bấm "Quay" → random chia 2 team + thứ tự X1→O1→X2→O2 → hiện 5s rồi vào chơi.</summary>
+    /// <summary>Người tổ chức bấm "Quay" → random chia 2 team + 2 cặp đấu → hiện 5s rồi vào ván cặp 1.</summary>
     public Match SpinCaroOrder(Guid roomId, Guid userId)
     {
         lock (LockFor(roomId))
@@ -1469,8 +1481,8 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Quay random: xáo 4 người → 2 người đầu = team X (1), 2 người sau = team O (2).
-    /// Thứ tự lượt xen kẽ X1 → O1 → X2 → O2 (team X đi trước). Vào pha HIỆN 5s.
+    /// Quay random: xáo 4 người → 2 đầu = team X (1), 2 sau = team O (2). Ghép 2 cặp đấu 1v1:
+    /// cặp 0 = [Xa, Oc], cặp 1 = [Xb, Od]. Vào pha HIỆN 5s (xem team + cặp) rồi chơi cặp 1.
     /// </summary>
     private static void SpinCaroOrderInternal(Match match)
     {
@@ -1480,16 +1492,20 @@ public class MatchManager
             int j = Random.Shared.Next(i + 1);
             (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
         }
-        // shuffled[0],[2] = team X; shuffled[1],[3] = team O.
-        var x1 = shuffled[0]; var x2 = shuffled[2];
-        var o1 = shuffled[1]; var o2 = shuffled[3];
+        var xa = shuffled[0]; var xb = shuffled[2];
+        var oc = shuffled[1]; var od = shuffled[3];
         match.CaroTeam.Clear();
-        match.CaroTeam[x1] = 1; match.CaroTeam[x2] = 1;
-        match.CaroTeam[o1] = 2; match.CaroTeam[o2] = 2;
-        match.CaroTurnOrder = new List<Guid> { x1, o1, x2, o2 }; // X→O→X→O
-        match.CaroTurnIdx = 0;
+        match.CaroTeam[xa] = 1; match.CaroTeam[xb] = 1;
+        match.CaroTeam[oc] = 2; match.CaroTeam[od] = 2;
+        match.CaroPairs = new List<Guid[]>
+        {
+            new[] { xa, oc }, // cặp 1: X đi trước
+            new[] { xb, od }, // cặp 2
+        };
+        match.CaroPairIndex = 0;
+        match.CaroPairWinners.Clear();
         match.CaroSpinDeadline = null;
-        match.CaroRevealUntil = DateTime.UtcNow + CaroRevealTimeout; // hiện team + thứ tự 5s
+        match.CaroRevealUntil = DateTime.UtcNow + CaroRevealTimeout; // hiện team + cặp 5s
     }
 
     /// <summary>Timer: hết 20s pha quay mà chưa bấm → server tự quay. Trả về true nếu vừa xử lý.</summary>
@@ -1504,32 +1520,46 @@ public class MatchManager
         }
     }
 
-    /// <summary>Hết 5s hiện team/thứ tự → vào pha chơi thật (đếm tổng + đồng hồ lượt). Trả về true nếu vừa xử lý.</summary>
+    /// <summary>Hết 5s hiện team/cặp → vào ván của cặp hiện tại (deal bàn mới). Trả về true nếu vừa xử lý.</summary>
     public bool TryStartCaroPlay(Guid roomId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakCaroSpin) return false;
             if (!match.CaroRevealUntil.HasValue || match.CaroRevealUntil.Value > DateTime.UtcNow) return false;
-            match.CaroRevealUntil = null;
-            match.Status = MatchStatus.BreakCaroPlay;
-            match.CaroDeadline = DateTime.UtcNow + CaroTimeout;
-            match.CaroTurnDeadline = DateTime.UtcNow + CaroTurnTimeout;
+            StartCaroPair(match);
             return true;
         }
+    }
+
+    /// <summary>Bắt đầu ván cho cặp hiện tại: bàn 10×10 mới, thứ tự [X, O] của cặp, status BreakCaroPlay + đồng hồ.</summary>
+    private static void StartCaroPair(Match match)
+    {
+        var pair = match.CaroPairs[match.CaroPairIndex];
+        match.CaroBoard = CaroGameEngine.BuildBoard();
+        match.CaroTurnOrder = new List<Guid> { pair[0], pair[1] }; // X đi trước
+        match.CaroTurnIdx = 0;
+        match.CaroLastMove = -1;
+        match.CaroWinnerTeam = 0;
+        match.CaroWinLine.Clear();
+        match.CaroDrawVotes.Clear();
+        match.CaroRevealUntil = null;
+        match.Status = MatchStatus.BreakCaroPlay;
+        match.CaroDeadline = DateTime.UtcNow + CaroTimeout;
+        match.CaroTurnDeadline = DateTime.UtcNow + CaroTurnTimeout;
     }
 
     /// <summary>Bắt đầu lượt mới: reset đồng hồ 10s/lượt.</summary>
     private static void StartCaroTurn(Match match)
         => match.CaroTurnDeadline = DateTime.UtcNow + CaroTurnTimeout;
 
-    /// <summary>UserId người đang tới lượt đặt quân (theo CaroTurnOrder + Idx). Null nếu chưa quay.</summary>
+    /// <summary>UserId người đang tới lượt đặt quân (theo CaroTurnOrder + Idx). Null nếu chưa vào cặp.</summary>
     private static Guid? CaroCurrentTurn(Match match)
         => match.CaroTurnOrder.Count > 0 ? match.CaroTurnOrder[match.CaroTurnIdx % match.CaroTurnOrder.Count] : null;
 
     /// <summary>
-    /// Player đặt 1 quân vào ô trống (0-99) trong lượt mình. Quân = team của player.
-    /// Nếu tạo ≥5 liên tiếp → team đó thắng, kết thúc round. Nếu bàn đầy → hòa. Còn lại → qua lượt người kế.
+    /// Player (1 trong 2 người của cặp hiện tại) đặt 1 quân vào ô trống (0-99) trong lượt mình.
+    /// ≥5 liên tiếp → team đó thắng CẶP. Bàn đầy → cặp hòa. Còn lại → qua lượt đối thủ trong cặp.
     /// </summary>
     public Match PlaceCaroStone(Guid roomId, Guid userId, int cellIndex)
     {
@@ -1555,16 +1585,16 @@ public class MatchManager
             {
                 match.CaroWinnerTeam = team;
                 match.CaroWinLine = winLine;
-                FinalizeBreakCaroRound(match);
+                EndCaroPair(match);
             }
             else if (CaroGameEngine.IsBoardFull(match.CaroBoard))
             {
-                match.CaroWinnerTeam = 0; // hòa
-                FinalizeBreakCaroRound(match);
+                match.CaroWinnerTeam = 0; // cặp hòa
+                EndCaroPair(match);
             }
             else
             {
-                match.CaroTurnIdx++; // qua lượt người kế
+                match.CaroTurnIdx++; // qua lượt đối thủ trong cặp
                 StartCaroTurn(match);
             }
             return match;
@@ -1578,11 +1608,10 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakCaroPlay || match.CaroBoard == null) return false;
             if (!match.CaroTurnDeadline.HasValue || match.CaroTurnDeadline.Value > DateTime.UtcNow) return false;
-            // Nếu bàn đã đầy (cực hiếm ở đây) → hòa.
             if (CaroGameEngine.IsBoardFull(match.CaroBoard))
             {
                 match.CaroWinnerTeam = 0;
-                FinalizeBreakCaroRound(match);
+                EndCaroPair(match);
                 return true;
             }
             match.CaroTurnIdx++; // bỏ lượt, qua người kế
@@ -1591,21 +1620,21 @@ public class MatchManager
         }
     }
 
-    /// <summary>Timer: hết tổng thời gian backstop → hòa. Trả về true nếu vừa xử lý.</summary>
+    /// <summary>Timer: hết tổng thời gian backstop của cặp → cặp đó hòa. Trả về true nếu vừa xử lý.</summary>
     public bool TryFinalizeCaro(Guid roomId)
     {
         lock (LockFor(roomId))
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakCaroPlay) return false;
             if (!match.CaroDeadline.HasValue || match.CaroDeadline.Value > DateTime.UtcNow) return false;
-            match.CaroWinnerTeam = 0; // hòa
-            FinalizeBreakCaroRound(match);
+            match.CaroWinnerTeam = 0; // cặp hòa
+            EndCaroPair(match);
             return true;
         }
     }
 
     /// <summary>
-    /// Player bấm "Xin hòa" (chỉ ở pha chơi). Lưu phiếu. Khi có ≥1 người MỖI team đồng ý → hòa ngay.
+    /// Player bấm "Xin hòa" CẶP hiện tại. Lưu phiếu. Khi CẢ 2 người của cặp đồng ý → cặp đó hòa.
     /// </summary>
     public Match VoteCaroDraw(Guid roomId, Guid userId)
     {
@@ -1613,35 +1642,64 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakCaroPlay)
                 throw new InvalidOperationException("Không trong pha chơi Caro.");
-            if (!match.CaroTeam.ContainsKey(userId))
-                throw new InvalidOperationException("Bạn không trong ván Caro.");
+            if (match.CaroTurnOrder.Count == 0 || !match.CaroTurnOrder.Contains(userId))
+                throw new InvalidOperationException("Bạn không trong cặp đang đấu.");
             match.CaroDrawVotes[userId] = true;
-            // Đủ đồng thuận: ≥1 người team X đồng ý VÀ ≥1 người team O đồng ý.
-            bool xAgree = match.CaroTeam.Any(kv => kv.Value == 1 && match.CaroDrawVotes.GetValueOrDefault(kv.Key));
-            bool oAgree = match.CaroTeam.Any(kv => kv.Value == 2 && match.CaroDrawVotes.GetValueOrDefault(kv.Key));
-            if (xAgree && oAgree)
+            // Cả 2 người của cặp đồng ý → cặp hòa.
+            if (match.CaroTurnOrder.All(u => match.CaroDrawVotes.GetValueOrDefault(u)))
             {
-                match.CaroWinnerTeam = 0; // hòa theo thỏa thuận
-                FinalizeBreakCaroRound(match);
+                match.CaroWinnerTeam = 0;
+                EndCaroPair(match);
             }
             return match;
         }
     }
 
     /// <summary>
-    /// Caro xong: gán FinalRank theo team (team thắng = rank 1, team thua = rank 3; hòa = tất cả rank 1) → WaitingNextRound.
-    /// Điểm tính ở ComputeCaroScores (team thắng +2/người, team thua -2/người, hòa 0).
+    /// Kết thúc ván của cặp hiện tại: ghi team thắng cặp (CaroWinnerTeam, 0=hòa) vào CaroPairWinners.
+    /// Nếu còn cặp → hiện kết quả 5s rồi vào cặp kế (qua TryStartCaroPlay). Hết cặp → finalize chung cuộc.
     /// </summary>
-    private static void FinalizeBreakCaroRound(Match match)
+    private static void EndCaroPair(Match match)
     {
+        match.CaroPairWinners.Add(match.CaroWinnerTeam);
+        match.CaroTurnDeadline = null;
+        match.CaroDeadline = null;
+
+        if (match.CaroPairIndex + 1 < match.CaroPairs.Count)
+        {
+            // Còn cặp → quay lại pha hiện 5s (status BreakCaroSpin) cho mọi người xem kết quả cặp + cặp kế.
+            match.CaroPairIndex++;
+            match.Status = MatchStatus.BreakCaroSpin;
+            match.CaroBoard = null;
+            match.CaroTurnOrder.Clear();
+            match.CaroWinLine.Clear();
+            match.CaroRevealUntil = DateTime.UtcNow + CaroRevealTimeout;
+        }
+        else
+        {
+            FinalizeBreakCaroMatch(match);
+        }
+    }
+
+    /// <summary>
+    /// Cả 2 cặp xong: team thắng nhiều cặp hơn → thắng chung cuộc (CaroMatchWinnerTeam). Bằng nhau → hòa.
+    /// Gán FinalRank (thắng=1, thua=3, hòa=1) → WaitingNextRound. Điểm ở ComputeCaroScores.
+    /// </summary>
+    private static void FinalizeBreakCaroMatch(Match match)
+    {
+        int xWins = match.CaroPairWinners.Count(w => w == 1);
+        int oWins = match.CaroPairWinners.Count(w => w == 2);
+        match.CaroMatchWinnerTeam = xWins > oWins ? 1 : oWins > xWins ? 2 : 0;
+
         foreach (var p in match.Players)
         {
             int team = match.CaroTeam.GetValueOrDefault(p.UserId);
-            if (match.CaroWinnerTeam == 0) p.FinalRank = 1;                 // hòa
-            else p.FinalRank = team == match.CaroWinnerTeam ? 1 : 3;        // thắng / thua
+            if (match.CaroMatchWinnerTeam == 0) p.FinalRank = 1;                  // hòa
+            else p.FinalRank = team == match.CaroMatchWinnerTeam ? 1 : 3;         // thắng / thua
         }
         match.CaroTurnDeadline = null;
         match.CaroDeadline = null;
+        match.CaroRevealUntil = null;
         match.Status = MatchStatus.WaitingNextRound;
         match.NextRoundAt = DateTime.UtcNow + NextRoundDelay;
     }
@@ -3192,18 +3250,18 @@ public class MatchManager
     }
 
     /// <summary>
-    /// Điểm game "Caro đồng đội": team thắng (CaroWinnerTeam) mỗi người +2; team thua mỗi người -2.
-    /// Hòa (CaroWinnerTeam == 0) → tất cả 0. Zero-sum (2 thắng +2, 2 thua -2 = tổng 0).
+    /// Điểm game "Caro đồng đội": team thắng nhiều cặp hơn (CaroMatchWinnerTeam) mỗi người +2; team thua mỗi người -2.
+    /// Hòa (CaroMatchWinnerTeam == 0, mỗi team thắng 1 cặp hoặc 0-0) → tất cả 0. Zero-sum.
     /// </summary>
     private int[] ComputeCaroScores(Match match)
     {
         int n = match.Players.Count;
         var scores = new int[n];
-        if (match.CaroWinnerTeam == 0) return scores; // hòa
+        if (match.CaroMatchWinnerTeam == 0) return scores; // hòa
         for (int i = 0; i < n; i++)
         {
             int team = match.CaroTeam.GetValueOrDefault(match.Players[i].UserId);
-            scores[i] = team == match.CaroWinnerTeam ? 2 : -2;
+            scores[i] = team == match.CaroMatchWinnerTeam ? 2 : -2;
         }
         return scores;
     }

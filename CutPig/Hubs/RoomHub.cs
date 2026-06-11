@@ -1299,32 +1299,43 @@ public class RoomHub : Hub
     /// <summary>Build state Caro đồng đội cho broadcast. Bàn cờ public hết (không có thông tin ẩn).</summary>
     private static CaroStateDto? BuildCaroState(Match m)
     {
-        if (m.BreakGame != GameEngine.BreakGameType.Caro || m.CaroBoard == null) return null;
-        bool spun = m.CaroTurnOrder.Count > 0;
-        int phase = m.Status == MatchStatus.BreakCaroSpin ? 0 : 1;
+        if (m.BreakGame != GameEngine.BreakGameType.Caro) return null;
+        // Đã quay chia team chưa (có cặp đấu).
+        bool spun = m.CaroPairs.Count > 0;
+        int phase = m.Status == MatchStatus.BreakCaroPlay ? 1 : 0;
 
-        Guid? turnUser = spun && phase == 1
+        Guid? turnUser = phase == 1 && m.CaroTurnOrder.Count > 0
             ? m.CaroTurnOrder[m.CaroTurnIdx % m.CaroTurnOrder.Count]
             : (Guid?)null;
 
-        var players = m.Players.Select(p =>
-        {
-            int order = m.CaroTurnOrder.IndexOf(p.UserId);
-            return new CaroPlayerDto(
-                p.UserId,
-                m.CaroTeam.GetValueOrDefault(p.UserId),
-                order >= 0 ? order + 1 : 0,
-                m.CaroDrawVotes.GetValueOrDefault(p.UserId));
-        }).ToList();
+        // Người đang trong cặp đấu hiện tại.
+        var curPairSet = new HashSet<Guid>(m.CaroTurnOrder);
+
+        var players = m.Players.Select(p => new CaroPlayerDto(
+            p.UserId,
+            m.CaroTeam.GetValueOrDefault(p.UserId),
+            curPairSet.Contains(p.UserId),
+            m.CaroDrawVotes.GetValueOrDefault(p.UserId))).ToList();
+
+        // 2 cặp đấu + kết quả (CaroPairWinners[i] nếu cặp i đã xong).
+        var pairs = m.CaroPairs.Select((pr, i) => new CaroPairDto(
+            pr[0], pr[1],
+            i < m.CaroPairWinners.Count ? m.CaroPairWinners[i] : 0)).ToList();
+
+        var board = m.CaroBoard != null ? new List<int>(m.CaroBoard) : new List<int>();
 
         return new CaroStateDto(
             phase,
-            new List<int>(m.CaroBoard),
+            board,
             m.CaroLastMove,
             turnUser,
             m.CaroWinnerTeam,
+            m.CaroMatchWinnerTeam,
             new List<int>(m.CaroWinLine),
             spun,
+            m.CaroPairIndex,
+            MatchManager.CaroPairCount,
+            pairs,
             players);
     }
 
