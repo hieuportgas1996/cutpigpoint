@@ -5,6 +5,23 @@ import './caro-break.css';
 
 const SIZE = 10;
 
+// Quân cờ vẽ bằng SVG nét bo tròn — sắc nét, cân giữa ô (thay ký tự ✕/◯ thô).
+function Mark({ kind }: { kind: 'x' | 'o' }) {
+  if (kind === 'x') {
+    return (
+      <svg className="car-mark mark-x" viewBox="0 0 24 24" aria-hidden>
+        <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" />
+        <line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="car-mark mark-o" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="7" fill="none" />
+    </svg>
+  );
+}
+
 /**
  * Màn "Giải lao — Caro đồng đội" full-screen overlay. 2 pha (caro.phase):
  *  0 = quay chia team: người tổ chức bấm "Quay" → hiện 2 team (X/O) + thứ tự đi.
@@ -139,7 +156,7 @@ export function CaroBreakScreen({
           <TeamCard team={1} list={teamX} />
 
           {/* Bàn cờ 10×10 */}
-          <div className="car-board" style={{ gridTemplateColumns: `repeat(${SIZE}, 1fr)` }}>
+          <div className="car-board" style={{ gridTemplateColumns: `repeat(${SIZE}, var(--car-cell))` }}>
             {caro.board.map((v, i) => {
               const filled = v !== 0;
               const isLast = i === caro.lastMove;
@@ -157,7 +174,7 @@ export function CaroBreakScreen({
                   disabled={!isMyTurn || filled || decided}
                   onClick={() => onPlace(i)}
                 >
-                  {v === 1 ? '✕' : v === 2 ? '◯' : ''}
+                  {v === 1 ? <Mark kind="x" /> : v === 2 ? <Mark kind="o" /> : null}
                 </button>
               );
             })}

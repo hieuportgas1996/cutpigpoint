@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- nền tròn đỏ Tết -->
+  <circle cx="32" cy="32" r="31" fill="#c0392b"/>
+  <circle cx="32" cy="32" r="31" fill="none" stroke="#ffd966" stroke-width="2"/>
+
+  <!-- mặt heo hồng -->
+  <g>
+    <!-- tai -->
+    <path d="M16 24 L12 14 L24 20 Z" fill="#f7a8b8" stroke="#d46b86" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M48 24 L52 14 L40 20 Z" fill="#f7a8b8" stroke="#d46b86" stroke-width="1.2" stroke-linejoin="round"/>
+    <!-- đầu -->
+    <ellipse cx="32" cy="37" rx="19" ry="16" fill="#f7a8b8" stroke="#d46b86" stroke-width="1.4"/>
+    <!-- mắt -->
+    <circle cx="25" cy="34" r="2.4" fill="#3b2a2a"/>
+    <circle cx="39" cy="34" r="2.4" fill="#3b2a2a"/>
+    <!-- mõm -->
+    <ellipse cx="32" cy="43" rx="9" ry="6.5" fill="#f28aa5" stroke="#d46b86" stroke-width="1.2"/>
+    <ellipse cx="28.5" cy="43" rx="1.7" ry="2.4" fill="#a64863"/>
+    <ellipse cx="35.5" cy="43" rx="1.7" ry="2.4" fill="#a64863"/>
+  </g>
+
+  <!-- con dao (dao phay) bắt chéo -->
+  <g transform="rotate(28 44 22)">
+    <!-- lưỡi dao -->
+    <rect x="30" y="10" width="26" height="13" rx="2" fill="#dfe6ea" stroke="#9aa5ab" stroke-width="1.2"/>
+    <rect x="30" y="10" width="26" height="4" rx="2" fill="#f4f7f9"/>
+    <!-- chuôi dao -->
+    <rect x="54" y="13" width="9" height="7" rx="2" fill="#5d3a1a" stroke="#3a2410" stroke-width="1"/>
+  </g>
+</svg>
