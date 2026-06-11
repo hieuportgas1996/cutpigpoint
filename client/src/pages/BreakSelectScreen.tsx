@@ -78,7 +78,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
   [BreakGameType.Caro]: {
     label: 'Caro đồng đội',
     emoji: '⭕',
-    tagline: 'Cờ caro 10×10, 2 team · 2 cặp đấu 1v1',
+    tagline: 'Caro 10×10',
     rules: [
       'Quay chia 4 người thành 2 team (2 người/team): team X ❌ vs team O ⭕.',
       'Chia 2 CẶP ĐẤU 1v1 (1 người team X đấu 1 người team O), chơi TUẦN TỰ từng cặp.',

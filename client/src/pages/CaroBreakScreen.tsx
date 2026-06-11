@@ -201,21 +201,23 @@ export function CaroBreakScreen({
                 const filled = v !== 0;
                 const isLast = i === caro.lastMove;
                 const isWin = winSet.has(i);
+                const clickable = isMyTurn && !filled && !decided;
                 const cls = [
                   'car-cell',
                   v === 1 ? 'x' : v === 2 ? 'o' : 'empty',
                   isLast ? 'last' : '',
                   isWin ? 'win' : '',
+                  clickable ? 'clickable' : '',
                 ].join(' ');
+                // Dùng <div> (KHÔNG <button>) để tránh global button style (border-radius/padding/transform) làm méo ô.
                 return (
-                  <button
+                  <div
                     key={i}
                     className={cls}
-                    disabled={!isMyTurn || filled || decided}
-                    onClick={() => onPlace(i)}
+                    onClick={clickable ? () => onPlace(i) : undefined}
                   >
                     {v === 1 ? <Mark kind="x" /> : v === 2 ? <Mark kind="o" /> : null}
-                  </button>
+                  </div>
                 );
               })}
             </div>

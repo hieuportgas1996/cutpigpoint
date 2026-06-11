@@ -91,19 +91,18 @@
   padding: 0;
   margin: 0;
   border: 1px solid #d3e0ee;
+  border-radius: 0;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: default;
   line-height: 0;
   font-size: 0;
-  appearance: none;
-  -webkit-appearance: none;
   transition: background 0.1s;
 }
-.car-cell.empty:not(:disabled):hover { background: rgba(120,170,220,0.22); }
-.car-cell:disabled { cursor: default; }
+.car-cell.clickable { cursor: pointer; }
+.car-cell.clickable:hover { background: rgba(120,170,220,0.22); }
 .car-cell.last { background: rgba(120,170,220,0.18); }
 .car-cell.win { background: rgba(255,225,120,0.45); }
 
