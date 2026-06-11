@@ -282,6 +282,25 @@ public class MatchTimerService : BackgroundService
                     }
                 }
 
+                // Giải Lao (Caro đồng đội): pha quay 20s → auto quay; hết 5s hiện team → vào chơi;
+                // pha chơi: hết 10s/lượt → bỏ lượt qua người kế; hết backstop tổng → hòa → WaitingNextRound.
+                foreach (var match in _matches.AllBreakCaroSpin().ToList())
+                {
+                    if (_matches.TryAutoSpinCaro(match.RoomId) || _matches.TryStartCaroPlay(match.RoomId))
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                }
+                foreach (var match in _matches.AllBreakCaroPlay().ToList())
+                {
+                    bool changed = _matches.TryAutoSkipCaroTurn(match.RoomId)
+                        || _matches.TryFinalizeCaro(match.RoomId);
+                    if (changed)
+                    {
+                        await _hub.Clients.Group($"room:{match.RoomId}").SendAsync("MatchState", BuildPublic(match), stoppingToken);
+                        if (match.Status == MatchStatus.WaitingNextRound)
+                            await EmitRoundEndAsync(match, stoppingToken);
+                    }
+                }
+
                 // Auto-start next round after 5s when match is WaitingNextRound
                 foreach (var match in _matches.AllWaitingNextRound())
                 {

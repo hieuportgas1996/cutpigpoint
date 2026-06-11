@@ -14,6 +14,7 @@ import { XiDachMobilePanel } from './XiDachMobilePanel';
 import { ReflexBreakScreen } from './ReflexBreakScreen';
 import { SudokuBreakScreen } from './SudokuBreakScreen';
 import { MatchPairsBreakScreen } from './MatchPairsBreakScreen';
+import { CaroBreakScreen } from './CaroBreakScreen';
 import { BreakSelectScreen, BreakIntroScreen } from './BreakSelectScreen';
 import { Card, cardFromDto, cardToDto, compareCard, detectCombo, comboBeats, isFourPairRun, isBigCutCombo, findFourPairRun } from '../game/cards';
 import { api, MatchStatus, RoundEnd, RoundResultEntry, MatchPlayerPublic } from '../api';
@@ -338,6 +339,37 @@ function MatchPairsResultRows({ round, myUserId }: { round: RoundEnd; myUserId: 
   );
 }
 
+// Modal tổng kết "Caro đồng đội" — nhóm theo team (mathCorrectCount tái dùng làm team: 1=X, 2=O).
+function CaroResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
+  // team thắng = người có roundScore > 0; hòa = mọi người roundScore === 0.
+  const rows = [...round.results].sort((a, b) => (b.roundScore - a.roundScore) || (a.mathCorrectCount - b.mathCorrectCount));
+  const isDraw = round.results.every(r => r.roundScore === 0);
+  return (
+    <div className="match-end-list festival-list">
+      {isDraw && <div className="math-result-detail" style={{ textAlign: 'center', marginBottom: 6 }}>🤝 Hòa — cả 2 team 0 điểm</div>}
+      {rows.map(r => {
+        const team = r.mathCorrectCount; // 1 = X, 2 = O
+        const won = r.roundScore > 0;
+        return (
+          <div key={r.userId} className={`match-end-row festival-row ${won ? 'festival-winner' : ''}`}>
+            <span className="rank-tag">{team === 1 ? '❌' : '⭕'}</span>
+            <div className="match-end-name">
+              <div>{r.userId === myUserId ? `${r.displayName} (Bạn)` : r.displayName}</div>
+              <div className="math-result-detail">
+                <span className="math-result-correct">{team === 1 ? 'Team X' : 'Team O'} · {isDraw ? 'Hòa' : won ? 'Thắng' : 'Thua'}</span>
+              </div>
+            </div>
+            <span className={`score-pill ${r.roundScore > 0 ? 'pos' : r.roundScore < 0 ? 'neg' : ''}`}>
+              {r.roundScore > 0 ? `+${r.roundScore}` : r.roundScore}
+            </span>
+            <span className="total-score">Tổng: {r.totalScore > 0 ? `+${r.totalScore}` : r.totalScore}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MathResultRows({ round, myUserId }: { round: RoundEnd; myUserId: string }) {
   // Theo hạng (FinalRank 1..4).
   const rows = [...round.results].sort((a, b) => (a.finalRank || 99) - (b.finalRank || 99));
@@ -412,7 +444,7 @@ export default function RoomPlayPage() {
     playCards, passTurn, endMatch, clearRoundEnd,
     respondWhiteWin, cutNewTrick, declineTrickCut, sendChat, startNextRound,
     surrender, startVoteReset, respondVoteReset, scheduleFestival, flipFestivalCard, activateStarOfHope,
-    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, spinMatchPairsOrder, flipMatchPairsCell, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
+    activateXiDach, respondGamble, scheduleBreak, selectBreakGame, startBreakGameNow, submitRpsChoice, submitMathNumber, submitMathAnswer, submitMemoryAnswer, submitReflexCell, submitSudokuCell, spinMatchPairsOrder, flipMatchPairsCell, spinCaroOrder, placeCaroStone, voteCaroDraw, drawXiDachCard, standXiDach, compareXiDach, compareXiDachAll,
   } = useRoomConnection(code);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -902,6 +934,22 @@ export default function RoomPlayPage() {
     ? Math.max(0, Math.ceil((new Date(matchState.matchPairsRevealUntil).getTime() - now) / 1000))
     : 0;
 
+  // Giải Lao (Caro đồng đội): pha quay chia team / pha chơi.
+  const isCaroRound = matchState?.status === MatchStatus.BreakCaroSpin || matchState?.status === MatchStatus.BreakCaroPlay;
+  const caro = matchState?.caro ?? null;
+  const carSpinLeftSec = matchState?.caroSpinDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.caroSpinDeadline).getTime() - now) / 1000))
+    : 0;
+  const carRevealLeftSec = matchState?.caroRevealUntil
+    ? Math.max(0, Math.ceil((new Date(matchState.caroRevealUntil).getTime() - now) / 1000))
+    : 0;
+  const carTurnLeftSec = matchState?.caroTurnDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.caroTurnDeadline).getTime() - now) / 1000))
+    : 0;
+  const carTotalLeftSec = matchState?.caroDeadline
+    ? Math.max(0, Math.ceil((new Date(matchState.caroDeadline).getTime() - now) / 1000))
+    : 0;
+
   // Round Sát Phạt đang diễn ra (rút bài hoặc so điểm).
   const isXiDachRound = matchState?.isXiDachRound ?? false;
   const isXiDachPlaying = matchState?.status === MatchStatus.XiDachPlaying;
@@ -1282,6 +1330,21 @@ export default function RoomPlayPage() {
 
   async function handleFlipMatchPairs(cellIndex: number) {
     try { await flipMatchPairsCell(cellIndex); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleSpinCaro() {
+    try { await spinCaroOrder(); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handlePlaceCaro(cellIndex: number) {
+    try { await placeCaroStone(cellIndex); }
+    catch (e) { toast.push('error', (e as Error).message); }
+  }
+
+  async function handleCaroDraw() {
+    try { await voteCaroDraw(); }
     catch (e) { toast.push('error', (e as Error).message); }
   }
 
@@ -1916,6 +1979,22 @@ export default function RoomPlayPage() {
           />
         )}
 
+        {isCaroRound && caro && (
+          <CaroBreakScreen
+            caro={caro}
+            players={matchState.players}
+            myUserId={myUserId}
+            isOrganizer={matchState.breakOrganizerId === myUserId}
+            spinLeftSec={carSpinLeftSec}
+            revealLeftSec={carRevealLeftSec}
+            totalLeftSec={carTotalLeftSec}
+            turnLeftSec={carTurnLeftSec}
+            onSpin={handleSpinCaro}
+            onPlace={handlePlaceCaro}
+            onDraw={handleCaroDraw}
+          />
+        )}
+
         {isXiDachRound && isMobile && (
           <XiDachMobilePanel
             players={matchState.players}
@@ -2018,6 +2097,8 @@ export default function RoomPlayPage() {
                       ? `🧩 Giải lao Trí tuệ — Ván ${delayedRoundEnd.roundNumber}`
                       : delayedRoundEnd.breakGame === 6
                       ? `🎴 Giải lao Cơ hội — Ván ${delayedRoundEnd.roundNumber}`
+                      : delayedRoundEnd.breakGame === 7
+                      ? `⭕ Giải lao Caro đồng đội — Ván ${delayedRoundEnd.roundNumber}`
                       : `🎮 Giải lao Oẳn Tù Xì — Ván ${delayedRoundEnd.roundNumber}`)
                   : delayedRoundEnd.wasXiDach
                   ? `🃏 Sát Phạt Xì Dách — Ván ${delayedRoundEnd.roundNumber}`
@@ -2035,6 +2116,8 @@ export default function RoomPlayPage() {
                 ? <FestivalResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasBreak && delayedRoundEnd.breakGame === 6
                 ? <MatchPairsResultRows round={delayedRoundEnd} myUserId={myUserId} />
+                : delayedRoundEnd.wasBreak && delayedRoundEnd.breakGame === 7
+                ? <CaroResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : delayedRoundEnd.wasBreak && (delayedRoundEnd.breakGame === 2 || delayedRoundEnd.breakGame === 3 || delayedRoundEnd.breakGame === 4 || delayedRoundEnd.breakGame === 5)
                 ? <MathResultRows round={delayedRoundEnd} myUserId={myUserId} />
                 : <RoundResultRows round={delayedRoundEnd} myUserId={myUserId} />}
@@ -2103,7 +2186,7 @@ export default function RoomPlayPage() {
                       : r.wasJudge
                       ? `Ván ${r.roundNumber} · ⚖️ Phán xử`
                       : r.wasBreak
-                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : r.breakGame === 5 ? 'Trí tuệ' : r.breakGame === 6 ? 'Cơ hội' : 'Oẳn Tù Xì'}`
+                      ? `Ván ${r.roundNumber} · 🎮 Giải lao ${r.breakGame === 2 ? 'Tính toán' : r.breakGame === 3 ? 'Trí nhớ' : r.breakGame === 4 ? 'Phản xạ' : r.breakGame === 5 ? 'Trí tuệ' : r.breakGame === 6 ? 'Cơ hội' : r.breakGame === 7 ? 'Caro đồng đội' : 'Oẳn Tù Xì'}`
                       : `Ván ${r.roundNumber}${winner ? ` · ${winner.displayName} Nhất` : ''}`;
                     return (
                       <details key={`${r.matchId}-${r.roundNumber}`} className="history-item" open={r === roundHistory[roundHistory.length - 1]}>
@@ -2127,6 +2210,8 @@ export default function RoomPlayPage() {
                           ? <FestivalResultRows round={r} myUserId={myUserId} />
                           : r.wasBreak && r.breakGame === 6
                           ? <MatchPairsResultRows round={r} myUserId={myUserId} />
+                          : r.wasBreak && r.breakGame === 7
+                          ? <CaroResultRows round={r} myUserId={myUserId} />
                           : r.wasBreak && (r.breakGame === 2 || r.breakGame === 3 || r.breakGame === 4 || r.breakGame === 5)
                           ? <MathResultRows round={r} myUserId={myUserId} />
                           : <RoundResultRows round={r} myUserId={myUserId} />}

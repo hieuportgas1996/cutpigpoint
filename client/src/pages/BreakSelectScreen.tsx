@@ -75,9 +75,21 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
       'Ai tìm được nhiều cặp nhất → hạng cao; không ai có cặp → hòa.',
     ],
   },
+  [BreakGameType.Caro]: {
+    label: 'Caro đồng đội',
+    emoji: '⭕',
+    tagline: 'Cờ caro 10×10, 2 team đối đầu',
+    rules: [
+      'Quay chia 4 người thành 2 team (2 người/team): team X ❌ vs team O ⭕.',
+      'Đánh xen kẽ theo lượt X → O → X → O, mỗi lượt 10 giây.',
+      'Đặt được 5 quân liên tiếp (ngang/dọc/chéo) là team đó THẮNG — kể cả bị chặn 2 đầu.',
+      'Hết 10s không đánh → bỏ lượt. Có thể bấm "Xin hòa" — cả 2 team đồng ý thì hòa.',
+      'Team thắng mỗi người +2 điểm; team thua mỗi người −2; hòa thì 0 điểm.',
+    ],
+  },
 };
 
-const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs];
+const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs, BreakGameType.Caro];
 
 // Pha 1: người tổ chức chọn game (modal option). Người khác chờ.
 export function BreakSelectScreen({

@@ -23,6 +23,8 @@ public enum MatchStatus
     BreakSudoku = 18,            // round Giải lao Trí tuệ: giải Sudoku 4×4 (60s, chung 1 đề)
     BreakMatchSpin = 19,         // round Giải lao Cơ hội: pha quay thứ tự lượt (20s, tổ chức bấm)
     BreakMatchPlay = 20,         // round Giải lao Cơ hội: pha lật cặp theo lượt (120s tổng)
+    BreakCaroSpin = 21,          // round Giải lao Caro đồng đội: pha quay chia team + thứ tự (20s, tổ chức bấm)
+    BreakCaroPlay = 22,          // round Giải lao Caro đồng đội: pha đánh caro theo lượt (10s/lượt)
 }
 
 /// <summary>Loại game trong "Giải lao zui zẻ". None = không phải round giải lao.</summary>
@@ -35,6 +37,7 @@ public enum BreakGameType
     Reflex = 4,   // Phản xạ (click đúng hình/màu nhanh nhất)
     Sudoku = 5,   // Trí tuệ (giải Sudoku 4×4)
     MatchPairs = 6, // Cơ hội (lật cặp lá bài giống nhau)
+    Caro = 7,     // Caro đồng đội (cờ caro 10×10, 4 người chia 2 team)
 }
 
 public class MatchPlayer
@@ -275,6 +278,32 @@ public class Match
     public DateTime? MatchPairsRevealUntil { get; set; }
     /// <summary>Khi lật 2 lá KHÔNG khớp: hiện ~1.5s rồi úp lại + qua lượt. Null khi không chờ úp.</summary>
     public DateTime? MatchPairsMismatchUntil { get; set; }
+
+    // -- Caro đồng đội -- cờ caro 10×10, 4 người chia 2 team (2 người/team), đánh xen kẽ X→O→X→O
+    /// <summary>Bàn cờ 100 ô (10×10): 0 = trống, 1 = team X, 2 = team O. Null khi không phải round Caro.</summary>
+    public int[]? CaroBoard { get; set; }
+    /// <summary>Team mỗi người (key = UserId → 1 = team X, 2 = team O). Rỗng khi chưa quay chia team.</summary>
+    public Dictionary<Guid, int> CaroTeam { get; set; } = new();
+    /// <summary>Thứ tự lượt sau khi quay (UserId): X1 → O1 → X2 → O2. Rỗng khi chưa quay.</summary>
+    public List<Guid> CaroTurnOrder { get; set; } = new();
+    /// <summary>Index người đang tới lượt trong CaroTurnOrder.</summary>
+    public int CaroTurnIdx { get; set; }
+    /// <summary>Index ô vừa đặt gần nhất (để client highlight). -1 = chưa đặt nước nào.</summary>
+    public int CaroLastMove { get; set; } = -1;
+    /// <summary>Team thắng (1 hoặc 2); 0 = chưa thắng / hòa. Set khi có 5 liên tiếp.</summary>
+    public int CaroWinnerTeam { get; set; }
+    /// <summary>Index các ô tạo thành chuỗi thắng (≥5 ô) để client tô sáng. Rỗng khi chưa thắng / hòa.</summary>
+    public List<int> CaroWinLine { get; set; } = new();
+    /// <summary>Hết hạn 20s pha quay chia team (tổ chức chưa bấm → server tự quay). Null ngoài pha quay.</summary>
+    public DateTime? CaroSpinDeadline { get; set; }
+    /// <summary>Sau khi quay: hiện team + thứ tự 5s cho mọi người xem (vẫn status BreakCaroSpin) rồi vào chơi. Null = chưa quay / đã vào chơi.</summary>
+    public DateTime? CaroRevealUntil { get; set; }
+    /// <summary>Hết hạn 10s LƯỢT hiện tại; hết → BỎ LƯỢT (không đặt quân nào), qua người kế. Reset mỗi lượt.</summary>
+    public DateTime? CaroTurnDeadline { get; set; }
+    /// <summary>Hết hạn TỔNG ván Caro (backstop: hết → hòa). Null ngoài round này.</summary>
+    public DateTime? CaroDeadline { get; set; }
+    /// <summary>Phiếu xin hòa của từng người trong round Caro: key = UserId, true = Đồng ý hòa. Reset khi không phải round Caro. Đủ ≥1 người MỖI team đồng ý → hòa.</summary>
+    public Dictionary<Guid, bool> CaroDrawVotes { get; set; } = new();
 
     /// <summary>UserId người đã tổ chức "Sát Phạt" → round KẾ TIẾP là Xì Dách, người này làm Nhà Cái. Chỉ 1 người/round. Null = chưa ai.</summary>
     public Guid? XiDachScheduledUserId { get; set; }

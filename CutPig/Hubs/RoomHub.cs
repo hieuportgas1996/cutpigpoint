@@ -850,6 +850,54 @@ public class RoomHub : Hub
             await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
     }
 
+    public async Task SpinCaroOrder()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.SpinCaroOrder(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+    }
+
+    public async Task PlaceCaroStone(int cellIndex)
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.PlaceCaroStone(roomId.Value, auth.Value.UserId, cellIndex); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Thắng (5 liên tiếp) / bàn đầy → round finalize NGAY trong hub → phải tự emit RoundEnd.
+        if (match.Status == GameEngine.MatchStatus.WaitingNextRound)
+            await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
+    }
+
+    public async Task VoteCaroDraw()
+    {
+        var auth = await AuthenticateAsync();
+        if (auth == null) throw new HubException("Unauthorized");
+        var roomId = _presence.CurrentRoom(Context.ConnectionId);
+        if (roomId == null) throw new HubException("Chưa vào phòng nào.");
+
+        Match match;
+        try { match = _matches.VoteCaroDraw(roomId.Value, auth.Value.UserId); }
+        catch (InvalidOperationException ex) { throw new HubException(ex.Message); }
+
+        await Clients.Group(GroupName(roomId.Value)).SendAsync("MatchState", BuildMatchPublic(match));
+        // Đủ 2 team đồng ý hòa → finalize NGAY trong hub → phải tự emit RoundEnd.
+        if (match.Status == GameEngine.MatchStatus.WaitingNextRound)
+            await Clients.Group(GroupName(roomId.Value)).SendAsync("RoundEnd", _matches.BuildRoundEndDto(match));
+    }
+
     public async Task SubmitRpsChoice(int choice)
     {
         var auth = await AuthenticateAsync();
@@ -1120,7 +1168,12 @@ public class RoomHub : Hub
             m.MatchPairsDeadline,
             m.MatchPairsMismatchUntil,
             m.MatchPairsTurnDeadline,
-            m.MatchPairsRevealUntil);
+            m.MatchPairsRevealUntil,
+            BuildCaroState(m),
+            m.CaroSpinDeadline,
+            m.CaroRevealUntil,
+            m.CaroTurnDeadline,
+            m.CaroDeadline);
     }
 
     private static RpsStateDto? BuildRpsState(GameEngine.RpsTournament? t)
@@ -1241,6 +1294,38 @@ public class RoomHub : Hub
         }).ToList();
 
         return new MatchPairsStateDto(phase, cells, matched, new List<int>(m.MatchPairsFlipped), turnUser, spun, players);
+    }
+
+    /// <summary>Build state Caro đồng đội cho broadcast. Bàn cờ public hết (không có thông tin ẩn).</summary>
+    private static CaroStateDto? BuildCaroState(Match m)
+    {
+        if (m.BreakGame != GameEngine.BreakGameType.Caro || m.CaroBoard == null) return null;
+        bool spun = m.CaroTurnOrder.Count > 0;
+        int phase = m.Status == MatchStatus.BreakCaroSpin ? 0 : 1;
+
+        Guid? turnUser = spun && phase == 1
+            ? m.CaroTurnOrder[m.CaroTurnIdx % m.CaroTurnOrder.Count]
+            : (Guid?)null;
+
+        var players = m.Players.Select(p =>
+        {
+            int order = m.CaroTurnOrder.IndexOf(p.UserId);
+            return new CaroPlayerDto(
+                p.UserId,
+                m.CaroTeam.GetValueOrDefault(p.UserId),
+                order >= 0 ? order + 1 : 0,
+                m.CaroDrawVotes.GetValueOrDefault(p.UserId));
+        }).ToList();
+
+        return new CaroStateDto(
+            phase,
+            new List<int>(m.CaroBoard),
+            m.CaroLastMove,
+            turnUser,
+            m.CaroWinnerTeam,
+            new List<int>(m.CaroWinLine),
+            spun,
+            players);
     }
 
     /// <summary>

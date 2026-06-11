@@ -350,11 +350,13 @@ export const MatchStatus = {
   BreakSudoku: 18,
   BreakMatchSpin: 19,
   BreakMatchPlay: 20,
+  BreakCaroSpin: 21,
+  BreakCaroPlay: 22,
 } as const;
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5, MatchPairs: 6 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5, MatchPairs: 6, Caro: 7 } as const;
 
 export interface RpsMatchup {
   playerAId: string;
@@ -472,6 +474,24 @@ export interface MatchPairsState {
   players: MatchPairsPlayer[];
 }
 
+// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 4 người chia 2 team ----
+export interface CaroPlayer {
+  userId: string;
+  team: number;        // 1 = X, 2 = O
+  turnOrder: number;   // 1-4 (0 nếu chưa quay)
+  drawVote: boolean;   // đã bấm xin hòa chưa
+}
+export interface CaroState {
+  phase: number;             // 0 quay chia team, 1 đang chơi
+  board: number[];           // 100 ô (10×10): 0 trống, 1 team X, 2 team O
+  lastMove: number;          // index ô vừa đặt (-1 nếu chưa)
+  turnUserId: string | null; // người đang tới lượt
+  winnerTeam: number;        // 0 chưa/hòa, 1 X thắng, 2 O thắng
+  winLine: number[];         // index các ô chuỗi thắng (tô sáng)
+  spun: boolean;             // đã quay chia team chưa
+  players: CaroPlayer[];
+}
+
 export interface MatchPlayerPublic {
   userId: string;
   displayName: string;
@@ -570,6 +590,11 @@ export interface MatchPublicState {
   matchPairsMismatchUntil: string | null;
   matchPairsTurnDeadline: string | null;
   matchPairsRevealUntil: string | null;
+  caro: CaroState | null;
+  caroSpinDeadline: string | null;
+  caroRevealUntil: string | null;
+  caroTurnDeadline: string | null;
+  caroDeadline: string | null;
 }
 
 export interface PrivateHand {

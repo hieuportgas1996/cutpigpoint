@@ -133,7 +133,12 @@ public record MatchPublicStateDto(
     DateTime? MatchPairsDeadline = null,
     DateTime? MatchPairsMismatchUntil = null,
     DateTime? MatchPairsTurnDeadline = null,
-    DateTime? MatchPairsRevealUntil = null);
+    DateTime? MatchPairsRevealUntil = null,
+    CaroStateDto? Caro = null,
+    DateTime? CaroSpinDeadline = null,
+    DateTime? CaroRevealUntil = null,
+    DateTime? CaroTurnDeadline = null,
+    DateTime? CaroDeadline = null);
 
 // ---- Giải Lao (Oẳn Tù Xì) ----
 public record RpsMatchupDto(
@@ -232,6 +237,18 @@ public record MatchPairsStateDto(
     Guid? TurnUserId,                // người đang tới lượt (pha chơi)
     bool Spun,                       // đã quay thứ tự chưa
     List<MatchPairsPlayerDto> Players);  // số cặp + thứ tự lượt từng người
+
+// ---- Giải Lao (Caro đồng đội) — cờ caro 10×10, 4 người chia 2 team, theo lượt ----
+public record CaroPlayerDto(Guid UserId, int Team, int TurnOrder, bool DrawVote);  // team 1=X/2=O, thứ tự lượt 1-4 (0 nếu chưa quay), đã xin hòa chưa
+public record CaroStateDto(
+    int Phase,                       // 0 = quay chia team, 1 = đang chơi
+    List<int> Board,                 // 100 ô (10×10): 0 trống, 1 team X, 2 team O
+    int LastMove,                    // index ô vừa đặt (-1 nếu chưa)
+    Guid? TurnUserId,                // người đang tới lượt (pha chơi)
+    int WinnerTeam,                  // 0 = chưa/hòa, 1 = X thắng, 2 = O thắng
+    List<int> WinLine,               // index các ô chuỗi thắng (để tô sáng)
+    bool Spun,                       // đã quay chia team chưa
+    List<CaroPlayerDto> Players);    // team + thứ tự + phiếu hòa từng người
 
 public record PrivateHandDto(Guid MatchId, List<CardDto> Hand);
 
