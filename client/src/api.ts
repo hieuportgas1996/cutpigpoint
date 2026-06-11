@@ -356,7 +356,7 @@ export const MatchStatus = {
 
 export const RpsChoice = { None: 0, Rock: 1, Paper: 2, Scissors: 3 } as const;
 export const RpsStage = { Round1A: 0, Round1B: 1, ThirdPlace: 2, Final: 3, Done: 4 } as const;
-export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5, MatchPairs: 6, Caro: 7 } as const;
+export const BreakGameType = { None: 0, Rps: 1, Math: 2, Memory: 3, Reflex: 4, Sudoku: 5, MatchPairs: 6, Caro: 7, Binh: 8 } as const;
 
 export interface RpsMatchup {
   playerAId: string;

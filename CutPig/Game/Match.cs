@@ -37,7 +37,8 @@ public enum BreakGameType
     Reflex = 4,   // Phản xạ (click đúng hình/màu nhanh nhất)
     Sudoku = 5,   // Trí tuệ (giải Sudoku 4×4)
     MatchPairs = 6, // Cơ hội (lật cặp lá bài giống nhau)
-    Caro = 7,     // Caro đồng đội (cờ caro 10×10, 4 người chia 2 team)
+    Caro = 7,     // Caro đồng đội (cờ caro 10×10, 4 người chia 2 team) — TẠM DISABLE, fix sau
+    Binh = 8,     // Binh xập xám — chưa phát triển, disable (placeholder)
 }
 
 public class MatchPlayer

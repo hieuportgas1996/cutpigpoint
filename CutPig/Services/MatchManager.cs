@@ -399,7 +399,8 @@ public class MatchManager
                 throw new InvalidOperationException("Không trong pha chọn game giải lao.");
             if (match.BreakOrganizerId != userId)
                 throw new InvalidOperationException("Chỉ người tổ chức được chọn game.");
-            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku or BreakGameType.MatchPairs or BreakGameType.Caro))
+            // Caro + Binh tạm DISABLE (đang hoàn thiện) — không cho chọn.
+            if (gameType is not (BreakGameType.Rps or BreakGameType.Math or BreakGameType.Memory or BreakGameType.Reflex or BreakGameType.Sudoku or BreakGameType.MatchPairs))
                 throw new InvalidOperationException("Game không hợp lệ.");
             EnterBreakIntro(match, gameType);
             return match;
@@ -422,7 +423,8 @@ public class MatchManager
         {
             if (!_matchesByRoom.TryGetValue(roomId, out var match) || match.Status != MatchStatus.BreakSelect) return false;
             if (!match.BreakSelectDeadline.HasValue || match.BreakSelectDeadline.Value > DateTime.UtcNow) return false;
-            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs, BreakGameType.Caro };
+            // Pool random KHÔNG gồm Caro/Binh (đang disable).
+            var games = new[] { BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs };
             EnterBreakIntro(match, games[Random.Shared.Next(games.Length)]);
             return true;
         }

@@ -2,7 +2,7 @@ import { BreakGameType } from '../api';
 import './break-select.css';
 
 // Tên game hiển thị cho người chơi (theo yêu cầu): Oẳn Tù Xì → "May mắn".
-export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tagline: string; rules: string[] }> = {
+export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tagline: string; rules: string[]; disabled?: boolean }> = {
   [BreakGameType.Rps]: {
     label: 'May mắn',
     emoji: '🎲',
@@ -79,6 +79,7 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
     label: 'Caro đồng đội',
     emoji: '⭕',
     tagline: 'Caro 10×10',
+    disabled: true, // TẠM TẮT — đang fix giao diện bàn cờ, mở lại sau
     rules: [
       'Quay chia 4 người thành 2 team (2 người/team): team X ❌ vs team O ⭕.',
       'Chia 2 CẶP ĐẤU 1v1 (1 người team X đấu 1 người team O), chơi TUẦN TỰ từng cặp.',
@@ -87,9 +88,20 @@ export const BREAK_GAME_META: Record<number, { label: string; emoji: string; tag
       'Team thắng nhiều cặp hơn → THẮNG: mỗi người +2; team thua −2; hòa (1-1) thì 0 điểm.',
     ],
   },
+  [BreakGameType.Binh]: {
+    label: 'Binh xập xám',
+    emoji: '🀄',
+    tagline: 'Sắp ra mắt',
+    disabled: true, // CHƯA phát triển — placeholder, mở khi xong
+    rules: [
+      'Chia 13 lá, xếp thành 3 chi (3 lá trên · 5 lá giữa · 5 lá dưới).',
+      'So từng chi với các người chơi khác để tính điểm.',
+      'Tính năng đang được phát triển — sẽ ra mắt sau!',
+    ],
+  },
 };
 
-const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs, BreakGameType.Caro];
+const GAME_ORDER = [BreakGameType.Rps, BreakGameType.Math, BreakGameType.Memory, BreakGameType.Reflex, BreakGameType.Sudoku, BreakGameType.MatchPairs, BreakGameType.Caro, BreakGameType.Binh];
 
 // Pha 1: người tổ chức chọn game (modal option). Người khác chờ.
 export function BreakSelectScreen({
@@ -114,16 +126,18 @@ export function BreakSelectScreen({
         <div className="brk-options">
           {GAME_ORDER.map(gt => {
             const meta = BREAK_GAME_META[gt];
+            const locked = !!meta.disabled;
+            const canPick = iAmOrganizer && !locked;
             return (
               <button
                 key={gt}
-                className="brk-opt"
-                disabled={!iAmOrganizer}
-                onClick={iAmOrganizer ? () => onSelect(gt) : undefined}
+                className={`brk-opt ${locked ? 'locked' : ''}`}
+                disabled={!canPick}
+                onClick={canPick ? () => onSelect(gt) : undefined}
               >
                 <span className="brk-opt-emoji">{meta.emoji}</span>
                 <span className="brk-opt-label">{meta.label}</span>
-                <span className="brk-opt-tag">{meta.tagline}</span>
+                <span className="brk-opt-tag">{locked ? '🔒 Sắp có' : meta.tagline}</span>
               </button>
             );
           })}

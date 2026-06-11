@@ -49,6 +49,8 @@
 .brk-opt:not(:disabled):hover { transform: translateY(-2px); border-color: #ffe26b; background: rgba(255,210,80,0.1); }
 .brk-opt:not(:disabled):active { transform: translateY(0); }
 .brk-opt:disabled { cursor: default; opacity: 0.78; }
+.brk-opt.locked { opacity: 0.42; filter: grayscale(0.6); cursor: not-allowed; }
+.brk-opt.locked .brk-opt-tag { color: #c79a5a; font-weight: 700; }
 .brk-opt-emoji { font-size: 32px; line-height: 1; }
 .brk-opt-label { font-size: 17px; font-weight: 800; color: #ffe26b; }
 .brk-opt-tag { font-size: 11px; color: #d4b88a; line-height: 1.25; word-break: break-word; }
